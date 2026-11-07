@@ -64,11 +64,17 @@ private class SettingsAboutPageActions(
         onShowMessage(copiedMessage)
     }
 
-    fun onOpenGitHubRepo() {
-        if (!context.tryStartActivity(Intent(Intent.ACTION_VIEW, "https://github.com/cwuom/NeriPlayer".toUri()))) {
+    private fun openGitHub(url: String) {
+        if (!context.tryStartActivity(Intent(Intent.ACTION_VIEW, url.toUri()))) {
             onShowMessage(resources.getString(CoreCommonR.string.error_no_app_for_action))
         }
     }
+
+    fun onOpenGitHubRepo() = openGitHub("https://github.com/cwuom/NeriPlayer")
+
+    fun onOpenUpstreamGitHubRepo() = openGitHub("https://github.com/cwuom/NeriPlayer")
+
+    fun onOpenForkGitHubRepo() = openGitHub("https://github.com/vgmr-99/sgmusic")
 }
 
 @Composable
@@ -94,6 +100,8 @@ internal fun SettingsAboutPageContent(
         devModeEnabled = devModeEnabled,
         onVersionClick = actions::onVersionClick,
         onCopyValue = actions::onCopyValue,
-        onOpenGitHubRepo = actions::onOpenGitHubRepo
+        onOpenGitHubRepo = actions::onOpenGitHubRepo,
+        onOpenUpstreamGitHubRepo = actions::onOpenUpstreamGitHubRepo,
+        onOpenForkGitHubRepo = actions::onOpenForkGitHubRepo
     )
 }

@@ -390,5 +390,9 @@
     <string name="settings_android13_required">Android 13+ required</string>
     <string name="settings_build_uuid">Build UUID</string>
     <string name="settings_version_debug_suffix">DEBUG MODE</string>
-    <string name="settings_github_repo_url">github.com/cwuom/NeriPlayer</string>
+    <string name="settings_github_repo_url">Upstream github.com/cwuom/NeriPlayer\nThis project github.com/vgmr-99/sgmusic</string>
+    <string name="settings_github_upstream_url">github.com/cwuom/NeriPlayer</string>
+    <string name="settings_github_fork_url">github.com/vgmr-99/sgmusic</string>
+    <string name="settings_github_upstream_title">Upstream repo (NeriPlayer)</string>
+    <string name="settings_github_fork_title">This repo (Shiguang Music)</string>
 </resources>

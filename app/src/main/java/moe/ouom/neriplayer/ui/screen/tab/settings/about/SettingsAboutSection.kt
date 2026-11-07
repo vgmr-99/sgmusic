@@ -49,14 +49,18 @@ internal fun LazyListScope.settingsAboutSection(
     devModeEnabled: Boolean,
     onVersionClick: () -> Unit,
     onCopyValue: (String) -> Unit = {},
-    onOpenGitHubRepo: () -> Unit
+    onOpenGitHubRepo: () -> Unit,
+    onOpenUpstreamGitHubRepo: () -> Unit = onOpenGitHubRepo,
+    onOpenForkGitHubRepo: () -> Unit = onOpenGitHubRepo
 ) {
     item {
         SettingsAboutContent(
             devModeEnabled = devModeEnabled,
             onVersionClick = onVersionClick,
             onCopyValue = onCopyValue,
-            onOpenGitHubRepo = onOpenGitHubRepo
+            onOpenGitHubRepo = onOpenGitHubRepo,
+            onOpenUpstreamGitHubRepo = onOpenUpstreamGitHubRepo,
+            onOpenForkGitHubRepo = onOpenForkGitHubRepo
         )
     }
 }
@@ -66,7 +70,9 @@ internal fun SettingsAboutContent(
     devModeEnabled: Boolean,
     onVersionClick: () -> Unit,
     onCopyValue: (String) -> Unit,
-    onOpenGitHubRepo: () -> Unit
+    onOpenGitHubRepo: () -> Unit,
+    onOpenUpstreamGitHubRepo: () -> Unit = onOpenGitHubRepo,
+    onOpenForkGitHubRepo: () -> Unit = onOpenGitHubRepo
 ) {
     SettingsAboutIntroItem()
     SettingsBuildUuidItem(onCopyValue)
@@ -76,7 +82,16 @@ internal fun SettingsAboutContent(
         onCopyValue = onCopyValue
     )
     SettingsBuildTimeItem(onCopyValue)
-    SettingsGitHubItem(onOpenGitHubRepo = onOpenGitHubRepo)
+    SettingsGitHubItem(
+        title = stringResource(CoreCommonR.string.settings_github_upstream_url),
+        supporting = stringResource(CoreCommonR.string.settings_github_upstream_title),
+        onOpenGitHubRepo = onOpenUpstreamGitHubRepo
+    )
+    SettingsGitHubItem(
+        title = stringResource(CoreCommonR.string.settings_github_fork_url),
+        supporting = stringResource(CoreCommonR.string.settings_github_fork_title),
+        onOpenGitHubRepo = onOpenForkGitHubRepo
+    )
 }
 
 @Composable
@@ -189,7 +204,11 @@ private fun SettingsBuildTimeItem(onCopyValue: (String) -> Unit) {
 }
 
 @Composable
-private fun SettingsGitHubItem(onOpenGitHubRepo: () -> Unit) {
+private fun SettingsGitHubItem(
+    title: String,
+    supporting: String,
+    onOpenGitHubRepo: () -> Unit
+) {
     ListItem(
         leadingContent = {
             Icon(
@@ -198,8 +217,8 @@ private fun SettingsGitHubItem(onOpenGitHubRepo: () -> Unit) {
                 tint = MaterialTheme.colorScheme.onSurface
             )
         },
-        headlineContent = { Text(stringResource(CoreCommonR.string.common_github)) },
-        supportingContent = { Text(stringResource(CoreCommonR.string.settings_github_repo_url)) },
+        headlineContent = { Text(title) },
+        supportingContent = { Text(supporting) },
         modifier = androidx.compose.ui.Modifier.settingsItemClickable(onClick = onOpenGitHubRepo),
         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
     )

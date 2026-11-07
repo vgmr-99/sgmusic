@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- About -->
-    <string name="about_app_footer">NeriPlayer • GPLv3 • Powered by You</string>
+    <!-- About: 拾光音乐 fork of NeriPlayer, GPLv3 -->
+    <string name="about_app_footer">拾光音乐 • Fork of NeriPlayer • GPLv3 • Upstream cwuom/NeriPlayer • This vgmr-99/sgmusic</string>
 </resources>

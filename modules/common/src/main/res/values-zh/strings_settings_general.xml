@@ -390,5 +390,9 @@
     <string name="settings_android13_required">需要 Android 13+</string>
     <string name="settings_build_uuid">构建 UUID</string>
     <string name="settings_version_debug_suffix">调试模式</string>
-    <string name="settings_github_repo_url">github.com/cwuom/NeriPlayer</string>
+    <string name="settings_github_repo_url">上游 github.com/cwuom/NeriPlayer\n本项目 github.com/vgmr-99/sgmusic</string>
+    <string name="settings_github_upstream_url">github.com/cwuom/NeriPlayer</string>
+    <string name="settings_github_fork_url">github.com/vgmr-99/sgmusic</string>
+    <string name="settings_github_upstream_title">上游仓库（NeriPlayer）</string>
+    <string name="settings_github_fork_title">本项目仓库（拾光音乐）</string>
 </resources>

@@ -12,10 +12,6 @@
   <img alt="Android 9+" src="https://img.shields.io/badge/Android-9%2B-3DDC84?logo=android&logoColor=white" />
 </p>
 
-<p>
-  <img src="docs/assets/splash_preview.png" width="220" alt="拾光音乐启动图" />
-</p>
-
 </div>
 
 > [!IMPORTANT]
