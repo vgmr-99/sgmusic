@@ -24,6 +24,10 @@ package moe.ouom.neriplayer.ui.screen.tab.settings.about
  */
 
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -35,9 +39,11 @@ import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Update
 import androidx.compose.material.icons.outlined.Verified
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import moe.ouom.neriplayer.BuildConfig
 import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.R
@@ -92,6 +98,7 @@ internal fun SettingsAboutContent(
         supporting = stringResource(CoreCommonR.string.settings_github_fork_title),
         onOpenGitHubRepo = onOpenForkGitHubRepo
     )
+    SettingsDisclaimerFooterItem()
 }
 
 @Composable
@@ -201,6 +208,47 @@ private fun SettingsBuildTimeItem(onCopyValue: (String) -> Unit) {
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
     )
+}
+
+@Composable
+private fun SettingsDisclaimerFooterItem() {
+    // 拾光音乐：原首次启动的使用说明与隐私弹窗已下掉，免责声明放在关于页最后展示
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Text(
+            text = stringResource(AppR.string.disclaimer_title),
+            style = MaterialTheme.typography.titleMedium
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(AppR.string.disclaimer_intro),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = stringResource(AppR.string.disclaimer_summary_content_body),
+            style = MaterialTheme.typography.bodySmall
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(AppR.string.disclaimer_section1_body),
+            style = MaterialTheme.typography.bodySmall
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(AppR.string.disclaimer_section6_bullet1),
+            style = MaterialTheme.typography.bodySmall
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(AppR.string.disclaimer_section9_body),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 @Composable

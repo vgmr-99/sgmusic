@@ -18,7 +18,7 @@
     <string name="settings_explore_search_history">Explore Search History</string>
     <string name="settings_explore_search_history_desc">Show and record search keywords on Explore</string>
     <string name="settings_usb_device_attach_handling">Handle USB DAC Attach</string>
-    <string name="settings_usb_device_attach_handling_desc">Turn off to stop NeriPlayer from opening to handle USB DACs or FreeDSP cables when attached</string>
+    <string name="settings_usb_device_attach_handling_desc">Turn off to stop 拾光音乐 from opening to handle USB DACs or FreeDSP cables when attached</string>
     <string name="settings_playback_idle_shutdown">Exit playback service when paused</string>
     <string name="settings_playback_idle_shutdown_desc">Remove notification after timeout; keep queue and progress</string>
     <string name="settings_prefer_high_refresh_rate">High Refresh Rate</string>
@@ -128,7 +128,7 @@
     <string name="settings_usb_exclusive_playback">USB Exclusive Playback</string>
     <string name="settings_usb_exclusive_playback_desc">Try direct exclusive output when a USB DAC is connected</string>
     <string name="settings_usb_exclusive_background_permission_title">Allow USB exclusive background playback</string>
-    <string name="settings_usb_exclusive_background_permission_desc">USB exclusive output needs the foreground service and wake lock to keep running. To avoid screen-off limits, set NeriPlayer battery/background behavior to unrestricted or fully allowed in system settings.</string>
+    <string name="settings_usb_exclusive_background_permission_desc">USB exclusive output needs the foreground service and wake lock to keep running. To avoid screen-off limits, set 拾光音乐 battery/background behavior to unrestricted or fully allowed in system settings.</string>
     <string name="settings_usb_exclusive_background_permission_battery">Request battery optimization exemption</string>
     <string name="settings_usb_exclusive_background_permission_app_settings">Open app settings</string>
     <string name="settings_usb_exclusive_background_permission_never">Don\'t show again</string>
@@ -257,7 +257,7 @@
     <string name="settings_allow_mixed_playback">Allow Mixed Playback</string>
     <string name="settings_allow_mixed_playback_desc">Do not take audio focus so other apps can play</string>
     <string name="settings_preempt_audio_focus">Preempt Audio Focus</string>
-    <string name="settings_preempt_audio_focus_desc">Take audio focus when the main screen opens and playback is idle, only if no other audio is playing, making headset controls more likely to target NeriPlayer</string>
+    <string name="settings_preempt_audio_focus_desc">Take audio focus when the main screen opens and playback is idle, only if no other audio is playing, making headset controls more likely to target 拾光音乐</string>
     <string name="settings_lyrics_cover_lyric_font_size">Cover lyric font</string>
     <string name="settings_lyrics_cover_translation_font_size">Cover translation font</string>
     <string name="settings_lyrics_page_lyric_font_size">Lyrics page font</string>

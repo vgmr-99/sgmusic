@@ -100,7 +100,7 @@
     <string name="netease_web_login">网易云登录</string>
     <string name="netease_qr_login">网易云扫码登录</string>
     <string name="netease_qr_login_title">扫码连接你的账号</string>
-    <string name="netease_qr_login_subtitle">用手机网易云音乐扫码并确认后，请立刻返回 NeriPlayer。</string>
+    <string name="netease_qr_login_subtitle">用手机网易云音乐扫码并确认后，请立刻返回 拾光音乐。</string>
     <string name="netease_qr_login_loading">正在生成二维码…</string>
     <string name="netease_qr_login_waiting">请使用网易云音乐扫码登录</string>
     <string name="netease_qr_login_scanned">已扫码，请在手机上确认登录</string>

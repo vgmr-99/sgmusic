@@ -5,7 +5,7 @@
     <string name="disclaimer_intro">Please review how the app connects to services, stores data, and requests permissions.</string>
     <string name="disclaimer_last_updated">Updated August 8, 2026</string>
     <string name="disclaimer_summary_content_title">Content comes from third parties</string>
-    <string name="disclaimer_summary_content_body">NeriPlayer plays content from platforms you choose to access. It does not host media files.</string>
+    <string name="disclaimer_summary_content_body">拾光音乐 plays content from platforms you choose to access. It does not host media files.</string>
     <string name="disclaimer_summary_data_title">Data stays on your device by default</string>
     <string name="disclaimer_summary_data_body">Settings, history, download records, and local diagnostics stay on-device and are not used for advertising or profiling.</string>
     <string name="disclaimer_summary_sync_title">Sync is your choice</string>
@@ -24,7 +24,7 @@
     <string name="disclaimer_agree_countdown">I have read and agree</string>
     <string name="disclaimer_read_countdown">Please read (%d s)</string>
     <string name="onboarding_badge">First-time setup</string>
-    <string name="onboarding_title">NeriPlayer, tuned for you</string>
+    <string name="onboarding_title">拾光音乐, tuned for you</string>
     <string name="onboarding_subtitle">Set the essentials in a few steps. Every optional choice can be changed later.</string>
     <string name="onboarding_step_counter">Step %1$d of %2$d</string>
     <string name="onboarding_language_title">Choose language</string>
@@ -84,7 +84,7 @@
     <string name="onboarding_permission_granted">Allowed</string>
     <string name="onboarding_permissions_hint">You can skip either permission and change it later from the related feature or system settings.</string>
     <string name="onboarding_notification_permission_warning_title">Playback notifications are recommended</string>
-    <string name="onboarding_notification_permission_warning_desc">Declining notification permission may affect playback, including lock-screen controls and playback status. NeriPlayer will not send unrelated push notifications. Grant notification permission now?</string>
+    <string name="onboarding_notification_permission_warning_desc">Declining notification permission may affect playback, including lock-screen controls and playback status. 拾光音乐 will not send unrelated push notifications. Grant notification permission now?</string>
     <string name="onboarding_notification_permission_request_again">Grant permission</string>
     <string name="onboarding_notification_permission_skip">Not now</string>
     <string name="onboarding_notification_permission_final_warning_title">Final confirmation: allow playback notifications?</string>
@@ -94,7 +94,7 @@
     <string name="onboarding_controls_title">Tune the Now Playing screen</string>
     <string name="onboarding_controls_desc">Choose the control size and placement. The preview updates immediately.</string>
     <string name="onboarding_controls_preview_song">Night Flight</string>
-    <string name="onboarding_controls_preview_artist">NeriPlayer</string>
+    <string name="onboarding_controls_preview_artist">拾光音乐</string>
     <string name="onboarding_controls_preview_lyric_1">Last night the east wind blew</string>
     <string name="onboarding_controls_preview_lyric_2">It feels like a river flowing east</string>
     <string name="onboarding_controls_preview_lyric_3">How much sorrow can the heart hold</string>
@@ -125,7 +125,7 @@
     <string name="onboarding_controls_preview_lyric_10">Keep the one before your eyes</string>
     <string name="onboarding_controls_preview_lyric_11">Where can longing find its name</string>
     <string name="onboarding_controls_preview_lyric_12">Let the new words meet the wine</string>
-    <string name="onboarding_learning_title">A quick tour of NeriPlayer</string>
+    <string name="onboarding_learning_title">A quick tour of 拾光音乐</string>
     <string name="onboarding_learning_desc">These entry points help you find common features faster before you start using the app.</string>
     <string name="onboarding_learning_now_playing_title">Now Playing</string>
     <string name="onboarding_learning_now_playing_desc">Tap the mini player to open Now Playing, then swipe between the cover and lyrics pages.</string>
@@ -141,8 +141,8 @@
     <string name="onboarding_learning_listen_together_desc">Create a room from playback or settings to share tracks, progress, and playback modes with friends.</string>
     <string name="onboarding_learning_queue_title">Playback queue</string>
     <string name="onboarding_learning_queue_desc">Open the queue from Now Playing to inspect tracks, drag to reorder, and use playback modes or the sleep timer.</string>
-    <string name="onboarding_learning_enter_app">Enter NeriPlayer</string>
-    <string name="disclaimer_section1_body">NeriPlayer is a local-first audio and video player for collecting and playing third-party content you choose to access. The app does not host, upload, or distribute media files. Online playback, search, sign-in, and downloads connect directly to the relevant platform or service you select.</string>
+    <string name="onboarding_learning_enter_app">Enter 拾光音乐</string>
+    <string name="disclaimer_section1_body">拾光音乐 is a local-first audio and video player for collecting and playing third-party content you choose to access. The app does not host, upload, or distribute media files. Online playback, search, sign-in, and downloads connect directly to the relevant platform or service you select.</string>
     <string name="disclaimer_section2_bullet1">Copyright and related rights in playable content belong to the original creators, rightsholders, or platforms.</string>
     <string name="disclaimer_section2_bullet2">You are responsible for confirming that content you access, download, share, or use has a lawful source and the necessary permissions.</string>
     <string name="disclaimer_section2_bullet3">Do not use the app to infringe third-party content, trademarks, privacy, or other lawful rights.</string>

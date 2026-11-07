@@ -4,7 +4,7 @@
     <string name="bili_web_login">Bilibili Web Login</string>
     <string name="bili_qr_login">Bilibili QR Login</string>
     <string name="bili_qr_login_title">Connect your Bilibili account</string>
-    <string name="bili_qr_login_subtitle">Scan and confirm with the Bilibili app on your phone, then return to NeriPlayer immediately.</string>
+    <string name="bili_qr_login_subtitle">Scan and confirm with the Bilibili app on your phone, then return to 拾光音乐 immediately.</string>
     <string name="bili_qr_login_loading">Creating QR code…</string>
     <string name="bili_qr_login_waiting">Scan with the Bilibili app</string>
     <string name="bili_qr_login_scanned">Scanned. Confirm sign-in on your phone</string>

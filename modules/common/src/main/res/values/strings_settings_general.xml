@@ -18,7 +18,7 @@
     <string name="settings_explore_search_history">探索页搜索历史</string>
     <string name="settings_explore_search_history_desc">显示并记录探索页的搜索关键词</string>
     <string name="settings_usb_device_attach_handling">处理 USB DAC 插入</string>
-    <string name="settings_usb_device_attach_handling_desc">关闭后，插入 USB DAC 或 FreeDSP 线束时不会唤起音理音理处理此设备</string>
+    <string name="settings_usb_device_attach_handling_desc">关闭后，插入 USB DAC 或 FreeDSP 线束时不会唤起拾光音乐处理此设备</string>
     <string name="settings_playback_idle_shutdown">暂停后退出播放服务</string>
     <string name="settings_playback_idle_shutdown_desc">暂停超时后移除通知，保留队列和进度</string>
     <string name="settings_prefer_high_refresh_rate">高刷新率</string>
@@ -128,7 +128,7 @@
     <string name="settings_usb_exclusive_playback">USB 独占播放</string>
     <string name="settings_usb_exclusive_playback_desc">连接 USB DAC 时尝试直连独占输出</string>
     <string name="settings_usb_exclusive_background_permission_title">允许 USB 独占后台播放</string>
-    <string name="settings_usb_exclusive_background_permission_desc">USB 独占需要前台服务和唤醒锁持续运行。为了避免息屏后被系统限制，建议在系统设置中把 NeriPlayer 的电池/后台行为改为不限制或完全允许。</string>
+    <string name="settings_usb_exclusive_background_permission_desc">USB 独占需要前台服务和唤醒锁持续运行。为了避免息屏后被系统限制，建议在系统设置中把 拾光音乐 的电池/后台行为改为不限制或完全允许。</string>
     <string name="settings_usb_exclusive_background_permission_battery">请求忽略电池优化</string>
     <string name="settings_usb_exclusive_background_permission_app_settings">打开应用设置</string>
     <string name="settings_usb_exclusive_background_permission_never">不再提示</string>

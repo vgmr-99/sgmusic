@@ -17,8 +17,9 @@ class StartupStageResolverTest {
 
     @Test
     fun `requires disclaimer before onboarding`() {
+        // 拾光音乐：免责声明不再拦截启动，false 也直达主界面/引导
         assertEquals(
-            StartupStage.Disclaimer,
+            StartupStage.Main,
             StartupStageResolver.resolve(
                 disclaimerAccepted = false,
                 startupOnboardingCompleted = true
@@ -50,8 +51,9 @@ class StartupStageResolverTest {
 
     @Test
     fun `routes pending disclaimer acceptance without waiting for storage echo`() {
+        // 拾光音乐：pending 也直接按 onboarding 状态路由，不再等免责确认
         assertEquals(
-            StartupStage.Onboarding,
+            StartupStage.Loading,
             StartupStageResolver.resolve(
                 disclaimerAccepted = false,
                 startupOnboardingCompleted = null,

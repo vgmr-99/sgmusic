@@ -100,7 +100,7 @@
     <string name="netease_web_login">NetEase Login</string>
     <string name="netease_qr_login">NetEase QR Login</string>
     <string name="netease_qr_login_title">Connect your account</string>
-    <string name="netease_qr_login_subtitle">Scan and confirm with NetEase Cloud Music on your phone, then return to NeriPlayer immediately.</string>
+    <string name="netease_qr_login_subtitle">Scan and confirm with NetEase Cloud Music on your phone, then return to 拾光音乐 immediately.</string>
     <string name="netease_qr_login_loading">Creating QR code…</string>
     <string name="netease_qr_login_waiting">Scan with NetEase Cloud Music</string>
     <string name="netease_qr_login_scanned">Scanned. Confirm sign-in on your phone</string>

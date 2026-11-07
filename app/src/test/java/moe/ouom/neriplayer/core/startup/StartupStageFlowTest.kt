@@ -14,6 +14,7 @@ import org.junit.Test
 class StartupStageFlowTest {
     @Test
     fun `emits stage updates from startup gates`() = runTest {
+        // 拾光音乐：免责声明不再作为启动门，false 也直接到 Main
         val disclaimerAccepted = MutableStateFlow<Boolean?>(null)
         val onboardingCompleted = MutableStateFlow<Boolean?>(null)
         val stages = mutableListOf<StartupStage>()
@@ -34,7 +35,6 @@ class StartupStageFlowTest {
         assertEquals(
             listOf(
                 StartupStage.Loading,
-                StartupStage.Disclaimer,
                 StartupStage.Main
             ),
             stages
