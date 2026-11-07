@@ -7,9 +7,10 @@
         <item name="android:windowDisablePreview">true</item>
     </style>
 
+    <!-- 拾光音乐新启动图：无极带 + 星光，参考 docs/assets/splash_preview.png -->
     <style name="Theme.NeriPlayer.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#FFFFFFFF</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_neriplayer_splash</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
         <item name="postSplashScreenTheme">@style/Theme.NeriPlayer</item>
     </style>
 </resources>

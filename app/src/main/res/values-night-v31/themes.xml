@@ -7,9 +7,10 @@
         <item name="android:windowDisablePreview">true</item>
     </style>
 
+    <!-- 拾光音乐新启动图（夜间同样用白色底+新 LOGO，与日间一致） -->
     <style name="Theme.NeriPlayer.Starting" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">#FF121212</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_neriplayer_splash</item>
+        <item name="windowSplashScreenBackground">#FFFFFFFF</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
         <item name="postSplashScreenTheme">@style/Theme.NeriPlayer</item>
     </style>
 </resources>
