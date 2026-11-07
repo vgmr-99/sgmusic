@@ -518,6 +518,14 @@ object AppContainer {
     val lrcLibClient by lazy { LrcLibLyricsRepository(LrcLibClient(sharedOkHttpClient)) }
     val amllTtmlClient by lazy { AmllLyricsRepository(AmllTtmlClient(sharedOkHttpClient)) }
     val kugouLyricsClient by lazy { KugouLyricsRepository(KugouLyricsClient(sharedOkHttpClient)) }
+    // LX 自定义源（阶段 2）：GPL-3.0，JS 宿主代发经共享 OkHttp；脚本文件落盘 filesDir/lx_sources.json
+    val lxSourceRepository by lazy {
+        moe.ouom.neriplayer.platform.lxsource.LxSourceRepository(
+            http = moe.ouom.neriplayer.platform.lxsource.LxHttpClient(sharedOkHttpClient),
+            preloadJs = moe.ouom.neriplayer.platform.lxsource.LxPreload.load(applicationContext),
+            store = moe.ouom.neriplayer.platform.lxsource.FileLxSourceStore(applicationContext),
+        )
+    }
     val editableLyricsMatcher by lazy {
         EditableLyricsMatcher(
             cloudMusicSearchApi = cloudMusicSearchApi,

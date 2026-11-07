@@ -48,7 +48,8 @@ enum class PlaybackSourceType {
     BILIBILI,
     YOUTUBE_MUSIC,
     LOCAL,
-    SUBSONIC
+    SUBSONIC,
+    LX
 }
 
 @Composable
@@ -113,6 +114,13 @@ fun PlaybackSourceBadge(
                 Icon(imageVector = Icons.Outlined.LibraryMusic,
                     contentDescription = null, modifier = Modifier.size(16.dp))
                 Text(stringResource(CoreCommonR.string.server_source),
+                    style = MaterialTheme.typography.labelSmall)
+            }
+            PlaybackSourceType.LX -> {
+                Icon(imageVector = Icons.Outlined.LibraryMusic,
+                    contentDescription = stringResource(CoreCommonR.string.settings_lx_source),
+                    modifier = Modifier.size(16.dp))
+                Text(stringResource(CoreCommonR.string.settings_lx_source),
                     style = MaterialTheme.typography.labelSmall)
             }
             PlaybackSourceType.LOCAL -> {

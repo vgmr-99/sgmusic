@@ -173,6 +173,7 @@ private fun qualityLabelForCachedSource(
         PlaybackAudioSource.BILIBILI -> qualityLabelForBili(key, getLocalizedString)
         PlaybackAudioSource.YOUTUBE_MUSIC -> qualityLabelForYouTube(key, getLocalizedString)
         PlaybackAudioSource.SUBSONIC -> getLocalizedString(moe.ouom.neriplayer.common.R.string.server_quality_original)
+        PlaybackAudioSource.LX -> key
         PlaybackAudioSource.LOCAL -> key
     }
 }

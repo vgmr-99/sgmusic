@@ -60,6 +60,7 @@
     <string name="onboarding_enhanced_blur_prompt_not_now">暂不开启</string>
     <string name="onboarding_complete_hint">完成习惯设置后会进入学习引导，帮助你了解容易错过的功能入口</string>
     <string name="onboarding_action_next">继续</string>
+    <string name="onboarding_skip_all">跳过全部（使用默认选项）</string>
     <string name="onboarding_platform_action_manage">管理</string>
     <string name="onboarding_playback_sources_title">播放源兜底</string>
     <string name="onboarding_playback_sources_desc">默认关闭自动兜底。只有你确认后，应用才会在原始音源不可用时尝试其他来源</string>

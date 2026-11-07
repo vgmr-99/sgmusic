@@ -33,9 +33,9 @@
     <string name="home_favorite_playlist">收藏歌单</string>
     <string name="home_unfavorited">已取消收藏</string>
     <string name="continue_playing_remove">移除</string>
-    <string name="home_title_brand_loud">音理音理!!</string>
-    <string name="home_title_brand_wave">音理音理~</string>
-    <string name="home_title_brand_call">NeriPlayer</string>
+    <string name="home_title_brand_loud">拾光音乐</string>
+    <string name="home_title_brand_wave">拾光音乐</string>
+    <string name="home_title_brand_call">拾光音乐</string>
     <string name="home_all_cards_hidden">首页卡片已全部隐藏，可在设置中重新开启。</string>
     <string name="home_offline_no_continue">脱机模式下仅显示继续播放，暂无可显示内容。</string>
     <string name="offline_mode_title">脱机模式</string>

@@ -657,6 +657,12 @@ class SettingsRepository(private val context: Context) {
     val neteaseLocalSourceFallbackFlow: Flow<Boolean> =
         dataStoreSettingFlow { it[SettingsKeys.NETEASE_LOCAL_SOURCE_FALLBACK] ?: false }
 
+    val lxSourceEnabledFlow: Flow<Boolean> =
+        dataStoreSettingFlow { it[SettingsKeys.LX_SOURCE_ENABLED] ?: false }
+
+    val lxSourceQualityFlow: Flow<String> =
+        dataStoreSettingFlow { it[SettingsKeys.LX_SOURCE_QUALITY] ?: "320k" }
+
     val stopOnBluetoothDisconnectFlow: Flow<Boolean> =
         dataStoreSettingFlow { it[SettingsKeys.STOP_ON_BLUETOOTH_DISCONNECT] ?: true }
 
@@ -1524,6 +1530,20 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[SettingsKeys.NETEASE_LOCAL_SOURCE_FALLBACK] = enabled }
         updatePlaybackPreferenceSnapshot(context) {
             it.copy(neteaseLocalSourceFallback = enabled)
+        }
+    }
+
+    suspend fun setLxSourceEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[SettingsKeys.LX_SOURCE_ENABLED] = enabled }
+        updatePlaybackPreferenceSnapshot(context) {
+            it.copy(lxSourceEnabled = enabled)
+        }
+    }
+
+    suspend fun setLxSourceQuality(quality: String) {
+        context.dataStore.edit { it[SettingsKeys.LX_SOURCE_QUALITY] = quality }
+        updatePlaybackPreferenceSnapshot(context) {
+            it.copy(lxSourceQuality = quality)
         }
     }
 

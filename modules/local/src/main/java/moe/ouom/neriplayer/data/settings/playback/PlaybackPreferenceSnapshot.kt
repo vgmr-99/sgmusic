@@ -108,6 +108,8 @@ private const val PLAYBACK_REMEMBER_LONG_FORM_PROGRESS_KEY =
 private const val PLAYBACK_KEEP_MODE_STATE_KEY = "keep_playback_mode_state"
 private const val PLAYBACK_NETEASE_AUTO_SOURCE_SWITCH_KEY = "netease_auto_source_switch"
 private const val PLAYBACK_NETEASE_LOCAL_SOURCE_FALLBACK_KEY = "netease_local_source_fallback"
+private const val PLAYBACK_LX_SOURCE_ENABLED_KEY = "lx_source_enabled"
+private const val PLAYBACK_LX_SOURCE_QUALITY_KEY = "lx_source_quality"
 private const val PLAYBACK_FADE_IN_KEY = "playback_fade_in"
 private const val PLAYBACK_CROSSFADE_NEXT_KEY = "playback_crossfade_next"
 private const val PLAYBACK_SLEEP_TIMER_FINISH_CURRENT_ON_EXPIRY_KEY =
@@ -266,6 +268,8 @@ private fun persistNormalizedPlaybackPreferenceSnapshot(
                     PLAYBACK_NETEASE_LOCAL_SOURCE_FALLBACK_KEY,
                     normalizedSnapshot.neteaseLocalSourceFallback
                 )
+                .putBoolean(PLAYBACK_LX_SOURCE_ENABLED_KEY, normalizedSnapshot.lxSourceEnabled)
+                .putString(PLAYBACK_LX_SOURCE_QUALITY_KEY, normalizedSnapshot.lxSourceQuality)
                 .putBoolean(PLAYBACK_FADE_IN_KEY, normalizedSnapshot.playbackFadeIn)
                 .putBoolean(PLAYBACK_CROSSFADE_NEXT_KEY, normalizedSnapshot.playbackCrossfadeNext)
                 .putBoolean(
@@ -406,6 +410,8 @@ fun Preferences.toPlaybackPreferenceSnapshot(): PlaybackPreferenceSnapshot {
         keepPlaybackModeState = valueOr(SettingsKeys.KEEP_PLAYBACK_MODE_STATE, true),
         neteaseAutoSourceSwitch = valueOr(SettingsKeys.NETEASE_AUTO_SOURCE_SWITCH, false),
         neteaseLocalSourceFallback = valueOr(SettingsKeys.NETEASE_LOCAL_SOURCE_FALLBACK, false),
+        lxSourceEnabled = valueOr(SettingsKeys.LX_SOURCE_ENABLED, false),
+        lxSourceQuality = valueOr(SettingsKeys.LX_SOURCE_QUALITY, "320k"),
         playbackFadeIn = valueOr(SettingsKeys.PLAYBACK_FADE_IN, true),
         playbackCrossfadeNext = valueOr(SettingsKeys.PLAYBACK_CROSSFADE_NEXT, true),
         sleepTimerFinishCurrentOnExpiry = valueOr(SettingsKeys.PLAYBACK_SLEEP_TIMER_FINISH_CURRENT_ON_EXPIRY, false),
@@ -533,6 +539,8 @@ private fun SharedPreferences.toCachedPlaybackPreferenceSnapshot(): PlaybackPref
             prefs.getBoolean(PLAYBACK_NETEASE_AUTO_SOURCE_SWITCH_KEY, false),
         neteaseLocalSourceFallback =
             prefs.getBoolean(PLAYBACK_NETEASE_LOCAL_SOURCE_FALLBACK_KEY, false),
+        lxSourceEnabled = prefs.getBoolean(PLAYBACK_LX_SOURCE_ENABLED_KEY, false),
+        lxSourceQuality = prefs.stringOr(PLAYBACK_LX_SOURCE_QUALITY_KEY, "320k"),
         playbackFadeIn = prefs.getBoolean(PLAYBACK_FADE_IN_KEY, true),
         playbackCrossfadeNext = prefs.getBoolean(PLAYBACK_CROSSFADE_NEXT_KEY, true),
         sleepTimerFinishCurrentOnExpiry = prefs.getBoolean(
@@ -654,6 +662,7 @@ fun PlaybackPreferenceSnapshot.sanitized(): PlaybackPreferenceSnapshot {
         audioQuality = audioQuality.trim().ifBlank { "exhigh" },
         youtubeAudioQuality = youtubeAudioQuality.trim().ifBlank { "high" },
         biliAudioQuality = biliAudioQuality.trim().ifBlank { "high" },
+        lxSourceQuality = lxSourceQuality.trim().ifBlank { "320k" },
         mobileDataNeteaseAudioQuality =
             normalizeMobileDataNeteaseAudioQuality(mobileDataNeteaseAudioQuality),
         mobileDataYouTubeAudioQuality =

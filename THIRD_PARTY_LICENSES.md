@@ -14,6 +14,7 @@ NeriPlayer 按根目录的 [GPL-3.0 许可证](LICENSE) 发布。本文记录部
 | [Capsulyric](https://github.com/FrancoGiudans/Capsulyric) | Directly ported `ShizukuHook`, `FirewallCompat`, `ShizukuXmsfNetworkHelper`, and the aggressive-isolation state handling used by the Super Island lyric bridge | GPL-3.0-or-later, as declared in the adapted source headers |
 | [InstallerX Revived](https://github.com/wxxsfxyzm/InstallerX-Revived) | Upstream Shizuku hooked-binder technique retained by the Capsulyric port | GPL-3.0-only |
 | libusb | Sources and headers in [`modules/native/src/main/cpp/third_party/libusb/`](modules/native/src/main/cpp/third_party/libusb/) used by USB exclusive output | LGPL-2.1-or-later, as declared in the imported source headers |
+| [quickjs-wrapper (wang.harlon.quickjs:wrapper-android 3.2.3)](https://github.com/HarlonWang/quickjs-wrapper) | QuickJS Android/JVM runtime used by the LX custom-source host (`modules/platform/.../lxsource/`) | Apache-2.0 |
 
 The Super Island adaptations are in
 [`shizuku/`](modules/playback/runtime/src/main/java/moe/ouom/neriplayer/core/player/shizuku/)

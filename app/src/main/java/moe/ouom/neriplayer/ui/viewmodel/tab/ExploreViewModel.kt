@@ -36,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import moe.ouom.neriplayer.common.R as CoreCommonR
@@ -747,7 +748,15 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     /** 搜索网易云歌曲 */
     private fun searchNetease(keyword: String, matchQuery: String, requestVersion: Long) {
         if (!isNeteaseSearchAllowed()) {
-            clearNeteaseSearchForAuthRequired()
+            // 未登录时，老行为是直接提示登录；现在先尝试 LX 自定义源搜索作为替代，
+            // LX 也不可用时才回退到登录提示。
+            searchJob = viewModelScope.launch {
+                if (isLxSearchAvailable()) {
+                    searchLx(keyword, matchQuery, requestVersion)
+                } else {
+                    clearNeteaseSearchForAuthRequired()
+                }
+            }
             return
         }
         val type = _uiState.value.selectedNeteaseSearchType
@@ -806,6 +815,63 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     private fun isNeteaseSearchAllowed(): Boolean {
         return isNeteaseExploreSearchAvailable(neteaseRepo.getAuthHealthOnce().state)
+    }
+
+    /**
+     * LX 自定义源搜索可用性：LX 总开关已移除，只要至少一个 OK 的已启用脚本即可。
+     * 未登录时作为网易云搜索的自动替代，播放时走 LX 兜底。
+     */
+    private suspend fun isLxSearchAvailable(): Boolean {
+        return AppContainer.lxSourceRepository.items.value.any {
+            it.enabled && it.state == moe.ouom.neriplayer.platform.lxsource.LxSourceState.OK
+        }
+    }
+
+    /** LX 自定义源搜索：结果直接是带 songmid 的 SongItem，播放由 LX musicUrl 解析兜底。 */
+    private fun searchLx(keyword: String, matchQuery: String, requestVersion: Long) {
+        searchJob = viewModelScope.launch {
+            try {
+                val songs = withContext(Dispatchers.IO) {
+                    AppContainer.lxSourceRepository.searchSongsForUi(keyword)
+                }.let { rankExploreSongSearchResults(matchQuery, it) }
+                if (!isSearchRequestCurrent(requestVersion, SearchSource.NETEASE)) return@launch
+                NPLogger.d(
+                    TAG,
+                    "search LX success: request=$requestVersion, keyword=$keyword, count=${songs.size}"
+                )
+                val items = songs.map(ExploreSearchResult::Song)
+                updateSearchStateIfCurrent(requestVersion, SearchSource.NETEASE) {
+                    it.copy(
+                        searching = false,
+                        searchError = null,
+                        searchLoadMoreError = null,
+                        searchResults = songs,
+                        searchItems = items,
+                        searchPage = 1,
+                        searchHasMore = false
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                NPLogger.e(TAG, "search LX failed: request=$requestVersion, keyword=$keyword", e)
+                updateSearchStateIfCurrent(requestVersion, SearchSource.NETEASE) {
+                    it.copy(
+                        searching = false,
+                        searchError = feedbackText(
+                            CoreCommonR.string.error_netease_search,
+                            e.message ?: feedbackText(CoreCommonR.string.github_sync_failed_message)
+                        ),
+                        searchResults = emptyList(),
+                        searchItems = emptyList(),
+                        searchHasMore = false,
+                        searchLoadingMore = false,
+                        searchLoadMoreError = null,
+                        searchPage = 0
+                    )
+                }
+            }
+        }
     }
 
     private fun clearNeteaseSearchForAuthRequired() {

@@ -1829,4 +1829,42 @@ object AutoSettingsSchema {
             icon = AutoSettingIcon.PlaylistPlay
         )
     }
+
+    /*
+     * LX 自定义源兜底
+     * 阶段 1 最小闭环：总开关 + 默认音质；脚本导入/启停在后续 Custom UI
+     */
+    @AutoSettingsSection(
+        order = 115
+    )
+    object lxSource {
+        val metadata = autoSettingsSection(
+            titleRes = CoreCommonR.string.settings_lx_source,
+            descriptionRes = CoreCommonR.string.settings_lx_source_desc,
+            icon = AutoSettingIcon.LibraryMusic
+        )
+
+        @AutoSetting(order = 10)
+        val lxSourceEnabled = autoSwitchSetting(
+            key = "lx_source_enabled",
+            defaultValue = false,
+            titleRes = CoreCommonR.string.settings_lx_source_enabled,
+            descriptionRes = CoreCommonR.string.settings_lx_source_enabled_desc,
+            icon = AutoSettingIcon.LibraryMusic
+        )
+
+        @AutoSetting(
+            key = "lx_source_quality",
+            type = SettingValueType.String,
+            defaultString = "320k",
+            order = 20,
+            ui = SettingUiType.Custom,
+            access = SettingAccessMode.KeyOnly
+        )
+        val lxSourceQuality = autoSetting(
+            titleRes = CoreCommonR.string.settings_lx_source_quality,
+            descriptionRes = CoreCommonR.string.settings_lx_source_quality_desc,
+            icon = AutoSettingIcon.Audiotrack
+        )
+    }
 }

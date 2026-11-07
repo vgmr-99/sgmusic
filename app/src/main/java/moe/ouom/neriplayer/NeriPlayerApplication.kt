@@ -150,6 +150,12 @@ class NeriPlayerApplication : Application(), WorkConfiguration.Provider {
 
             NativeCrashHandler.init(this)
             AppContainer.initialize(this)
+            // LX 自定义源：文件落盘 + 脚本初始化不阻塞启动（失败仅记日志，兜底链保持休眠）。
+            // 不等交互门槛：脚本 init 只读 filesDir 与求值 JS，并不依赖 UI 就绪，等门槛反而拖慢启动。
+            AppContainer.launchBackgroundIo {
+                runCatching { AppContainer.lxSourceRepository.init() }
+                    .onFailure { NPLogger.e("LxSource", "init fail", it) }
+            }
             AppContainer.launchBackgroundIo {
                 val recoveredMetadataWrites = LocalMediaMetadataRecoveryStore.recoverInterruptedWrites(
                     this@NeriPlayerApplication

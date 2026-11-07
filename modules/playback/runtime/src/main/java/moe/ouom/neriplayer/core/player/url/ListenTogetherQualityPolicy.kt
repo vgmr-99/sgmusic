@@ -19,6 +19,7 @@ internal fun maxListenTogetherStreamUrlCandidates(source: PlaybackAudioSource): 
         PlaybackAudioSource.NETEASE -> MAX_LISTEN_TOGETHER_STREAM_URL_CANDIDATES
         PlaybackAudioSource.BILIBILI -> MAX_LISTEN_TOGETHER_BILI_STREAM_URL_CANDIDATES
         PlaybackAudioSource.YOUTUBE_MUSIC -> MAX_LISTEN_TOGETHER_YOUTUBE_STREAM_URL_CANDIDATES
+        PlaybackAudioSource.LX -> MAX_LISTEN_TOGETHER_STREAM_URL_CANDIDATES
         PlaybackAudioSource.LOCAL, PlaybackAudioSource.SUBSONIC -> 0
     }
 }

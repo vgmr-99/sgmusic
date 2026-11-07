@@ -35,7 +35,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -152,7 +152,8 @@ internal fun MiuixSettingsHomeScaffold(
             )
         }
     )
-    val showExpandedTitleMask = scrollBehavior.state.collapsedFraction < 0.5f
+    // 小 TopAppBar 常驻：无展开标题位，毛玻璃采样恒按折叠态注册
+    val showExpandedTitleMask = false
     val miniPlayerHeight = LocalMiniPlayerHeight.current
     val isTabletLayout = currentWindowWidthDp() >= 720.dp
     val horizontalPadding = settingsHorizontalPadding(isTabletLayout)
@@ -160,18 +161,17 @@ internal fun MiuixSettingsHomeScaffold(
     Scaffold(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Transparent)
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
+            .background(Color.Transparent),
         containerColor = Color.Transparent,
         // 底部避让由导航宿主和列表留白负责，滚动视口应延伸到系统导航区
         contentWindowInsets = ScaffoldDefaults.contentWindowInsets.only(
             WindowInsetsSides.Top + WindowInsetsSides.Horizontal
         ),
         topBar = {
-            LargeTopAppBar(
+            TopAppBar(
                 title = {
-                    // large top app bars compose both title slots, but only one is visible
-                    val isExpandedTitleSlot = LocalTextStyle.current.fontSize.value > 24f
+                    // 小标题栏常驻：毛玻璃采样恒按折叠态注册
+                    val isExpandedTitleSlot = false
                     CompositionLocalProvider(
                         LocalAdvancedGlassBackdropRegistrationEnabled provides
                             if (isExpandedTitleSlot) {
@@ -183,7 +183,6 @@ internal fun MiuixSettingsHomeScaffold(
                         title()
                     }
                 },
-                scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,
                     scrolledContainerColor = Color.Transparent
@@ -466,14 +465,13 @@ internal fun MiuixSettingsDetailScaffold(
     Scaffold(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Transparent)
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
+            .background(Color.Transparent),
         containerColor = Color.Transparent,
         contentWindowInsets = ScaffoldDefaults.contentWindowInsets.only(
             WindowInsetsSides.Top + WindowInsetsSides.Horizontal
         ),
         topBar = {
-            LargeTopAppBar(
+            TopAppBar(
                 title = { Text(title) },
                 navigationIcon = {
                     if (showBackButton) {
@@ -485,7 +483,6 @@ internal fun MiuixSettingsDetailScaffold(
                         }
                     }
                 },
-                scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,
                     scrolledContainerColor = Color.Transparent

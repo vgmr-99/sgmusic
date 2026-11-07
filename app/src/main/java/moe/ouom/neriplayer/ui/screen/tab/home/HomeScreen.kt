@@ -77,7 +77,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -309,18 +309,7 @@ fun HomeScreen(
     ).distinct()
     val titleSeed = rememberSaveable { (0..Int.MAX_VALUE).random() }
     val appBarTitle = titleOptions[titleSeed % titleOptions.size]
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
-        state = topAppBarState,
-        // follow the finger and stay put; a release snap reads as an unwanted bounce
-        snapAnimationSpec = null,
-        canScroll = {
-            shouldAllowCollapsingTopAppBar(
-                canScrollForward = gridState.canScrollForward,
-                canScrollBackward = gridState.canScrollBackward,
-                collapsedFraction = topAppBarState.collapsedFraction
-            )
-        }
-    )
+    // 标题常驻顶部：小 TopAppBar + 无滚动行为，列表滚动时栏位不消失、不折叠
 
     val snackbarHostState = remember { SnackbarHostState() }
     val guessYouLikeTitle = stringResource(CoreCommonR.string.home_ytmusic_guess_you_like)
@@ -434,9 +423,8 @@ fun HomeScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .padding(top = if (isTabletDevice) 8.dp else 0.dp)
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
         ) {
-            LargeTopAppBar(
+            TopAppBar(
                 title = { Text(appBarTitle, modifier = Modifier.padding(start = appBarTitleInset)) },
                 actions = {
                     HapticIconButton(
@@ -455,7 +443,6 @@ fun HomeScreen(
                         )
                     }
                 },
-                scrollBehavior = scrollBehavior,
                 windowInsets = WindowInsets(0),
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,

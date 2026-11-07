@@ -201,6 +201,7 @@ internal fun listenTogetherQualityRank(
         PlaybackAudioSource.NETEASE -> NETEASE_LISTEN_TOGETHER_QUALITY_ORDER
         PlaybackAudioSource.BILIBILI -> BILI_LISTEN_TOGETHER_QUALITY_ORDER
         PlaybackAudioSource.YOUTUBE_MUSIC -> YOUTUBE_LISTEN_TOGETHER_QUALITY_ORDER
+        PlaybackAudioSource.LX -> LX_LISTEN_TOGETHER_QUALITY_ORDER
         PlaybackAudioSource.LOCAL, PlaybackAudioSource.SUBSONIC -> emptyList()
     }.indexOf(normalized).takeIf { it >= 0 }
 }
@@ -230,6 +231,9 @@ private fun normalizeListenTogetherQualityKey(
         PlaybackAudioSource.YOUTUBE_MUSIC -> normalized.takeIf {
             it in YOUTUBE_LISTEN_TOGETHER_QUALITY_ORDER
         }
+        PlaybackAudioSource.LX -> normalized.takeIf {
+            it in LX_LISTEN_TOGETHER_QUALITY_ORDER
+        }
         PlaybackAudioSource.LOCAL, PlaybackAudioSource.SUBSONIC -> null
     }
 }
@@ -241,6 +245,7 @@ private fun listenTogetherSourceKey(source: PlaybackAudioSource): String {
         PlaybackAudioSource.YOUTUBE_MUSIC -> "youtube"
         PlaybackAudioSource.SUBSONIC -> "subsonic"
         PlaybackAudioSource.LOCAL -> "local"
+        PlaybackAudioSource.LX -> "lx"
     }
 }
 
@@ -269,6 +274,14 @@ private val YOUTUBE_LISTEN_TOGETHER_QUALITY_ORDER = listOf(
     "medium",
     "high",
     "very_high"
+)
+
+// LX 自定义源音质顺序：与 LxQuality 对齐（低->高）
+private val LX_LISTEN_TOGETHER_QUALITY_ORDER = listOf(
+    "128k",
+    "320k",
+    "flac",
+    "flac24bit"
 )
 
 internal fun isShareableListenTogetherStreamResolution(result: SongUrlResult): Boolean {
@@ -347,6 +360,7 @@ internal fun PlayerManager.listenTogetherFallbackResult(song: SongItem): SongUrl
         PlaybackAudioSource.NETEASE -> effectiveNeteaseQuality()
         PlaybackAudioSource.BILIBILI -> effectiveBiliQuality()
         PlaybackAudioSource.YOUTUBE_MUSIC -> effectiveYouTubeQuality()
+        PlaybackAudioSource.LX -> ""
         PlaybackAudioSource.LOCAL, PlaybackAudioSource.SUBSONIC -> ""
     }
     val legacyAudioInfo = listenTogetherFallbackAudioInfo(song)
@@ -382,6 +396,7 @@ internal fun PlayerManager.listenTogetherPreferredQualityKey(song: SongItem): St
         PlaybackAudioSource.NETEASE -> effectiveNeteaseQuality()
         PlaybackAudioSource.BILIBILI -> effectiveBiliQuality()
         PlaybackAudioSource.YOUTUBE_MUSIC -> effectiveYouTubeQuality()
+        PlaybackAudioSource.LX -> null
         PlaybackAudioSource.LOCAL, PlaybackAudioSource.SUBSONIC -> null
     }
 }
@@ -436,6 +451,11 @@ internal fun buildListenTogetherFallbackAudioInfo(
                 }
             )
         }
+        PlaybackAudioSource.LX -> PlaybackAudioInfo(
+            source = PlaybackAudioSource.LX,
+            qualityKey = preferredQualityKey.trim().lowercase().ifBlank { "320k" },
+            qualityLabel = preferredQualityKey.trim().lowercase().ifBlank { "320k" }
+        )
         PlaybackAudioSource.SUBSONIC -> PlaybackAudioInfo(source = PlaybackAudioSource.SUBSONIC)
         PlaybackAudioSource.LOCAL -> PlaybackAudioInfo(source = PlaybackAudioSource.LOCAL)
     }

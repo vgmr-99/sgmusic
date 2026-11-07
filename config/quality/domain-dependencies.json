@@ -3246,6 +3246,37 @@
     ]
   },
   {
+    "name": "platform-lxsource",
+    "package": "moe.ouom.neriplayer.platform.lxsource.",
+    "allowed_classes": [
+      "java.lang.*",
+      "java.util.concurrent.*",
+      "java.util.*",
+      "java.io.*",
+      "java.nio.charset.*",
+      "java.security.*",
+      "javax.crypto.*",
+      "kotlin.*",
+      "kotlinx.coroutines.*",
+      "kotlinx.coroutines.flow.*",
+      "kotlinx.coroutines.sync.*",
+      "kotlinx.serialization.*",
+      "kotlinx.serialization.json.*",
+      "okhttp3.*",
+      "org.json.*",
+      "android.content.Context",
+      "android.content.res.AssetManager",
+      "android.util.Base64",
+      "com.whl.quickjs.*",
+      "moe.ouom.neriplayer.common.logging.NPLogger",
+      "moe.ouom.neriplayer.data.model.SongItem",
+      "moe.ouom.neriplayer.data.model.music.MusicPlatform",
+      "moe.ouom.neriplayer.data.model.playback.*"
+    ],
+    "bridges": {},
+    "descriptor_only": []
+  },
+  {
     "name": "lyrics-output",
     "package": "moe.ouom.neriplayer.lyrics.output.",
     "allowed_classes": [

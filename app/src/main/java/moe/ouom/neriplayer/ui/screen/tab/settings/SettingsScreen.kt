@@ -446,16 +446,7 @@ internal fun SettingsScreen(
                         },
 
                         SettingsPage.Theme to {
-                            miuixSettingsSectionCardItem(key = "${selectedPage.name}:ui_style") {
-                                SettingsUiStyleSelector(
-                                    modifier = Modifier.settingsHighlightTarget(
-                                        targetId = "setting:ui_style",
-                                        highlightTargetId = settingsHighlightTargetId,
-                                        highlightPulse = settingsHighlightPulse,
-                                        onHighlightFinished = onSettingsHighlightFinished
-                                    )
-                                )
-                            }
+                            // 拾光音乐默认简洁界面风格，不展示界面风格选择
                             miuixSettingsSectionCardItem(key = "${selectedPage.name}:mode") {
                                 MiuixSettingsSectionIntro(
                                     title = stringResource(CoreCommonR.string.settings_theme_mode),
@@ -934,6 +925,15 @@ internal fun SettingsScreen(
                             item(key = "${selectedPage.name}:content") {
                                 XiaomiSuperIslandSettingsPage(
                                     autoSettingsRepository = autoSettingsRepository,
+                                    settingsRepository = repository,
+                                    modifier = Modifier.animateItem()
+                                )
+                            }
+                        },
+
+                        SettingsPage.LxSources to {
+                            item(key = "${selectedPage.name}:content") {
+                                moe.ouom.neriplayer.ui.screen.tab.settings.component.playback.SettingsLxSourceSection(
                                     settingsRepository = repository,
                                     modifier = Modifier.animateItem()
                                 )

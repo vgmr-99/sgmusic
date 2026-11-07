@@ -437,6 +437,10 @@ private fun PlayerManager.applyInitialPlaybackPreferences(
         initialPlaybackPreferences.neteaseAutoSourceSwitch
     neteaseLocalSourceFallbackEnabled =
         initialPlaybackPreferences.neteaseLocalSourceFallback
+    lxSourceEnabled =
+        initialPlaybackPreferences.lxSourceEnabled
+    lxSourceQuality =
+        initialPlaybackPreferences.lxSourceQuality
     playbackFadeInEnabled = initialPlaybackPreferences.playbackFadeIn
     playbackCrossfadeNextEnabled =
         initialPlaybackPreferences.playbackCrossfadeNext
@@ -1476,6 +1480,23 @@ private fun PlayerManager.observePlaybackSettings() {
                     reason = "netease_local_source_fallback_enabled"
                 )
             }
+        }
+    }
+    ioScope.launch {
+        settingsRepo.lxSourceEnabledFlow.collect { enabled ->
+            val previousEnabled = lxSourceEnabled
+            lxSourceEnabled = enabled
+            if (!previousEnabled && enabled) {
+                scheduleQualityRefresh(
+                    source = PlaybackAudioSource.NETEASE,
+                    reason = "lx_source_enabled"
+                )
+            }
+        }
+    }
+    ioScope.launch {
+        settingsRepo.lxSourceQualityFlow.collect { quality ->
+            lxSourceQuality = quality
         }
     }
     ioScope.launch {

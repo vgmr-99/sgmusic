@@ -23,6 +23,7 @@ dependencies {
     implementation(project(":common"))
 
     implementation(libs.okhttp)
+    implementation("wang.harlon.quickjs:wrapper-android:3.2.3")
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.dec)
     implementation(libs.androidx.media3.datasource)

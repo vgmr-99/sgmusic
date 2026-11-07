@@ -45,6 +45,7 @@ private object AppPlayerRepositories : PlayerRepositoryDependencies {
     override val localPlaylistPlaybackStatsRepo get() = AppContainer.localPlaylistPlaybackStatsRepo
     override val trafficStatsRepo get() = AppContainer.trafficStatsRepo
     override val sharedOkHttpClient get() = AppContainer.sharedOkHttpClient
+    override val lxSourceRepository get() = runCatching { AppContainer.lxSourceRepository }.getOrNull()
 }
 
 private object AppPlayerListenTogether : PlayerListenTogetherAccess {

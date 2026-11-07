@@ -38,6 +38,8 @@ data class PlaybackPreferenceSnapshot(
     val keepPlaybackModeState: Boolean = true,
     val neteaseAutoSourceSwitch: Boolean = false,
     val neteaseLocalSourceFallback: Boolean = false,
+    val lxSourceEnabled: Boolean = false,
+    val lxSourceQuality: String = "320k",
     val playbackFadeIn: Boolean = true,
     val playbackCrossfadeNext: Boolean = true,
     val sleepTimerFinishCurrentOnExpiry: Boolean = false,

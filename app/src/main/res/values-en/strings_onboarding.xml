@@ -60,6 +60,7 @@
     <string name="onboarding_enhanced_blur_prompt_not_now">Leave off</string>
     <string name="onboarding_complete_hint">After the preference steps, the learning guide will show you easy-to-miss feature entry points.</string>
     <string name="onboarding_action_next">Continue</string>
+    <string name="onboarding_skip_all">Skip all (use defaults)</string>
     <string name="onboarding_platform_action_manage">Manage</string>
     <string name="onboarding_playback_sources_title">Playback source fallback</string>
     <string name="onboarding_playback_sources_desc">Automatic fallback is off by default. It only tries another source after you confirm it here.</string>

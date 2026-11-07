@@ -64,6 +64,7 @@ import moe.ouom.neriplayer.core.player.quality.effectiveYouTubeQuality
 import moe.ouom.neriplayer.platform.netease.api.playback.parser.NeteasePlaybackResponseParser
 import moe.ouom.neriplayer.core.player.resolver.netease.tryResolveNeteaseAutoBiliSource
 import moe.ouom.neriplayer.core.player.resolver.netease.tryResolveNeteaseMatchedLocalSource
+import moe.ouom.neriplayer.core.player.resolver.lxsource.tryResolveLxSource
 import moe.ouom.neriplayer.core.player.watchdog.configureActivePlaybackCandidates
 import moe.ouom.neriplayer.core.player.watchdog.currentPlaybackCandidate
 import moe.ouom.neriplayer.core.player.watchdog.resetPlaybackProgressAdvanceBaseline
@@ -1705,6 +1706,13 @@ private suspend fun PlayerManager.getNeteaseSongUrl(
                 tryResolveNeteaseAutoBiliSource(song, sideEffects)?.let {
                     return@withContext it
                 }
+            }
+        }
+        // LX 自定义源兜底：换源链最后一档。网易云任意失败（含地区限制、无 URL）都试 LX，
+        // 有预览试听片段时 LX 全曲也优先于试听。
+        if (allowAutoBiliFallback) {
+            tryResolveLxSource(song)?.let {
+                return@withContext it
             }
         }
 

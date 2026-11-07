@@ -23,6 +23,7 @@ import moe.ouom.neriplayer.data.stats.PlaybackStatsRepository
 import moe.ouom.neriplayer.data.traffic.TrafficStatsRepository
 import moe.ouom.neriplayer.platform.youtube.auth.YouTubeAuthRepository
 import moe.ouom.neriplayer.platform.youtube.repository.YouTubeMusicPlaybackRepository
+import moe.ouom.neriplayer.platform.lxsource.LxSourceRepository
 import okhttp3.OkHttpClient
 
 interface PlayerRepositoryDependencies {
@@ -49,6 +50,7 @@ interface PlayerRepositoryDependencies {
     val localPlaylistPlaybackStatsRepo: LocalPlaylistPlaybackStatsRepository
     val trafficStatsRepo: TrafficStatsRepository
     val sharedOkHttpClient: OkHttpClient
+    val lxSourceRepository: LxSourceRepository? get() = null
 }
 
 internal val settingsRepo get() = PlayerDependencies.repositories.settingsRepo

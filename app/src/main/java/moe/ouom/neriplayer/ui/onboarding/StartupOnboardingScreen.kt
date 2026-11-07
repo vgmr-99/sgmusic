@@ -1072,38 +1072,47 @@ fun StartupOnboardingScreen(
                                 )
                             },
                             actions = {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (stepIndex > 0) {
-                                        HapticTextButton(
-                                            onClick = {
-                                                transitionToStep(stepIndex - 1)
-                                            },
-                                            enabled = canNavigateBack,
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text(stringResource(CoreCommonR.string.action_back))
-                                        }
-                                    } else {
-                                        Spacer(Modifier.weight(1f))
-                                    }
-
-                                    HapticButton(
-                                        onClick = ::goNextStep,
-                                        enabled = canNavigateNext,
-                                        modifier = Modifier.weight(1.4f),
-                                        shape = OnboardingControlShape
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(
-                                            text = if (stepIndex == steps.lastIndex) {
-                                                stringResource(AppR.string.onboarding_learning_enter_app)
-                                            } else {
-                                                stringResource(AppR.string.onboarding_action_next)
+                                        if (stepIndex > 0) {
+                                            HapticTextButton(
+                                                onClick = {
+                                                    transitionToStep(stepIndex - 1)
+                                                },
+                                                enabled = canNavigateBack,
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(stringResource(CoreCommonR.string.action_back))
                                             }
-                                        )
+                                        } else {
+                                            Spacer(Modifier.weight(1f))
+                                        }
+
+                                        HapticButton(
+                                            onClick = ::goNextStep,
+                                            enabled = canNavigateNext,
+                                            modifier = Modifier.weight(1.4f),
+                                            shape = OnboardingControlShape
+                                        ) {
+                                            Text(
+                                                text = if (stepIndex == steps.lastIndex) {
+                                                    stringResource(AppR.string.onboarding_learning_enter_app)
+                                                } else {
+                                                    stringResource(AppR.string.onboarding_action_next)
+                                                }
+                                            )
+                                        }
+                                    }
+                                    HapticTextButton(
+                                        onClick = { finishOnboarding() },
+                                        enabled = canNavigateNext,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(stringResource(AppR.string.onboarding_skip_all))
                                     }
                                 }
                             }

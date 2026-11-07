@@ -490,6 +490,10 @@ object PlayerManager {
     internal var neteaseAutoSourceSwitchEnabled = false
     @Volatile
     internal var neteaseLocalSourceFallbackEnabled = false
+    @Volatile
+    internal var lxSourceEnabled = false
+    @Volatile
+    internal var lxSourceQuality = "320k"
     internal var stopOnBluetoothDisconnectEnabled = true
     @Volatile
     var usbExclusivePlaybackEnabled = false

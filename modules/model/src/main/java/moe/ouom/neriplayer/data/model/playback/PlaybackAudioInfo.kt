@@ -7,7 +7,8 @@ enum class PlaybackAudioSource {
     NETEASE,
     BILIBILI,
     YOUTUBE_MUSIC,
-    SUBSONIC
+    SUBSONIC,
+    LX
 }
 
 data class PlaybackQualityOption(
@@ -100,7 +101,8 @@ fun estimateBitrateKbps(
 data class PreferredQualityKeys(
     val netease: String = "exhigh",
     val youtube: String = "high",
-    val bili: String = "high"
+    val bili: String = "high",
+    val lx: String = "320k"
 )
 
 fun PreferredQualityKeys.forSource(source: PlaybackAudioSource): String? {
@@ -108,6 +110,7 @@ fun PreferredQualityKeys.forSource(source: PlaybackAudioSource): String? {
         PlaybackAudioSource.NETEASE -> netease
         PlaybackAudioSource.YOUTUBE_MUSIC -> youtube
         PlaybackAudioSource.BILIBILI -> bili
+        PlaybackAudioSource.LX -> lx
         PlaybackAudioSource.LOCAL, PlaybackAudioSource.SUBSONIC -> null
     }
 }
