@@ -46,6 +46,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -55,14 +60,20 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalOverscrollFactory
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import moe.ouom.neriplayer.ui.component.overlay.DensityScaledAlertDialog as AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -89,11 +100,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import moe.ouom.neriplayer.data.settings.appearance.UiDensityScalePreference
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -603,6 +620,13 @@ class MainActivity : ComponentActivity() {
                         var playedEntrance by rememberSaveable { mutableStateOf(false) }
                         LaunchedEffect(Unit) { playedEntrance = true }
 
+                        // 拾光音乐 W1 动态启动页：展示 2 秒（黑胶旋转 + 文字浮现），与白底扁平-动态预览一致
+                        var showAnimatedSplash by rememberSaveable { mutableStateOf(true) }
+                        LaunchedEffect(Unit) {
+                            delay(2_000L.milliseconds)
+                            showAnimatedSplash = false
+                        }
+
                         val stage = remember(
                             disclaimerAccepted,
                             startupOnboardingCompleted,
@@ -697,6 +721,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
+                        Box(modifier = Modifier.fillMaxSize()) {
                         AnimatedContent(
                             targetState = stage,
                             transitionSpec = {
@@ -1299,6 +1324,10 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+                        if (showAnimatedSplash) {
+                            AnimatedSplashScreen()
+                        }
+                    }
                 }
             }
         }
@@ -1888,4 +1917,85 @@ fun DisclaimerScreen(
         onAgree = onAgree,
         initialCountdownSeconds = initialCountdownSeconds
     )
+}
+
+// 拾光音乐 W1 动态启动图：白底 + 旋转黑胶 + 文字浮现 + 呼吸点，展示 2 秒后由 MainActivity 切走
+@Composable
+fun AnimatedSplashScreen() {
+    val orange = Color(0xFFFF7A45)
+    val ink = Color(0xFF1E1E28)
+    val gray = Color(0xFF9A9AA5)
+    val dotIdle = Color(0xFFE7E7EC)
+    val transition = rememberInfiniteTransition(label = "splash")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 10_000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "splash_spin"
+    )
+    val pulse by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1_400, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "splash_pulse"
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            androidx.compose.foundation.Image(
+                painter = painterResource(id = AppR.drawable.splash_logo),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(170.dp)
+                    .rotate(rotation)
+            )
+            Spacer(Modifier.height(44.dp))
+            Text(
+                text = "拾光音乐",
+                style = MaterialTheme.typography.headlineMedium,
+                color = ink,
+                letterSpacing = androidx.compose.ui.unit.TextUnit(8f, androidx.compose.ui.unit.TextUnitType.Sp)
+            )
+            Spacer(Modifier.height(14.dp))
+            Text(
+                text = "拾起每一段时光的声音",
+                style = MaterialTheme.typography.bodyMedium,
+                color = gray,
+                letterSpacing = androidx.compose.ui.unit.TextUnit(4f, androidx.compose.ui.unit.TextUnitType.Sp)
+            )
+        }
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 66.dp),
+            horizontalArrangement = Arrangement.spacedBy(11.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .scale(pulse)
+                    .background(orange, CircleShape)
+            )
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .background(dotIdle, CircleShape)
+            )
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .background(dotIdle, CircleShape)
+            )
+        }
+    }
 }
