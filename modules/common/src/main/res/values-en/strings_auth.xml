@@ -50,6 +50,14 @@
     <string name="settings_lx_import_file">Import script from file</string>
     <string name="settings_lx_import_example">Import bundled example script</string>
     <string name="settings_lx_imported">Script imported and initialized</string>
+    <string name="settings_lx_import_replaced">Replaced existing script: %1$s</string>
+    <string name="settings_lx_import_failed">Script import failed</string>
+    <string name="lx_script_import_confirm_title">Import music source script?</string>
+    <string name="lx_script_import_confirm_name">File: %1$s</string>
+    <string name="lx_script_import_confirm_size">Size: %1$s</string>
+    <string name="lx_script_import_confirm_replace">A script with the same name exists and will be replaced.</string>
+    <string name="lx_script_import_confirm_warning">Third-party scripts run inside the app and are used to resolve playback URLs. Only import sources you trust.</string>
+    <string name="lx_script_import_confirm_import">Import</string>
     <string name="settings_lx_delete">Delete script</string>
     <string name="settings_lx_empty">No script imported yet. The fallback chain is idle.</string>
     <string name="settings_lx_state_ok">Ready</string>

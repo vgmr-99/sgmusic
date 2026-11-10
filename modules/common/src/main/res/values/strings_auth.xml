@@ -50,6 +50,14 @@
     <string name="settings_lx_import_file">从文件导入脚本</string>
     <string name="settings_lx_import_example">导入内置示例脚本</string>
     <string name="settings_lx_imported">脚本已导入并初始化</string>
+    <string name="settings_lx_import_replaced">已覆盖同名脚本：%1$s</string>
+    <string name="settings_lx_import_failed">脚本导入失败</string>
+    <string name="lx_script_import_confirm_title">导入音乐源脚本？</string>
+    <string name="lx_script_import_confirm_name">文件：%1$s</string>
+    <string name="lx_script_import_confirm_size">大小：%1$s</string>
+    <string name="lx_script_import_confirm_replace">已存在同名脚本，导入后将覆盖它。</string>
+    <string name="lx_script_import_confirm_warning">脚本由第三方提供，导入后会在应用内执行并用于解析播放地址。请确认来源可信。</string>
+    <string name="lx_script_import_confirm_import">导入</string>
     <string name="settings_lx_delete">删除脚本</string>
     <string name="settings_lx_empty">尚未导入任何脚本。兜底链当前休眠。</string>
     <string name="settings_lx_state_ok">已就绪</string>

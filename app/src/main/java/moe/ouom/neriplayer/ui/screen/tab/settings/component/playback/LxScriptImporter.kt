@@ -1,0 +1,115 @@
+package moe.ouom.neriplayer.ui.screen.tab.settings.component.playback
+
+/*
+ * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 NeriPlayer developers
+ * https://github.com/cwuom/NeriPlayer
+ *
+ * This software is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this software.
+ * If not, see <https://www.gnu.org/licenses/>.
+ *
+ * File: moe.ouom.neriplayer.ui.screen.tab.settings.component.playback/LxScriptImporter
+ * 拾光音乐：LX 脚本导入公共入口（设置页文件选择 + 外部“用拾光音乐打开”共用）
+ */
+
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import moe.ouom.neriplayer.platform.lxsource.LxSourceItem
+import moe.ouom.neriplayer.platform.lxsource.LxSourceRepository
+import moe.ouom.neriplayer.platform.lxsource.LxSourceState
+
+/**
+ * LX 脚本导入结果。
+ * @param item 导入后的脚本条目（含 state / error）
+ * @param replaced 是否覆盖了同名旧脚本
+ */
+data class LxScriptImportResult(
+    val item: LxSourceItem,
+    val replaced: Boolean,
+) {
+    val succeeded: Boolean get() = item.state == LxSourceState.OK
+    val errorMessage: String? get() = item.error?.takeIf { it.isNotBlank() }
+}
+
+/**
+ * 读取脚本 URI 并导入 LX 仓库。
+ *
+ * 抽出来是为了让「设置页从文件导入」和「文件管理器里用拾光音乐打开 .js」走同一套逻辑：
+ * 大小校验、文件名提取、同名覆盖策略只有一份实现。
+ */
+internal object LxScriptImporter {
+
+    /** 2MB，防大文件卡死（与设置页原有上限一致）。 */
+    const val MAX_SCRIPT_TEXT = 2 * 1024 * 1024
+
+    private val JS_MIME_TYPES = setOf(
+        "application/javascript",
+        "text/javascript",
+        "application/x-javascript",
+        "text/x-javascript",
+        "application/ecmascript",
+        "text/ecmascript",
+    )
+
+    /**
+     * 判断 Intent 里的 URI 是否可能是 LX 脚本。
+     *
+     * Android 没有 .js 的标准 MIME，多数文件管理器会给 text/plain 或
+     * application/octet-stream，所以除了 MIME 还要看文件名后缀。
+     */
+    fun looksLikeScript(context: Context, uri: Uri, mimeType: String?): Boolean {
+        if (mimeType?.lowercase() in JS_MIME_TYPES) return true
+        val name = queryDisplayName(context, uri)
+        return name?.lowercase()?.endsWith(".js") == true
+    }
+
+    /** 读取脚本文本与文件名；失败抛异常，由调用方决定怎么提示。 */
+    fun readScript(context: Context, uri: Uri): Pair<String, String> {
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: error("无法读取文件")
+        if (bytes.isEmpty()) error("文件为空")
+        if (bytes.size > MAX_SCRIPT_TEXT) error("脚本过大")
+        val text = bytes.decodeToString().removePrefix("﻿")
+        if (text.isBlank()) error("文件为空")
+        val name = queryDisplayName(context, uri) ?: "lx-source.js"
+        return name to text
+    }
+
+    /**
+     * 导入脚本。已有同名脚本时覆盖（复用其 id，保留启用状态）。
+     */
+    suspend fun import(
+        repository: LxSourceRepository,
+        name: String,
+        scriptText: String,
+    ): LxScriptImportResult {
+        val replaced = repository.hasScriptNamed(name)
+        val item = repository.importScriptReplacingSameName(name = name, scriptText = scriptText)
+        return LxScriptImportResult(item = item, replaced = replaced)
+    }
+
+    private fun queryDisplayName(context: Context, uri: Uri): String? =
+        runCatching {
+            context.contentResolver.query(
+                uri,
+                arrayOf(OpenableColumns.DISPLAY_NAME),
+                null,
+                null,
+                null
+            )?.use { c ->
+                if (c.moveToFirst()) c.getString(0) else null
+            }
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+}

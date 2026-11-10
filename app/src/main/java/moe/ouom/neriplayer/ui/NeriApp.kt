@@ -124,6 +124,7 @@ import moe.ouom.neriplayer.data.settings.playback.readPlaybackPreferenceSnapshot
 import moe.ouom.neriplayer.navigation.Destinations
 import moe.ouom.neriplayer.data.model.navigation.LauncherShortcutAction
 import moe.ouom.neriplayer.data.model.navigation.LauncherShortcutRequest
+import moe.ouom.neriplayer.data.model.navigation.SettingsPageTarget
 import moe.ouom.neriplayer.navigation.launcherShortcutMainTabRoute
 import moe.ouom.neriplayer.ui.effect.glass.AdvancedGlassController
 import moe.ouom.neriplayer.ui.effect.glass.AdvancedGlassHost
@@ -220,6 +221,8 @@ import moe.ouom.neriplayer.ui.navigation.PredictiveBackPreviewGate
 import moe.ouom.neriplayer.ui.theme.reveal.shouldReverseThemeReveal
 import moe.ouom.neriplayer.ui.theme.LocalHasCustomBackground
 import moe.ouom.neriplayer.ui.screen.tab.home.LocalHomeOpenSearch
+import moe.ouom.neriplayer.ui.screen.tab.settings.page.SettingsPage
+import moe.ouom.neriplayer.ui.screen.tab.settings.page.settingsPageForTarget
 import moe.ouom.neriplayer.ui.theme.reveal.AppThemeRevealOverlayHost
 import moe.ouom.neriplayer.ui.theme.reveal.THEME_REVEAL_WATCHDOG_DELAY_MILLIS
 import moe.ouom.neriplayer.ui.theme.reveal.appThemeRevealPresentation
@@ -237,6 +240,8 @@ import moe.ouom.neriplayer.R as AppR
 
 private val EmptyLauncherShortcutRequestFlow =
     MutableStateFlow<LauncherShortcutRequest?>(null)
+/** 拾光音乐：外部导入脚本后请求跳到指定设置页。 */
+private val EmptySettingsPageRequestFlow = MutableStateFlow<SettingsPageTarget?>(null)
 private const val LAUNCHER_SHORTCUT_PLAYLIST_READY_TIMEOUT_MS = 5000L
 internal const val MAIN_TAB_LAYER_Z_INDEX = 0f
 internal const val NAV_HOST_LAYER_Z_INDEX = 1f
@@ -286,6 +291,9 @@ fun NeriApp(
     launcherShortcutRequestFlow: StateFlow<LauncherShortcutRequest?> =
         EmptyLauncherShortcutRequestFlow,
     onLauncherShortcutRequestConsumed: (LauncherShortcutRequest) -> Unit = {},
+    /** 拾光音乐：外部导入脚本后请求跳到指定设置页。 */
+    settingsPageRequestFlow: StateFlow<SettingsPageTarget?> = EmptySettingsPageRequestFlow,
+    onSettingsPageRequestConsumed: () -> Unit = {},
     onIsDarkChanged: (Boolean) -> Unit = {},
     onNowPlayingVisibilityChanged: (Boolean) -> Unit = {},
     onNowPlayingOpenChanged: (Boolean) -> Unit = {},
@@ -307,6 +315,8 @@ fun NeriApp(
                 initialStartDestinationSnapshot = initialStartDestinationSnapshot,
                 launcherShortcutRequestFlow = launcherShortcutRequestFlow,
                 onLauncherShortcutRequestConsumed = onLauncherShortcutRequestConsumed,
+                settingsPageRequestFlow = settingsPageRequestFlow,
+                onSettingsPageRequestConsumed = onSettingsPageRequestConsumed,
                 onIsDarkChanged = onIsDarkChanged,
                 onNowPlayingVisibilityChanged = onNowPlayingVisibilityChanged,
                 onNowPlayingOpenChanged = onNowPlayingOpenChanged,
@@ -356,6 +366,9 @@ private fun NeriAppContent(
     launcherShortcutRequestFlow: StateFlow<LauncherShortcutRequest?> =
         EmptyLauncherShortcutRequestFlow,
     onLauncherShortcutRequestConsumed: (LauncherShortcutRequest) -> Unit = {},
+    /** 拾光音乐：外部导入脚本后请求跳到指定设置页。 */
+    settingsPageRequestFlow: StateFlow<SettingsPageTarget?> = EmptySettingsPageRequestFlow,
+    onSettingsPageRequestConsumed: () -> Unit = {},
     onIsDarkChanged: (Boolean) -> Unit = {},
     onNowPlayingVisibilityChanged: (Boolean) -> Unit = {},
     onNowPlayingOpenChanged: (Boolean) -> Unit = {},
@@ -374,6 +387,11 @@ private fun NeriAppContent(
         onLauncherShortcutRequestConsumed
     )
     val launcherShortcutRequest by launcherShortcutRequestFlow.collectAsStateWithLifecycle()
+    /** 拾光音乐：外部导入脚本后跳到 LX 源管理页。 */
+    val settingsPageRequest by settingsPageRequestFlow.collectAsStateWithLifecycle()
+    val latestOnSettingsPageRequestConsumed by rememberUpdatedState(
+        onSettingsPageRequestConsumed
+    )
     val offlineMode by rememberOfflineModeState()
     val rootView = LocalView.current
     val repo = remember { AppContainer.settingsRepo }
@@ -1328,6 +1346,15 @@ private fun NeriAppContent(
                     message = composeResources.getString(messageRes)
                 )
             }
+            // 拾光音乐：外部导入脚本成功后，切到设置页并定位到 LX 源管理
+            val pendingSettingsPageFlow = remember { MutableStateFlow<SettingsPage?>(null) }
+            LaunchedEffect(settingsPageRequest) {
+                val target = settingsPageRequest ?: return@LaunchedEffect
+                val page = settingsPageForTarget(target) ?: return@LaunchedEffect
+                navigateToMainTab(Destinations.Settings.route)
+                pendingSettingsPageFlow.value = page
+                latestOnSettingsPageRequestConsumed()
+            }
             LaunchedEffect(launcherShortcutRequest, playbackBootstrapReady) {
                 val request = launcherShortcutRequest ?: return@LaunchedEffect
                 if (!playbackBootstrapReady) return@LaunchedEffect
@@ -1583,7 +1610,8 @@ private fun NeriAppContent(
                             onBeforeLanguageRestart = clearThemeRevealState,
                             onLanguageChanged = onLanguageChanged,
                             coherentFeedbackEnabled = coherentFeedbackEnabled,
-                            settingsVisible = isAppSettingsVisible(selectedMainTabRoute, showNowPlaying)
+                            settingsVisible = isAppSettingsVisible(selectedMainTabRoute, showNowPlaying),
+                            pendingSettingsPage = pendingSettingsPageFlow
                         ),
                         onBackgroundImageAlphaPreview = { pendingBackgroundImageAlpha = it },
                         snackbarHostState = snackbarHostState,

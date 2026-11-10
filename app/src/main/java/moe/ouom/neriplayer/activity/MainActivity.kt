@@ -182,6 +182,7 @@ import moe.ouom.neriplayer.ui.component.overlay.LocalOverlaySurfaceScale
 import moe.ouom.neriplayer.ui.component.overlay.LocalOverlayNavigationBarHidden
 import moe.ouom.neriplayer.ui.effect.glass.AdvancedGlassOverscrollFactory
 import moe.ouom.neriplayer.ui.feedback.AppFeedback
+import moe.ouom.neriplayer.ui.screen.tab.settings.component.playback.LxScriptImporter
 import moe.ouom.neriplayer.ui.util.ClipboardCopyResult
 import moe.ouom.neriplayer.ui.util.copyPlainTextSafely
 import moe.ouom.neriplayer.ui.onboarding.StartupOnboardingScreen
@@ -212,6 +213,17 @@ private data class PendingAudioServiceStart(
     val requestToken: Long,
     val source: String,
     val forceForeground: Boolean
+)
+
+/**
+ * 拾光音乐：外部打开 .js 音乐源时的待确认导入请求。
+ * 脚本属于第三方代码，导入即执行，所以先确认再读文件。
+ */
+internal data class PendingLxScriptImport(
+    val uri: android.net.Uri,
+    val displayName: String,
+    val sizeBytes: Long,
+    val replacesExisting: Boolean,
 )
 
 internal fun shouldUseLightSystemBarIcons(
@@ -362,6 +374,18 @@ class MainActivity : ComponentActivity() {
     private val launcherShortcutRequestFlow = pendingLauncherShortcutRequest.asStateFlow()
     private val pendingListenTogetherInvite = MutableStateFlow<ListenTogetherInvite?>(null)
     private val listenTogetherInviteFlow = pendingListenTogetherInvite.asStateFlow()
+    /**
+     * 拾光音乐：外部“用拾光音乐打开 .js”待导入脚本。
+     * 二次确认前只缓存 URI 与文件名，确认后才真正读文件并导入。
+     */
+    private val pendingLxScriptImport = MutableStateFlow<PendingLxScriptImport?>(null)
+    private val lxScriptImportFlow = pendingLxScriptImport.asStateFlow()
+    /**
+     * 拾光音乐：外部导入脚本成功后跳到设置里的 LX 源管理页。
+     * 与 launcherShortcutRequest 同构：Activity 持有请求，NeriApp 消费后清空。
+     */
+    private val pendingSettingsPageRequest =
+        MutableStateFlow<moe.ouom.neriplayer.data.model.navigation.SettingsPageTarget?>(null)
     private val listenTogetherStatusMessage = MutableStateFlow<String?>(null)
     private val listenTogetherStatusFlow = listenTogetherStatusMessage.asStateFlow()
     private val startupSyncWarningCoordinator by lazy {
@@ -1187,6 +1211,16 @@ class MainActivity : ComponentActivity() {
                                             !showDialog && !showErrorDialog &&
                                             pendingInvite == null && loudPlaybackConfirmation == null
                                         var appGlobalDialogVisible by remember { mutableStateOf(true) }
+                                        // 拾光音乐：外部打开 .js 音乐源时的二次确认弹窗
+                                        val pendingLxScript by lxScriptImportFlow
+                                            .collectAsStateWithLifecycle()
+                                        pendingLxScript?.let { request ->
+                                            LxScriptImportConfirmDialog(
+                                                request = request,
+                                                onConfirm = { importPendingLxScript(request) },
+                                                onDismiss = { pendingLxScriptImport.value = null }
+                                            )
+                                        }
                                         NeriApp(
                                             initialThemeSnapshot = startupThemeSnapshot,
                                             initialStartDestinationSnapshot =
@@ -1194,6 +1228,10 @@ class MainActivity : ComponentActivity() {
                                             launcherShortcutRequestFlow = launcherShortcutRequestFlow,
                                             onLauncherShortcutRequestConsumed =
                                                 ::clearLauncherShortcutRequest,
+                                            settingsPageRequestFlow = pendingSettingsPageRequest.asStateFlow(),
+                                            onSettingsPageRequestConsumed = {
+                                                pendingSettingsPageRequest.value = null
+                                            },
                                             onIsDarkChanged = { isDark ->
                                                 // 主题切换时保留窗口底色与内容主题一致
                                                 window.applyMainWindowBackground(isDark || isNowPlayingVisible)
@@ -1464,7 +1502,105 @@ class MainActivity : ComponentActivity() {
     private fun handleIncomingIntent(intent: Intent?) {
         if (handleLauncherShortcutIntent(intent)) return
         if (handleListenTogetherInviteIntent(intent)) return
+        if (handleLxScriptIntent(intent)) return
         handleExternalAudioIntent(intent)
+    }
+
+    /**
+     * 拾光音乐：处理“用拾光音乐打开 .js 音乐源”。
+     *
+     * 只在 ACTION_VIEW 且看起来是脚本时接管；这里只解析元信息并弹出确认框，
+     * 真正的读取与导入由用户确认后在后台协程里做，避免阻塞主线程。
+     */
+    private fun handleLxScriptIntent(intent: Intent?): Boolean {
+        if (intent?.action != Intent.ACTION_VIEW) return false
+        val uri = intent.data ?: return false
+        if (!LxScriptImporter.looksLikeScript(this, uri, intent.type)) return false
+        if (pendingLxScriptImport.value != null) return true
+
+        val displayName = queryDisplayName(uri) ?: "lx-source.js"
+        val sizeBytes = queryFileSize(uri)
+        val replacesExisting =
+            AppContainer.lxSourceRepository.hasScriptNamed(displayName)
+        pendingLxScriptImport.value = PendingLxScriptImport(
+            uri = uri,
+            displayName = displayName,
+            sizeBytes = sizeBytes,
+            replacesExisting = replacesExisting
+        )
+        setIntent(Intent(this, MainActivity::class.java))
+        return true
+    }
+
+    private fun queryDisplayName(uri: android.net.Uri): String? =
+        runCatching {
+            contentResolver.query(
+                uri,
+                arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                null,
+                null,
+                null
+            )?.use { c ->
+                if (c.moveToFirst()) c.getString(0) else null
+            }
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+
+    private fun queryFileSize(uri: android.net.Uri): Long =
+        runCatching {
+            contentResolver.query(
+                uri,
+                arrayOf(android.provider.OpenableColumns.SIZE),
+                null,
+                null,
+                null
+            )?.use { c ->
+                if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else -1L
+            } ?: -1L
+        }.getOrDefault(-1L)
+
+    /**
+     * 用户确认后导入脚本：读文件 → LX 仓库导入（同名覆盖）→ 提示结果。
+     * 导入内部会跑 QuickJS 初始化，可能耗时数秒，必须放后台。
+     */
+    private fun importPendingLxScript(request: PendingLxScriptImport) {
+        pendingLxScriptImport.value = null
+        val context = applicationContext
+        AppContainer.launchBackgroundIo {
+            val result = runCatching {
+                val (name, text) = LxScriptImporter.readScript(context, request.uri)
+                LxScriptImporter.import(
+                    repository = AppContainer.lxSourceRepository,
+                    name = name,
+                    scriptText = text
+                )
+            }
+            result.fold(
+                onSuccess = { imported ->
+                    val message = when {
+                        !imported.succeeded -> imported.errorMessage
+                            ?: getString(CoreCommonR.string.settings_lx_state_fail)
+                        imported.replaced -> getString(
+                            CoreCommonR.string.settings_lx_import_replaced,
+                            imported.item.name
+                        )
+                        else -> getString(CoreCommonR.string.settings_lx_imported)
+                    }
+                    AppFeedback.showToast(context, message)
+                    if (imported.succeeded) {
+                        // 导入成功：把用户带到 LX 源管理页，直接看到新脚本
+                        pendingSettingsPageRequest.value =
+                            moe.ouom.neriplayer.data.model.navigation.SettingsPageTarget.LxSources
+                    }
+                },
+                onFailure = { error ->
+                    AppFeedback.showToast(
+                        context,
+                        error.message
+                            ?: getString(CoreCommonR.string.settings_lx_import_failed)
+                    )
+                }
+            )
+        }
     }
 
     private fun handleLauncherShortcutIntent(intent: Intent?): Boolean {
@@ -1809,6 +1945,65 @@ class MainActivity : ComponentActivity() {
 
 /* --------------------- 统一主题 --------------------- */
 
+/**
+ * 拾光音乐：导入外部 LX 脚本前的二次确认。
+ * 脚本会被执行（QuickJS 求值），所以必须让用户明确确认文件与影响。
+ */
+@Composable
+private fun LxScriptImportConfirmDialog(
+    request: PendingLxScriptImport,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(CoreCommonR.string.lx_script_import_confirm_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(stringResource(CoreCommonR.string.lx_script_import_confirm_name, request.displayName))
+                if (request.sizeBytes > 0L) {
+                    Text(
+                        text = stringResource(
+                            CoreCommonR.string.lx_script_import_confirm_size,
+                            formatScriptSize(request.sizeBytes)
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (request.replacesExisting) {
+                    Text(
+                        text = stringResource(CoreCommonR.string.lx_script_import_confirm_replace),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text(
+                    text = stringResource(CoreCommonR.string.lx_script_import_confirm_warning),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            HapticTextButton(onClick = onConfirm) {
+                Text(stringResource(CoreCommonR.string.lx_script_import_confirm_import))
+            }
+        },
+        dismissButton = {
+            HapticTextButton(onClick = onDismiss) {
+                Text(stringResource(CoreCommonR.string.action_cancel))
+            }
+        }
+    )
+}
+
+private fun formatScriptSize(bytes: Long): String {
+    if (bytes < 1024L) return "$bytes B"
+    if (bytes < 1024L * 1024L) return "${bytes / 1024L} KB"
+    return String.format("%.1f MB", bytes / (1024.0 * 1024.0))
+}
+
 @Composable
 fun NeriTheme(
     useDark: Boolean,
@@ -1912,8 +2107,7 @@ private fun StartupCrashReportDialog(
 fun DisclaimerScreen(
     onAgree: () -> Unit,
     initialCountdownSeconds: Int = 5
-) {
-    StartupDisclaimerContent(
+) {    StartupDisclaimerContent(
         onAgree = onAgree,
         initialCountdownSeconds = initialCountdownSeconds
     )

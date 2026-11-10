@@ -1,6 +1,7 @@
 package moe.ouom.neriplayer.ui.settings.route
 
 import androidx.compose.ui.geometry.Offset
+import kotlinx.coroutines.flow.MutableStateFlow
 import moe.ouom.neriplayer.data.listentogether.ListenTogetherPreferences
 import moe.ouom.neriplayer.data.settings.SettingsRepository
 import moe.ouom.neriplayer.data.model.settings.appearance.ThemeMode
@@ -24,7 +25,13 @@ internal class AppSettingsHostEnvironment(
     val onBeforeLanguageRestart: () -> Unit,
     val onLanguageChanged: (LanguageManager.Language) -> Unit,
     val coherentFeedbackEnabled: Boolean,
-    val settingsVisible: Boolean = true
+    val settingsVisible: Boolean = true,
+    /**
+     * 拾光音乐：外部（如“用拾光音乐打开 .js”导入成功后）要求设置页跳到指定子页。
+     * 由 NeriApp 持有，设置页消费后自行清空，避免重复跳转。
+     */
+    val pendingSettingsPage: MutableStateFlow<moe.ouom.neriplayer.ui.screen.tab.settings.page.SettingsPage?> =
+        MutableStateFlow(null)
 )
 
 internal class AppSettingsHostBindings(

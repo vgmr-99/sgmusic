@@ -79,19 +79,12 @@ internal fun SettingsLxSourceSection(
         importing = true
         AppContainer.launchBackgroundIo {
             val result = runCatching {
-                val text = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    ?.decodeToString()
-                    ?: error("empty file")
-                if (text.length > MAX_SCRIPT_TEXT) error("script too large")
-                val name = runCatching {
-                    context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
-                        ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
-                }.getOrNull() ?: "lx-source.js"
-                val item = lxRepository.importScript(name = name, scriptText = text)
-                item.error
+                val (name, text) = LxScriptImporter.readScript(context, uri)
+                LxScriptImporter.import(lxRepository, name, text)
             }
             importing = false
             errorMessage = result.exceptionOrNull()?.message
+                ?: result.getOrNull()?.errorMessage
             if (result.isSuccess) {
                 AppFeedback.showToast(context, context.getString(CoreCommonR.string.settings_lx_imported))
             }
@@ -117,10 +110,11 @@ internal fun SettingsLxSourceSection(
                 AppContainer.launchBackgroundIo {
                     val result = runCatching {
                         val text = context.assets.open("script/example-source.js").bufferedReader().use { it.readText() }
-                        lxRepository.importScript(name = "example-source.js", scriptText = text).error
+                        LxScriptImporter.import(lxRepository, "example-source.js", text)
                     }
                     importing = false
                     errorMessage = result.exceptionOrNull()?.message
+                        ?: result.getOrNull()?.errorMessage
                     if (result.isSuccess) {
                         AppFeedback.showToast(context, context.getString(CoreCommonR.string.settings_lx_imported))
                     }
@@ -186,5 +180,3 @@ internal fun SettingsLxSourceSection(
         }
     }
 }
-
-private const val MAX_SCRIPT_TEXT = 2 * 1024 * 1024 // 2MB，防大文件卡死

@@ -88,6 +88,24 @@
                     android:host="listen-together"
                     android:pathPrefix="/join" />
             </intent-filter>
+            <!-- 拾光音乐：用拾光音乐打开 LX 音乐源脚本（.js），导入后进入 LX 源管理 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/javascript" />
+                <data android:mimeType="text/javascript" />
+                <data android:mimeType="application/x-javascript" />
+                <data android:mimeType="text/x-javascript" />
+                <data android:mimeType="application/ecmascript" />
+                <data android:mimeType="text/ecmascript" />
+                <!-- 多数文件管理器对 .js 只给 text/plain / octet-stream，这里一并接住，
+                     运行时再按文件名后缀二次确认是否为脚本 -->
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
         </activity>
         <activity
             android:name=".activity.car.BluetoothMediaValidationActivity"

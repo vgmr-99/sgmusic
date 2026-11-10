@@ -283,6 +283,13 @@ internal fun SettingsScreen(
     )
     val isSettingsSplitLayout = navigation.splitLayout
     val activeSettingsPage = navigation.activePage
+    // 拾光音乐：外部导入脚本成功后跳到指定子页（LX 源管理）
+    val pendingSettingsPage by environment.pendingSettingsPage.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingSettingsPage) {
+        val page = pendingSettingsPage ?: return@LaunchedEffect
+        navigation.activePage = page
+        environment.pendingSettingsPage.value = null
+    }
     val accountProfilesActive = shouldLoadSettingsAccountProfiles(
         isActive, environment.settingsVisible, activeSettingsPage
     )

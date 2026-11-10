@@ -27,11 +27,11 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.vector.ImageVector
 import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.data.settings.AutoSettingsSchema
+import moe.ouom.neriplayer.data.model.navigation.SettingsPageTarget
 import moe.ouom.neriplayer.ksp.annotations.AutoSettingsSectionEntry
 import moe.ouom.neriplayer.R as AppR
 
-internal enum class SettingsPage(
-    val titleRes: Int,
+internal enum class SettingsPage(    val titleRes: Int,
     val descriptionRes: Int,
     val icon: ImageVector
 ) {
@@ -207,6 +207,14 @@ internal val SettingsHomePageGroups: List<List<SettingsPage>> = listOf(
 /** Card indices of the shared lyrics section rendered on each lyrics page, in display order. */
 internal val LyricsPageCards = listOf(4, 1, 3)
 internal val ExternalLyricsPageCards = listOf(0, 2)
+
+/**
+ * 把跨层公开的目标枚举映射到具体设置页。
+ * 未知目标返回 null，调用方应保持当前页面不变。
+ */
+internal fun settingsPageForTarget(target: SettingsPageTarget): SettingsPage? = when (target) {
+    SettingsPageTarget.LxSources -> SettingsPage.LxSources
+}
 
 internal fun SettingsPage.backTargetPage(): SettingsPage? = when (this) {
     SettingsPage.MusicServers -> SettingsPage.Accounts

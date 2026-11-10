@@ -22,6 +22,8 @@ package moe.ouom.neriplayer.platform.lxsource
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import moe.ouom.neriplayer.common.logging.NPLogger
 import moe.ouom.neriplayer.data.model.SongItem
 import java.util.UUID
@@ -39,38 +41,74 @@ class LxSourceRepository(
     private val runtimes = ConcurrentHashMap<String, LxRuntime>()
     private val _items = MutableStateFlow<List<LxSourceItem>>(emptyList())
     val items: StateFlow<List<LxSourceItem>> = _items
+    /**
+     * init 与 import 共用同一把锁：冷启动时 Application 里的 init() 往往与外部 Intent
+     * 触发的 importScript() 并发，两者都往 _items 与 lx_sources.json 写，
+     * 不串行会出现重复初始化、状态互相覆盖、落盘丢脚本。
+     */
+    private val mutationLock = Mutex()
 
     suspend fun init() {
-        val loaded = store.loadAll()
-        NPLogger.d("LxSource", "init start: scripts=${loaded.size}")
-        _items.value = loaded
-        loaded.filter { it.enabled }.forEach { item ->
-            val runtime = LxRuntime(http, preloadJs)
-            runtimes[item.id] = runtime
-            NPLogger.d("LxSource", "init script=${item.name} id=${item.id}")
-            when (val r = runtime.init(item.scriptText, CurrentScriptInfo(name = item.name))) {
-                is LxResult.Ok -> {
-                    NPLogger.d("LxSource", "init OK script=${item.name} sources=${r.value.sources.keys}")
-                    val ok = item.copy(state = LxSourceState.OK, info = r.value, error = null)
-                    replace(ok)
-                }
-                is LxResult.Err -> {
-                    NPLogger.w("LxSource", "init FAIL script=${item.name} code=${r.code} message=${r.message}")
-                    val fail = item.copy(state = LxSourceState.FAIL, error = "${r.code}:${r.message}")
-                    replace(fail)
+        mutationLock.withLock {
+            val loaded = store.loadAll()
+            NPLogger.d("LxSource", "init start: scripts=${loaded.size}")
+            _items.value = loaded
+            loaded.filter { it.enabled }.forEach { item ->
+                val runtime = LxRuntime(http, preloadJs)
+                runtimes[item.id] = runtime
+                NPLogger.d("LxSource", "init script=${item.name} id=${item.id}")
+                when (val r = runtime.init(item.scriptText, CurrentScriptInfo(name = item.name))) {
+                    is LxResult.Ok -> {
+                        NPLogger.d("LxSource", "init OK script=${item.name} sources=${r.value.sources.keys}")
+                        val ok = item.copy(state = LxSourceState.OK, info = r.value, error = null)
+                        replace(ok)
+                    }
+                    is LxResult.Err -> {
+                        NPLogger.w("LxSource", "init FAIL script=${item.name} code=${r.code} message=${r.message}")
+                        val fail = item.copy(state = LxSourceState.FAIL, error = "${r.code}:${r.message}")
+                        replace(fail)
+                    }
                 }
             }
         }
     }
 
-    suspend fun importScript(name: String, scriptText: String): LxSourceItem {
-        val id = UUID.randomUUID().toString()
-        val item = LxSourceItem(id = id, name = name, scriptText = scriptText)
+    suspend fun importScript(name: String, scriptText: String): LxSourceItem =
+        importScriptInternal(name = name, scriptText = scriptText, replaceExisting = false)
+
+    /**
+     * 同名覆盖导入：已存在同名脚本时复用其 id 替换内容（保留启用状态），
+     * 避免反复打开同一个 .js 时列表里堆出多个同名条目。
+     */
+    suspend fun importScriptReplacingSameName(name: String, scriptText: String): LxSourceItem =
+        importScriptInternal(name = name, scriptText = scriptText, replaceExisting = true)
+
+    private suspend fun importScriptInternal(
+        name: String,
+        scriptText: String,
+        replaceExisting: Boolean,
+    ): LxSourceItem = mutationLock.withLock {
+        val existing = if (replaceExisting) {
+            _items.value.firstOrNull { it.name == name }
+        } else {
+            null
+        }
+        val id = existing?.id ?: UUID.randomUUID().toString()
+        val item = LxSourceItem(
+            id = id,
+            name = name,
+            scriptText = scriptText,
+            enabled = existing?.enabled ?: true
+        )
         replace(item)
         store.save(item)
+        existing?.let { old ->
+            // 复用 id 时先关掉旧 runtime，避免同一脚本两个 QuickJS 实例并存
+            runtimes.remove(old.id)?.close()
+        }
         val runtime = LxRuntime(http, preloadJs)
         runtimes[id] = runtime
-        return when (val r = runtime.init(scriptText, CurrentScriptInfo(name = name))) {
+        when (val r = runtime.init(scriptText, CurrentScriptInfo(name = name))) {
             is LxResult.Ok -> {
                 val okItem = item.copy(state = LxSourceState.OK, info = r.value, error = null)
                 replace(okItem)
@@ -163,30 +201,37 @@ class LxSourceRepository(
     }
 
     suspend fun setEnabled(sourceId: String, enabled: Boolean) {
-        val item = _items.value.firstOrNull { it.id == sourceId } ?: return
-        val updated = if (!enabled) {
-            item.copy(enabled = false, state = LxSourceState.DISABLED)
-        } else {
-            item.copy(enabled = true)
-        }
-        replace(updated)
-        store.save(updated)
-        if (enabled) {
-            val runtime = runtimes[sourceId] ?: LxRuntime(http, preloadJs).also { runtimes[sourceId] = it }
-            if (updated.state != LxSourceState.OK) {
-                when (val r = runtime.init(updated.scriptText, CurrentScriptInfo(name = updated.name))) {
-                    is LxResult.Ok -> replace(updated.copy(state = LxSourceState.OK, info = r.value, error = null))
-                    is LxResult.Err -> replace(updated.copy(state = LxSourceState.FAIL, error = "${r.code}:${r.message}"))
+        mutationLock.withLock {
+            val item = _items.value.firstOrNull { it.id == sourceId } ?: return
+            val updated = if (!enabled) {
+                item.copy(enabled = false, state = LxSourceState.DISABLED)
+            } else {
+                item.copy(enabled = true)
+            }
+            replace(updated)
+            store.save(updated)
+            if (enabled) {
+                val runtime = runtimes[sourceId] ?: LxRuntime(http, preloadJs).also { runtimes[sourceId] = it }
+                if (updated.state != LxSourceState.OK) {
+                    when (val r = runtime.init(updated.scriptText, CurrentScriptInfo(name = updated.name))) {
+                        is LxResult.Ok -> replace(updated.copy(state = LxSourceState.OK, info = r.value, error = null))
+                        is LxResult.Err -> replace(updated.copy(state = LxSourceState.FAIL, error = "${r.code}:${r.message}"))
+                    }
                 }
             }
         }
     }
 
     suspend fun remove(sourceId: String) {
-        runtimes.remove(sourceId)?.close()
-        _items.value = _items.value.filterNot { it.id == sourceId }
-        store.remove(sourceId)
+        mutationLock.withLock {
+            runtimes.remove(sourceId)?.close()
+            _items.value = _items.value.filterNot { it.id == sourceId }
+            store.remove(sourceId)
+        }
     }
+
+    /** 供外部（Intent 导入）判断是否已有同名脚本，用于「覆盖」提示文案。 */
+    fun hasScriptNamed(name: String): Boolean = _items.value.any { it.name == name }
 
     private fun replace(item: LxSourceItem) {
         _items.value = _items.value.filterNot { it.id == item.id } + item
