@@ -27,7 +27,6 @@ import moe.ouom.neriplayer.data.model.server.isServerSong
 
 import moe.ouom.neriplayer.data.identity.stableKey
 import moe.ouom.neriplayer.data.settings.playback.sanitized
-import moe.ouom.neriplayer.platform.lyrics.repository.AmllLyricsResolver
 import moe.ouom.neriplayer.lyrics.parser.convertPlainLyricsToEntries
 import moe.ouom.neriplayer.lyrics.parser.normalizeLegacyLrcTimestamps
 import android.app.Application
@@ -60,6 +59,7 @@ import moe.ouom.neriplayer.platform.bilibili.playback.resolver.biliBvidOrNull
 import moe.ouom.neriplayer.platform.bilibili.playback.resolver.biliCidOrNull
 import moe.ouom.neriplayer.data.model.music.MusicPlatform
 import moe.ouom.neriplayer.platform.youtube.api.client.YouTubeMusicClient
+import moe.ouom.neriplayer.core.player.PlayerLyricsPreferences
 import moe.ouom.neriplayer.core.player.host.PlayerDependencies
 import moe.ouom.neriplayer.data.model.settings.lyrics.LyricSourcePreference
 import moe.ouom.neriplayer.data.local.media.LocalMediaSupport
@@ -68,7 +68,6 @@ import moe.ouom.neriplayer.data.model.stableKey
 import moe.ouom.neriplayer.platform.youtube.api.transport.extractYouTubeMusicVideoId
 import moe.ouom.neriplayer.platform.youtube.media.isYouTubeMusicSong
 import moe.ouom.neriplayer.data.model.lyrics.LyricEntry
-import moe.ouom.neriplayer.lyrics.parser.hasWordTimedEntries
 import moe.ouom.neriplayer.lyrics.parser.parseNeteaseLyricsAuto
 import moe.ouom.neriplayer.lyrics.parser.alignSubtitleLyrics
 import moe.ouom.neriplayer.lyrics.parser.parseEmbeddedPhoneticLyrics
@@ -441,49 +440,6 @@ object PlayerLyricsProvider {
         ytMusicLyricsCache.put(cacheKey, sanitized)
         NPLogger.w("NERI-PlayerManager", "Discarded cached collapsed YouTube lyric translation")
         return sanitized
-    }
-
-    private fun buildAmllLyricsCacheKey(
-        song: SongItem,
-        requireDurationMatch: Boolean
-    ): String {
-        return buildString {
-            append(song.stableKey())
-            append('|')
-            append(song.name)
-            append('|')
-            append(song.artist)
-            append('|')
-            append(song.durationMs)
-            append("|durationMatch=")
-            append(requireDurationMatch)
-        }
-    }
-
-    private suspend fun loadAmllLyricsWithCache(
-        song: SongItem,
-        amllTtmlClient: AmllLyricsRepository,
-        requireDurationMatch: Boolean
-    ): List<LyricEntry> {
-        val cacheKey = buildAmllLyricsCacheKey(song, requireDurationMatch)
-        amllLyricsCache.get(cacheKey)?.let { cached ->
-            NPLogger.d("NERI-PlayerManager", "Using cached AMLL lyrics for '${song.name}'")
-            return cached.lyrics
-        }
-        val resolved = AmllLyricsResolver.loadRawByMetadata(
-            trackName = song.name,
-            artistName = song.artist,
-            durationMs = song.durationMs,
-            amllTtmlClient = amllTtmlClient,
-            requireDurationMatch = requireDurationMatch
-        )
-        val result = PreferredLyricSourceResult(
-            lyrics = resolved?.entries.orEmpty(),
-            romanizedLyrics = parseEmbeddedPhoneticLyrics(resolved?.rawLyrics.orEmpty()),
-            source = LyricSourcePreference.AmllTtml
-        )
-        amllLyricsCache.put(cacheKey, result)
-        return result.lyrics
     }
 
     private fun parseRemoteLyricEntriesOrEmpty(
@@ -1112,7 +1068,9 @@ object PlayerLyricsProvider {
             if (amllLyricsEnabled && preferWordTimedLyrics &&
                 resolveStoredLyricText(song.matchedLyric, song.originalLyric) == null
             ) {
-                val cachedAmll = amllLyricsCache.get(buildAmllLyricsCacheKey(song, requireDurationMatch = false))
+                val cachedAmll = amllLyricsCache.get(
+                    PlayerAmllLyricsSource.buildCacheKey(song, requireDurationMatch = false)
+                )
                 cachedAmll?.romanizedLyrics?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
             }
             loadNeteaseRomanizedFallback(song, preferWordTimedLyrics, editableLyricsMatcher, neteaseClient, neteaseLyricsCache)
@@ -1274,19 +1232,30 @@ object PlayerLyricsProvider {
                 else -> getNeteaseLyrics(song.id, neteaseClient, neteaseLyricsCache)
             }
 
-            if (biliCcLyricsLoaded ||
-                !preferWordTimedLyrics ||
-                platformLyrics.hasWordTimedEntries() ||
-                !amllLyricsEnabled
+            if (PlayerAmllLyricsSource.preferPlatformLyrics(
+                    biliCcLyricsLoaded = biliCcLyricsLoaded,
+                    preferWordTimedLyrics = preferWordTimedLyrics,
+                    platformLyrics = platformLyrics,
+                    amllLyricsEnabled = amllLyricsEnabled
+                )
             ) {
-                amllLyricsCache.remove(buildAmllLyricsCacheKey(song, requireDurationMatch = false))
+                amllLyricsCache.remove(PlayerAmllLyricsSource.buildCacheKey(song, requireDurationMatch = false))
                 platformLyrics
             } else {
-                loadAmllLyricsWithCache(
+                val amllLyrics = PlayerAmllLyricsSource.loadWithCache(
+                    cache = amllLyricsCache,
                     song = song,
                     amllTtmlClient = amllTtmlClient,
                     requireDurationMatch = false
-                ).ifEmpty { platformLyrics }
+                )
+                if (amllLyrics.isEmpty()) {
+                    platformLyrics
+                } else if (PlayerLyricsPreferences.mergeLyricsAcrossSources) {
+                    // 跨源合并：逐字歌词优先，缺失的行用平台歌词补齐
+                    PlayerAmllLyricsSource.mergeAcrossSources(amllLyrics, platformLyrics)
+                } else {
+                    amllLyrics
+                }
             }
         }
         // 新原文确认后才切换来源, 并发读取仍使用已经发布的原文来源

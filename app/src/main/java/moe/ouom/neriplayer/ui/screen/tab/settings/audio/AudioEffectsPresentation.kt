@@ -44,6 +44,7 @@ private val PresetNameRes = mapOf(
     "concert_hall" to AppR.string.audio_effects_preset_concert_hall,
     "cinema" to AppR.string.audio_effects_preset_cinema,
     "surround_3d" to AppR.string.audio_effects_preset_surround_3d,
+    "echo_room" to AppR.string.audio_effects_preset_echo_room,
     "karaoke" to AppR.string.audio_effects_preset_karaoke,
     "night" to AppR.string.audio_effects_preset_night,
     "spoken" to AppR.string.audio_effects_preset_spoken,
@@ -162,6 +163,8 @@ internal fun formatMilliseconds(ms: Float): String =
     if (ms < 10f) String.format(Locale.US, "%.1f ms", ms) else "${ms.roundToInt()} ms"
 
 internal fun formatRatio(value: Float): String = String.format(Locale.US, "%.1f:1", value)
+
+internal fun formatLufs(value: Float): String = "${value.roundToInt()} LUFS"
 
 internal fun formatMultiplier(value: Float): String = String.format(Locale.US, "%.2fx", value)
 

@@ -128,6 +128,78 @@ class BackupRestoreViewModel internal constructor(
     }
     
     /**
+     * 导出单个歌单为 M3U8（通用歌单格式，可被其它播放器导入）
+     */
+    fun exportPlaylistAsM3u(uri: Uri, playlistId: Long) {
+        val manager = backupManager ?: return
+        val resources = strings ?: return
+
+        _uiState.value = _uiState.value.copy(
+            isExporting = true,
+            exportProgress = resources.exportProgress
+        )
+
+        viewModelScope.launch {
+            val result = manager.exportPlaylistAsM3u(uri, playlistId)
+
+            result.fold(
+                onSuccess = { fileName ->
+                    _uiState.value = _uiState.value.copy(
+                        isExporting = false,
+                        exportProgress = null,
+                        lastExportSuccess = true,
+                        lastExportMessage = resources.exportSuccess(fileName)
+                    )
+                },
+                onFailure = { exception ->
+                    _uiState.value = _uiState.value.copy(
+                        isExporting = false,
+                        exportProgress = null,
+                        lastExportSuccess = false,
+                        lastExportMessage = resources.exportFailed(transferFailureText(exception))
+                    )
+                }
+            )
+        }
+    }
+
+    /**
+     * 从 M3U8 导入歌单
+     */
+    fun importPlaylistFromM3u(uri: Uri) {
+        val manager = backupManager ?: return
+        val resources = strings ?: return
+
+        _uiState.value = _uiState.value.copy(
+            isImporting = true,
+            importProgress = resources.importProgress
+        )
+
+        viewModelScope.launch {
+            val result = manager.importPlaylistFromM3u(uri, null)
+
+            result.fold(
+                onSuccess = { importResult ->
+                    _uiState.value = _uiState.value.copy(
+                        isImporting = false,
+                        importProgress = null,
+                        lastImportSuccess = true,
+                        lastImportMessage = resources.importSummary(importResult)
+                    )
+                },
+                onFailure = { exception ->
+                    _uiState.value = _uiState.value.copy(
+                        isImporting = false,
+                        importProgress = null,
+                        lastImportSuccess = false,
+                        lastImportMessage = resources.importFailed(transferFailureText(exception))
+                    )
+                }
+            )
+        }
+    }
+
+    /**
      * 导入歌单
      */
     fun importPlaylists(uri: Uri) {

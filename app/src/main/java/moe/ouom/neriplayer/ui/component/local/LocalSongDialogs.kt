@@ -143,8 +143,10 @@ fun LocalSongDetailsDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    // details 是委托属性，when 分支内无法 smart-cast；先取局部快照拿到稳定引用
+                    val currentDetails = details
                     when {
-                        details == null && error == null -> {
+                        currentDetails == null && error == null -> {
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 CircularProgressIndicator()
                                 Text(stringResource(CoreCommonR.string.local_song_details_loading))
@@ -158,50 +160,50 @@ fun LocalSongDetailsDialog(
                             )
                         }
 
-                        details != null -> {
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_display_name), details!!.displayName)
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_title), details!!.title)
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_artist), details!!.artist)
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_album), details!!.album)
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_album_artist), details!!.albumArtist)
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_composer), details!!.composer)
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_genre), details!!.genre)
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_year), details!!.year?.toString())
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_track), details!!.trackNumber?.toString())
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_disc), details!!.discNumber?.toString())
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_duration), formatDuration(details!!.durationMs))
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_extension), details!!.fileExtension)
+                        currentDetails != null -> {
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_display_name), currentDetails.displayName)
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_title), currentDetails.title)
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_artist), currentDetails.artist)
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_album), currentDetails.album)
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_album_artist), currentDetails.albumArtist)
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_composer), currentDetails.composer)
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_genre), currentDetails.genre)
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_year), currentDetails.year?.toString())
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_track), currentDetails.trackNumber?.toString())
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_disc), currentDetails.discNumber?.toString())
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_duration), formatDuration(currentDetails.durationMs))
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_extension), currentDetails.fileExtension)
                             CopyableDetail(
                                 stringResource(CoreCommonR.string.local_song_detail_bitrate),
-                                details!!.bitrateKbps?.let { "$it kbps" }
+                                currentDetails.bitrateKbps?.let { "$it kbps" }
                             )
                             CopyableDetail(
                                 stringResource(CoreCommonR.string.local_song_detail_sample_rate),
-                                details!!.sampleRateHz?.let { "$it Hz" }
+                                currentDetails.sampleRateHz?.let { "$it Hz" }
                             )
                             CopyableDetail(
                                 stringResource(CoreCommonR.string.local_song_detail_channels),
-                                details!!.channelCount?.toString()
+                                currentDetails.channelCount?.toString()
                             )
                             CopyableDetail(
                                 stringResource(CoreCommonR.string.local_song_detail_bit_depth),
-                                details!!.bitsPerSample?.let { "$it-bit" }
+                                currentDetails.bitsPerSample?.let { "$it-bit" }
                             )
                             CopyableDetail(
                                 stringResource(CoreCommonR.string.local_song_detail_size),
-                                details!!.sizeBytes?.let(::formatFileSize)
+                                currentDetails.sizeBytes?.let(::formatFileSize)
                             )
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_mime), details!!.mimeType)
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_audio_mime), details!!.audioMimeType)
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_mime), currentDetails.mimeType)
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_audio_mime), currentDetails.audioMimeType)
                             CopyableDetail(
                                 stringResource(CoreCommonR.string.local_song_detail_modified),
-                                details!!.lastModifiedMs?.let(::convertTimestampToDate)
+                                currentDetails.lastModifiedMs?.let(::convertTimestampToDate)
                             )
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_cover), details!!.coverSource)
-                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_lyric), details!!.lyricSource)
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_cover), currentDetails.coverSource)
+                            CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_lyric), currentDetails.lyricSource)
                             CopyableDetail(
                                 stringResource(CoreCommonR.string.local_song_detail_has_lyrics),
-                                if (details!!.lyricContent.isNullOrBlank()) {
+                                if (currentDetails.lyricContent.isNullOrBlank()) {
                                     stringResource(CoreCommonR.string.local_song_detail_no_lyrics_value)
                                 } else {
                                     stringResource(CoreCommonR.string.local_song_detail_has_lyrics_value)
@@ -209,16 +211,16 @@ fun LocalSongDetailsDialog(
                             )
                             CopyableDetail(
                                 stringResource(CoreCommonR.string.local_song_detail_path),
-                                details!!.filePath,
+                                currentDetails.filePath,
                                 mono = true
                             )
                             CopyableDetail(
                                 stringResource(CoreCommonR.string.local_song_detail_lyric_path),
-                                details!!.lyricPath,
+                                currentDetails.lyricPath,
                                 mono = true
                             )
-                            if (details!!.filePath.isNullOrBlank()) {
-                                CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_uri), details!!.sourceUri.toString(), mono = true)
+                            if (currentDetails.filePath.isNullOrBlank()) {
+                                CopyableDetail(stringResource(CoreCommonR.string.local_song_detail_uri), currentDetails.sourceUri.toString(), mono = true)
                             }
                         }
                     }

@@ -7,6 +7,7 @@ import moe.ouom.neriplayer.data.settings.appearance.EnhancedAdvancedBlurPreferen
 import moe.ouom.neriplayer.data.settings.appearance.ThemeDefaults
 import moe.ouom.neriplayer.data.settings.appearance.UiDensityScalePreference
 import moe.ouom.neriplayer.data.model.settings.appearance.UiStyle
+import moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingStyle
 import moe.ouom.neriplayer.data.settings.download.DEFAULT_DOWNLOAD_BILI_AUDIO_QUALITY
 import moe.ouom.neriplayer.data.settings.download.DEFAULT_DOWNLOAD_NETEASE_AUDIO_QUALITY
 import moe.ouom.neriplayer.data.settings.download.DEFAULT_DOWNLOAD_YOUTUBE_AUDIO_QUALITY
@@ -30,6 +31,8 @@ import moe.ouom.neriplayer.data.settings.playback.PlaybackSettingsSection
 import moe.ouom.neriplayer.data.settings.storage.CacheSizePolicy
 import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.data.model.settings.download.DEFAULT_DOWNLOAD_PARALLELISM
+import moe.ouom.neriplayer.data.model.settings.download.DEFAULT_SMART_DOWNLOAD_MAX_COUNT
+import moe.ouom.neriplayer.data.model.settings.download.DEFAULT_SMART_DOWNLOAD_PLAY_COUNT_THRESHOLD
 import moe.ouom.neriplayer.ksp.annotations.AutoSetting
 import moe.ouom.neriplayer.ksp.annotations.AutoSettingIcon
 import moe.ouom.neriplayer.ksp.annotations.AutoSettingsCatalog
@@ -635,6 +638,21 @@ object AutoSettingsSchema {
         )
 
         @AutoSetting(
+            key = "nowplaying_style",
+            type = SettingValueType.String,
+            defaultString = NowPlayingStyle.DEFAULT_STORAGE_VALUE,
+            constantName = "NOW_PLAYING_STYLE",
+            order = 47,
+            ui = SettingUiType.Custom,
+            access = SettingAccessMode.KeyOnly
+        )
+        val nowPlayingStyle = autoSetting(
+            titleRes = CoreCommonR.string.settings_nowplaying_style,
+            descriptionRes = CoreCommonR.string.settings_nowplaying_style_desc,
+            icon = AutoSettingIcon.Layers
+        )
+
+        @AutoSetting(
             key = "nowplaying_progress_show_quality_switch",
             type = SettingValueType.Boolean,
             defaultBoolean = true,
@@ -1035,6 +1053,21 @@ object AutoSettingsSchema {
             defaultValue = true,
             titleRes = CoreCommonR.string.settings_prefer_word_timed_lyrics,
             descriptionRes = CoreCommonR.string.settings_prefer_word_timed_lyrics_desc,
+            icon = AutoSettingIcon.Subtitles
+        )
+
+        @AutoSetting(
+            key = "merge_lyrics_across_sources",
+            type = SettingValueType.Boolean,
+            defaultBoolean = false,
+            order = 12,
+            ui = SettingUiType.Switch
+        )
+        val mergeLyricsAcrossSources = autoSwitchSetting(
+            key = "merge_lyrics_across_sources",
+            defaultValue = false,
+            titleRes = CoreCommonR.string.settings_merge_lyrics_across_sources,
+            descriptionRes = CoreCommonR.string.settings_merge_lyrics_across_sources_desc,
             icon = AutoSettingIcon.Subtitles
         )
 
@@ -1684,6 +1717,36 @@ object AutoSettingsSchema {
             defaultValue = DEFAULT_DOWNLOAD_PARALLELISM,
             titleRes = CoreCommonR.string.settings_download_parallelism,
             descriptionRes = CoreCommonR.string.settings_download_parallelism_desc,
+            icon = AutoSettingIcon.Tune
+        )
+
+        @AutoSetting(order = 80)
+        val smartDownloadEnabled = autoSwitchSetting(
+            key = "smart_download_enabled",
+            defaultValue = false,
+            titleRes = CoreCommonR.string.settings_smart_download,
+            descriptionRes = CoreCommonR.string.settings_smart_download_desc,
+            icon = AutoSettingIcon.AutoAwesome
+        )
+
+        @AutoSetting(order = 90)
+        val smartDownloadPlayCountThreshold = autoIntSetting(
+            key = "smart_download_play_count_threshold",
+            defaultValue = DEFAULT_SMART_DOWNLOAD_PLAY_COUNT_THRESHOLD,
+            titleRes = CoreCommonR.string.settings_smart_download_threshold,
+            descriptionRes = CoreCommonR.string.settings_smart_download_threshold_desc,
+            icon = AutoSettingIcon.Analytics
+        )
+
+        @AutoSetting(
+            order = 100,
+            ui = SettingUiType.Custom
+        )
+        val smartDownloadMaxCount = autoIntSetting(
+            key = "smart_download_max_count",
+            defaultValue = DEFAULT_SMART_DOWNLOAD_MAX_COUNT,
+            titleRes = CoreCommonR.string.settings_smart_download_max_count,
+            descriptionRes = CoreCommonR.string.settings_smart_download_max_count_desc,
             icon = AutoSettingIcon.Tune
         )
     }

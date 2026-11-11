@@ -859,12 +859,14 @@ fun BiliPlaylistDetailScreen(
                     selectedCount = if (partsSelectionMode) selectedParts.size else selectedIds.size,
                     onDismissRequest = { showExportSheet = false },
                     onCreateAndExport = { name ->
-                        val songs = if (partsSelectionMode && partsInfo != null) {
-                            val originalVideoItem = displayedVideos.find { it.bvid == partsInfo!!.bvid }
-                            partsInfo!!.pages
+                        // partsInfo 是可变状态，lambda 内无法 smart-cast；先取局部快照
+                        val info = partsInfo
+                        val songs = if (partsSelectionMode && info != null) {
+                            val originalVideoItem = displayedVideos.find { it.bvid == info.bvid }
+                            info.pages
                                 .filter { selectedParts.contains(it.page) }
                                 .map { page ->
-                                    vm.toSongItem(page, partsInfo!!, originalVideoItem?.coverUrl ?: "")
+                                    vm.toSongItem(page, info, originalVideoItem?.coverUrl ?: "")
                                 }
                         } else {
                             ui.videos
@@ -888,12 +890,14 @@ fun BiliPlaylistDetailScreen(
                         exitPartsSelection()
                     },
                     onExportToPlaylist = { playlist ->
-                        val songs = if (partsSelectionMode && partsInfo != null) {
-                            val originalVideoItem = displayedVideos.find { it.bvid == partsInfo!!.bvid }
-                            partsInfo!!.pages
+                        // partsInfo 是可变状态，lambda 内无法 smart-cast；先取局部快照
+                        val info = partsInfo
+                        val songs = if (partsSelectionMode && info != null) {
+                            val originalVideoItem = displayedVideos.find { it.bvid == info.bvid }
+                            info.pages
                                 .filter { selectedParts.contains(it.page) }
                                 .map { page ->
-                                    vm.toSongItem(page, partsInfo!!, originalVideoItem?.coverUrl ?: "")
+                                    vm.toSongItem(page, info, originalVideoItem?.coverUrl ?: "")
                                 }
                         } else {
                             ui.videos
@@ -977,141 +981,142 @@ fun BiliPlaylistDetailScreen(
                 )
             }
 
-            if (showPartsSheet && partsInfo != null) {
-                val currentPartsInfo = partsInfo!!
-                BackHandler(enabled = partsSelectionMode) { exitPartsSelection() }
-                DensityScaledModalBottomSheet(
-                    onDismissRequest = {
-                        showPartsSheet = false
-                        exitPartsSelection()
-                    },
-                    sheetState = partsSheetState,
-                    sheetGesturesEnabled = false
-                ) {
-                    Column(
-                        Modifier
-                            .bottomSheetScrollGuard()
-                            .padding(bottom = 12.dp)
+            // partsInfo 是可变状态，用 let 取不可变快照，后续读取都基于这份快照
+            partsInfo?.let { currentPartsInfo ->
+                if (showPartsSheet) {
+                    DensityScaledModalBottomSheet(
+                        onDismissRequest = {
+                            showPartsSheet = false
+                            exitPartsSelection()
+                        },
+                        sheetState = partsSheetState,
+                        sheetGesturesEnabled = false
                     ) {
-                        AnimatedVisibility(visible = partsSelectionMode) {
-                            val allSelected = selectedParts.size == currentPartsInfo.pages.size
-                            TopAppBar(
-                    title = {
-                        Text(
-                            pluralStringResource(
-                                AppR.plurals.common_selected_count,
-                                selectedParts.size,
-                                selectedParts.size
+                        Column(
+                            Modifier
+                                .bottomSheetScrollGuard()
+                                .padding(bottom = 12.dp)
+                        ) {
+                            AnimatedVisibility(visible = partsSelectionMode) {
+                                val allSelected = selectedParts.size == currentPartsInfo.pages.size
+                                TopAppBar(
+                        title = {
+                            Text(
+                                pluralStringResource(
+                                    AppR.plurals.common_selected_count,
+                                    selectedParts.size,
+                                    selectedParts.size
+                                )
                             )
-                        )
-                    },
-                                navigationIcon = {
-                                    HapticIconButton(onClick = { exitPartsSelection() }) {
-                                        Icon(Icons.Filled.Close, contentDescription = stringResource(CoreCommonR.string.action_exit_multi_select))
-                                    }
-                                },
-                                actions = {
-                                    HapticIconButton(onClick = {
-                                        selectedParts = if (allSelected) {
-                                            emptySet()
-                                        } else {
-                                            currentPartsInfo.pages.map { it.page }.toSet()
+                        },
+                                    navigationIcon = {
+                                        HapticIconButton(onClick = { exitPartsSelection() }) {
+                                            Icon(Icons.Filled.Close, contentDescription = stringResource(CoreCommonR.string.action_exit_multi_select))
                                         }
-                                    }) {
-                                        Icon(
-                                            imageVector = if (allSelected) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
-                                            contentDescription = if (allSelected) stringResource(CoreCommonR.string.action_deselect_all) else stringResource(CoreCommonR.string.action_select_all)
-                                        )
-                                    }
-                                    HapticIconButton(
-                                        onClick = {
-                                            if (selectedParts.isNotEmpty()) {
-                                                scope.launch { partsSheetState.hide() }.invokeOnCompletion {
-                                                    if (!partsSheetState.isVisible) {
-                                                        showPartsSheet = false
-                                                        showExportSheet = true
+                                    },
+                                    actions = {
+                                        HapticIconButton(onClick = {
+                                            selectedParts = if (allSelected) {
+                                                emptySet()
+                                            } else {
+                                                currentPartsInfo.pages.map { it.page }.toSet()
+                                            }
+                                        }) {
+                                            Icon(
+                                                imageVector = if (allSelected) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
+                                                contentDescription = if (allSelected) stringResource(CoreCommonR.string.action_deselect_all) else stringResource(CoreCommonR.string.action_select_all)
+                                            )
+                                        }
+                                        HapticIconButton(
+                                            onClick = {
+                                                if (selectedParts.isNotEmpty()) {
+                                                    scope.launch { partsSheetState.hide() }.invokeOnCompletion {
+                                                        if (!partsSheetState.isVisible) {
+                                                            showPartsSheet = false
+                                                            showExportSheet = true
+                                                        }
                                                     }
                                                 }
-                                            }
-                                        },
-                                        enabled = selectedParts.isNotEmpty()
+                                            },
+                                            enabled = selectedParts.isNotEmpty()
+                                        ) {
+                                            Icon(Icons.AutoMirrored.Outlined.PlaylistAdd, contentDescription = stringResource(AppR.string.explore_export_to_playlist))
+                                        }
+                                    },
+                                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                                )
+                            }
+
+                            AnimatedVisibility(visible = !partsSelectionMode) {
+                                Text(
+                                    text = currentPartsInfo.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            HorizontalDivider()
+
+                            LazyColumn {
+                                val originalVideoItem = displayedVideos.find { it.bvid == currentPartsInfo.bvid }
+
+                                itemsIndexed(currentPartsInfo.pages, key = { _, page -> page.page }) { index, page ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .combinedClickable(
+                                                onClick = {
+                                                    if (partsSelectionMode) {
+                                                        selectedParts = if (selectedParts.contains(page.page)) {
+                                                            selectedParts - page.page
+                                                        } else {
+                                                            selectedParts + page.page
+                                                        }
+                                                    } else {
+                                                        onPlayParts(currentPartsInfo, index, originalVideoItem?.coverUrl ?: "")
+                                                        scope.launch { partsSheetState.hide() }.invokeOnCompletion {
+                                                            if (!partsSheetState.isVisible) showPartsSheet = false
+                                                        }
+                                                    }
+                                                },
+                                                onLongClick = {
+                                                    if (!partsSelectionMode) {
+                                                        partsSelectionMode = true
+                                                        selectedParts = setOf(page.page)
+                                                    }
+                                                }
+                                            )
+                                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.AutoMirrored.Outlined.PlaylistAdd, contentDescription = stringResource(AppR.string.explore_export_to_playlist))
-                                    }
-                                },
-                                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-                            )
-                        }
-
-                        AnimatedVisibility(visible = !partsSelectionMode) {
-                            Text(
-                                text = currentPartsInfo.title,
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        HorizontalDivider()
-
-                        LazyColumn {
-                            val originalVideoItem = displayedVideos.find { it.bvid == currentPartsInfo.bvid }
-
-                            itemsIndexed(currentPartsInfo.pages, key = { _, page -> page.page }) { index, page ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .combinedClickable(
-                                            onClick = {
-                                                if (partsSelectionMode) {
+                                        if (partsSelectionMode) {
+                                            Checkbox(
+                                                checked = selectedParts.contains(page.page),
+                                                onCheckedChange = {
                                                     selectedParts = if (selectedParts.contains(page.page)) {
                                                         selectedParts - page.page
                                                     } else {
                                                         selectedParts + page.page
                                                     }
-                                                } else {
-                                                    onPlayParts(currentPartsInfo, index, originalVideoItem?.coverUrl ?: "")
-                                                    scope.launch { partsSheetState.hide() }.invokeOnCompletion {
-                                                        if (!partsSheetState.isVisible) showPartsSheet = false
-                                                    }
                                                 }
-                                            },
-                                            onLongClick = {
-                                                if (!partsSelectionMode) {
-                                                    partsSelectionMode = true
-                                                    selectedParts = setOf(page.page)
-                                                }
-                                            }
-                                        )
-                                        .padding(horizontal = 20.dp, vertical = 14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (partsSelectionMode) {
-                                        Checkbox(
-                                            checked = selectedParts.contains(page.page),
-                                            onCheckedChange = {
-                                                selectedParts = if (selectedParts.contains(page.page)) {
-                                                    selectedParts - page.page
-                                                } else {
-                                                    selectedParts + page.page
-                                                }
-                                            }
-                                        )
-                                        Spacer(Modifier.width(16.dp))
-                                    }
+                                            )
+                                            Spacer(Modifier.width(16.dp))
+                                        }
 
-                                    Text(
-                                        text = "P${page.page}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.width(48.dp)
-                                    )
-                                    Text(
-                                        text = page.part,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        modifier = Modifier.weight(1f)
-                                    )
+                                        Text(
+                                            text = "P${page.page}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.width(48.dp)
+                                        )
+                                        Text(
+                                            text = page.part,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
                                 }
                             }
                         }

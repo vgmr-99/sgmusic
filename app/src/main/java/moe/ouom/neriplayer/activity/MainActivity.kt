@@ -130,7 +130,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import moe.ouom.neriplayer.NeriPlayerApplication
@@ -201,7 +200,7 @@ import moe.ouom.neriplayer.util.platform.AMBIENT_REFRESH_RATE_IDLE_MS
 import moe.ouom.neriplayer.util.platform.applyPreferredHighRefreshRate
 import moe.ouom.neriplayer.util.platform.isAmbientRefreshRateIdle
 import moe.ouom.neriplayer.util.platform.resolveOnePlusHighDensityUiScale
-import java.util.concurrent.atomic.AtomicBoolean
+
 import kotlin.time.Duration.Companion.milliseconds
 import moe.ouom.neriplayer.R as AppR
 
@@ -428,14 +427,10 @@ class MainActivity : ComponentActivity() {
             followSystemDark = startupThemeSnapshot.followSystemDark,
             forceDark = startupThemeSnapshot.forceDark
         )
-        // 设置读取完成前继续使用系统启动页，避免再显示一个会阻塞首帧的中间页面
-        val startupContentReady = AtomicBoolean(safeModeActive)
-        installSplashScreen().setKeepOnScreenCondition {
-            shouldKeepSystemSplash(
-                contentReady = startupContentReady.get(),
-                elapsedMillis = SystemClock.elapsedRealtime() - startupLoadingStartedAtMs
-            )
-        }
+        // 系统启动页只用作首帧之前的白底过渡（图标为透明占位）。
+        // setKeepOnScreenCondition 返回 false 时，系统页会保持到应用绘制出第一帧才撤掉，
+        // 因此不会露出黑屏/白屏闪烁；撤掉后直接进入应用内自绘的动态启动页。
+        installSplashScreen().setKeepOnScreenCondition { false }
         super.onCreate(savedInstanceState)
         nowPlayingOrientationState = NowPlayingOrientationState(
             playerOpen = !safeModeActive && savedInstanceState?.getBoolean(STATE_NOW_PLAYING_OPEN) == true,
@@ -688,9 +683,6 @@ class MainActivity : ComponentActivity() {
                                     showStartupLoadingIndicator = shouldShowStartupLoadingIndicator(
                                         SystemClock.elapsedRealtime() - startupLoadingStartedAtMs
                                     )
-                                    if (showStartupLoadingIndicator) {
-                                        startupContentReady.set(true)
-                                    }
                                 }
                                 return@LaunchedEffect
                             }
@@ -701,7 +693,6 @@ class MainActivity : ComponentActivity() {
                             previousStartupStage = stage
                             if (!shouldKeepSystemSplash(stage)) {
                                 withFrameNanos { }
-                                startupContentReady.set(true)
                                 AppStartupWorkGate.markInteractiveContentReady()
                             }
                         }
@@ -1127,16 +1118,8 @@ class MainActivity : ComponentActivity() {
                                                                     updateListenTogetherStatus(
                                                                         getString(CoreCommonR.string.listen_together_status_joining)
                                                                     )
-                                                                    val savedBaseUrlInput =
-                                                                        preferences.workerBaseUrlInputFlow.first()
-                                                                    val savedBaseUrl =
-                                                                        preferences.workerBaseUrlFlow.first()
                                                                     val baseUrl =
-                                                                        resolveListenTogetherInviteJoinBaseUrl(
-                                                                            invite = invite,
-                                                                            savedBaseUrlInput = savedBaseUrlInput,
-                                                                            savedBaseUrl = savedBaseUrl
-                                                                        )
+                                                                        resolveListenTogetherInviteJoinBaseUrl(invite)
                                                                     val userUuid =
                                                                         preferences.getOrCreateUserUuid()
                                                                     val nickname =
@@ -2155,14 +2138,14 @@ fun AnimatedSplashScreen() {
             )
             Spacer(Modifier.height(44.dp))
             Text(
-                text = "拾光音乐",
+                text = stringResource(AppR.string.splash_app_name),
                 style = MaterialTheme.typography.headlineMedium,
                 color = ink,
                 letterSpacing = androidx.compose.ui.unit.TextUnit(8f, androidx.compose.ui.unit.TextUnitType.Sp)
             )
             Spacer(Modifier.height(14.dp))
             Text(
-                text = "拾起每一段时光的声音",
+                text = stringResource(AppR.string.splash_app_tagline),
                 style = MaterialTheme.typography.bodyMedium,
                 color = gray,
                 letterSpacing = androidx.compose.ui.unit.TextUnit(4f, androidx.compose.ui.unit.TextUnitType.Sp)

@@ -51,6 +51,7 @@ import moe.ouom.neriplayer.core.player.host.settingsRepo
 import moe.ouom.neriplayer.common.logging.NPLogger
 import moe.ouom.neriplayer.lyrics.lyricon.LyriconManager
 import moe.ouom.neriplayer.core.player.PlayerManager
+import moe.ouom.neriplayer.core.player.PlayerLyricsPreferences
 import moe.ouom.neriplayer.core.player.currentPositionMsOr
 import moe.ouom.neriplayer.core.player.audio.focus.StartupAudioFocusController
 import moe.ouom.neriplayer.core.player.audio.route.AudioDeviceRouteOwner
@@ -1256,6 +1257,15 @@ private fun PlayerManager.observePlaybackSettings() {
         }
     }
     ioScope.launch {
+        settingsRepo.mergeLyricsAcrossSourcesFlow.collect { enabled ->
+            val changed = PlayerLyricsPreferences.mergeLyricsAcrossSources != enabled
+            PlayerLyricsPreferences.mergeLyricsAcrossSources = enabled
+            if (changed) {
+                evictLyricCachesForSourcePreferenceChange()
+            }
+        }
+    }
+    ioScope.launch {
         settingsRepo.defaultLyricSourceFlow.collect { source ->
             val changed = defaultLyricSource != source
             defaultLyricSource = source
@@ -1775,86 +1785,6 @@ internal fun PlayerManager.updateAudioOffloadPreferences(reason: String) {
 
 internal fun PlayerManager.handleAudioBecomingNoisyImpl(): Boolean =
     audioDeviceRouteOwner.onAudioBecomingNoisy()
-
-private fun PlayerManager.handleUsbExclusivePlaybackSettingChanged(enabled: Boolean) {
-    usbPlaybackRouteOwner.changeSetting(enabled)
-}
-
-private fun PlayerManager.handleUsbExclusivePreferencesChanged(preferences: UsbExclusivePreferences) {
-    usbPlaybackRouteOwner.changePreferences(preferences)
-}
-
-internal fun PlayerManager.retryUsbExclusivePlayback(reason: String) {
-    usbPlaybackRouteOwner.retry(reason)
-}
-
-internal fun PlayerManager.scheduleUsbExclusiveTransportRecovery(reason: String) {
-    usbPlaybackRouteOwner.scheduleTransportRecovery(reason)
-}
-
-internal fun PlayerManager.markUsbExclusiveNativePathActive(reason: String) {
-    usbPlaybackRouteOwner.markNativePathActive(reason)
-}
-
-internal fun PlayerManager.tryRecoverUsbExclusivePlaybackAfterNativeTransferFailure(
-    reason: String,
-    runtimeReport: String
-): Boolean = usbPlaybackRouteOwner.recoverAfterTransferFailure(reason, runtimeReport)
-
-internal fun PlayerManager.stopPlaybackAfterUsbExclusiveNativeFailure(reason: String) {
-    usbPlaybackRouteOwner.stopAfterNativeFailure(reason)
-}
-
-internal fun PlayerManager.prepareUsbExclusiveRouteForManualPlayback(reason: String): Boolean =
-    usbPlaybackRouteOwner.prepareManualPlayback(reason)
-
-fun PlayerManager.updateUsbExclusiveForegroundState(
-    foreground: Boolean,
-    reason: String
-) {
-    usbExclusiveLivenessOwner.updateForegroundState(foreground, reason)
-}
-
-internal fun PlayerManager.recoverUsbExclusivePlaybackIfUnhealthy(
-    reason: String,
-    forceRecovery: Boolean = false
-): Boolean = usbPlaybackRouteOwner.recoverIfUnhealthy(reason, forceRecovery)
-
-fun PlayerManager.recoverUsbExclusivePlaybackOnForeground(reason: String) {
-    usbExclusiveLivenessOwner.recoverOnForeground(reason)
-}
-
-internal fun PlayerManager.cancelUsbExclusiveRecovery(reason: String) {
-    usbExclusiveLivenessOwner.cancelJobs()
-    NPLogger.d("NERI-UsbExclusive", "cancelUsbExclusiveRecovery(): reason=$reason")
-}
-
-internal fun PlayerManager.resumeInterruptedUsbExclusivePlaybackIfNeeded(reason: String): Boolean =
-    usbInterruptedPlaybackOwner.resumeOnSystemRouteIfNeeded(reason)
-
-internal fun PlayerManager.scheduleUsbExclusivePlaybackResumeAfterDeviceAttach(reason: String) {
-    usbInterruptedPlaybackOwner.scheduleResumeAfterDeviceAttach(reason)
-}
-
-internal fun PlayerManager.clearUsbExclusiveInterruptedPlaybackIntent(reason: String) {
-    usbInterruptedPlaybackOwner.clear(reason)
-}
-
-internal fun PlayerManager.applyUsbExclusivePlaybackPolicy(
-    reconfigureAudioSink: Boolean = false,
-    reconfigureReason: String = "usb_policy_changed",
-    allowReconfigureWhilePlaying: Boolean = false
-) {
-    usbPlaybackRouteOwner.applyPolicy(reconfigureAudioSink, reconfigureReason, allowReconfigureWhilePlaying)
-}
-
-internal fun PlayerManager.scheduleUsbAudioSinkReconfiguration(
-    reason: String,
-    allowWhilePlaybackActive: Boolean = false,
-    bypassCooldown: Boolean = false
-) {
-    usbSinkRouteOwner.schedule(reason, allowWhilePlaybackActive, bypassCooldown)
-}
 
 internal fun PlayerManager.releaseImpl() {
     serverRecoveryPosition = null

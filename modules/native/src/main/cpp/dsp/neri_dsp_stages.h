@@ -409,4 +409,79 @@ private:
     int64_t limiterEvents_ = 0;
 };
 
+// 独立延迟/回声：干声直通，湿声是延迟指定时间后的信号，并按反馈比例重复衰减。
+// 干声不经过延迟线，所以整条链路仍然零延迟，歌词和画面不会错位
+class DelayStage {
+public:
+    void configure(const StageContext& context);
+    void setTargets(bool enabled, float timeMs, float feedback, float mix);
+    void snapToTargets();
+    void reset();
+    bool active() const;
+    void process(float* left, float* right, int frames);
+
+private:
+    float readInterpolated(const DelayLine& line, float delaySamples) const;
+
+    StageContext context_;
+    SmoothedValue feedback_;
+    SmoothedValue mix_;
+    // 延迟长度按样本滑动，改时间时不会有台阶
+    float delaySamples_ = 0.0f;
+    float delayTargetSamples_ = 0.0f;
+    float delayCoefficient_ = 0.0f;
+    float dampingCoefficient_ = 0.0f;
+    DelayLine leftDelay_;
+    DelayLine rightDelay_;
+    float dampedLeft_ = 0.0f;
+    float dampedRight_ = 0.0f;
+    bool running_ = false;
+};
+
+// ITU-R BS.1770 响度标准化：用 K 加权测量当前响度，再补上到目标响度的差值。
+// 测量只需要历史数据，不引入任何延迟；增益缓慢跟随，避免呼吸感
+class LoudnessNormalizationStage {
+public:
+    void configure(const StageContext& context);
+    void setTargets(bool enabled, float targetLufs, float maxGainDb);
+    void snapToTargets();
+    void reset();
+    bool active() const;
+    void process(float* left, float* right, int frames);
+    float measuredLufs() const {
+        return measuredLufs_;
+    }
+    float appliedGainDb() const {
+        return gainToDb(gain_);
+    }
+
+private:
+    void designFilters();
+    void updateMeasurement();
+
+    static constexpr int kBlockCount = 20;
+
+    StageContext context_;
+    bool enabled_ = false;
+    float targetLufs_ = -14.0f;
+    float maxGainDb_ = 12.0f;
+    BiquadCoefficients shelf_;
+    BiquadCoefficients highPass_;
+    BiquadState shelfLeft_;
+    BiquadState shelfRight_;
+    BiquadState highPassLeft_;
+    BiquadState highPassRight_;
+    // 每 100 ms 一个块，保留最近 20 个块做门限统计
+    std::array<double, kBlockCount> blocks_{};
+    int blockIndex_ = 0;
+    int blockFill_ = 0;
+    double blockSum_ = 0.0;
+    int blockSamples_ = 0;
+    int hopSamples_ = 4800;
+    float measuredLufs_ = -70.0f;
+    float targetGain_ = 1.0f;
+    float gain_ = 1.0f;
+    float gainCoefficient_ = 0.0f;
+};
+
 } // namespace neri::dsp

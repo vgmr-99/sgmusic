@@ -40,7 +40,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import moe.ouom.neriplayer.platform.bilibili.api.auth.BiliCookieSource
 import moe.ouom.neriplayer.common.logging.NPLogger
 import moe.ouom.neriplayer.data.model.auth.SavedCookieAuthHealth
@@ -103,6 +108,9 @@ class BiliCookieRepository(private val context: Context) : BiliCookieSource {
     private val _cookieFlow: MutableStateFlow<Map<String, String>>
     private val _authHealthFlow: MutableStateFlow<SavedCookieAuthHealth>
     private val writeLock = Any()
+    private val migrationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val pendingLegacyMigration = AtomicBoolean(false)
+    private val migrationCompletion = CompletableDeferred<Unit>()
 
     val cookieFlow: StateFlow<Map<String, String>>
         get() = _cookieFlow.asStateFlow()
@@ -124,6 +132,27 @@ class BiliCookieRepository(private val context: Context) : BiliCookieSource {
         _authHealthFlow = MutableStateFlow(
             evaluateBiliAuthHealth(initialBundle)
         )
+        // 旧版 DataStore 的迁移放到后台，避免构造函数在主线程同步读取
+        if (pendingLegacyMigration.get()) {
+            migrationScope.launch {
+                try {
+                    migrateLegacyCookiesInBackground()
+                } finally {
+                    migrationCompletion.complete(Unit)
+                }
+            }
+        } else {
+            migrationCompletion.complete(Unit)
+        }
+    }
+
+    /**
+     * 等待旧版 DataStore 的迁移完成。
+     *
+     * 迁移在后台协程执行，调用方可以在需要"凭据已就绪"语义时先等待它。
+     */
+    suspend fun awaitLegacyMigration() {
+        migrationCompletion.await()
     }
 
     override fun getCookiesOnce(): Map<String, String> = _cookieFlow.value
@@ -202,7 +231,11 @@ class BiliCookieRepository(private val context: Context) : BiliCookieSource {
         ) {
             return BiliAuthBundle()
         }
-        return migrateLegacyCookies() ?: BiliAuthBundle()
+        // 旧 DataStore 的读取会阻塞等待 IO，改为在后台迁移
+        if (hasLegacyCookieStore()) {
+            pendingLegacyMigration.set(true)
+        }
+        return BiliAuthBundle()
     }
 
     // preferencesDataStore 的文件固定在 files/datastore/<name>.preferences_pb，
@@ -211,37 +244,42 @@ class BiliCookieRepository(private val context: Context) : BiliCookieSource {
         File(context.filesDir, "datastore/$LEGACY_COOKIE_STORE_NAME.preferences_pb").exists()
     }.getOrDefault(true)
 
-    private fun loadLegacyCookies(): Map<String, String> {
+    private suspend fun loadLegacyCookies(): Map<String, String> {
         if (!hasLegacyCookieStore()) return emptyMap()
         return runCatching {
-            val prefs = runBlocking { context.biliCookieStore.data.first() }
+            val prefs = context.biliCookieStore.data.first()
             val json = prefs[BiliCookieKeys.COOKIE_JSON] ?: "{}"
             jsonToMap(json)
         }.getOrDefault(emptyMap())
     }
 
-    private fun migrateLegacyCookies(): BiliAuthBundle? {
+    /**
+     * 在后台把旧 DataStore 的 Cookie 迁移到加密存储。
+     *
+     * 迁移完成后才发布新的账号状态，避免主线程在构造阶段被 DataStore 读取阻塞。
+     */
+    private suspend fun migrateLegacyCookiesInBackground() {
         val legacyCookies = loadLegacyCookies()
-        if (legacyCookies.isEmpty()) {
-            return null
-        }
-
+        if (legacyCookies.isEmpty()) return
         val migrated = BiliAuthBundle(
             cookies = legacyCookies,
             savedAt = 0L
         ).normalized(savedAt = 0L)
         // 加密存储不可写时保留旧 Cookie，下次启动再迁移
         if (!writeAuthBundle(migrated) || !SecurePreferencesOpener.isPersistent(encryptedPrefs)) {
-            return migrated
+            return
         }
         runCatching {
-            runBlocking {
-                context.biliCookieStore.edit { prefs ->
-                    prefs.remove(BiliCookieKeys.COOKIE_JSON)
-                }
+            context.biliCookieStore.edit { prefs ->
+                prefs.remove(BiliCookieKeys.COOKIE_JSON)
             }
         }
-        return migrated
+        synchronized(writeLock) {
+            _authFlow.value = migrated
+            _cookieFlow.value = migrated.cookies
+            _authHealthFlow.value = evaluateBiliAuthHealth(migrated)
+        }
+        NPLogger.d("NERI-BiliCookieRepo", "Migrated legacy Bili cookies: keys=${migrated.cookies.keys.joinToString()}")
     }
 
     private fun jsonToMap(json: String): Map<String, String> {

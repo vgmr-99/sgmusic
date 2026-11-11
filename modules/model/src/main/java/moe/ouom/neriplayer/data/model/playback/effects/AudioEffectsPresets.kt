@@ -127,6 +127,14 @@ val AudioEffectsBuiltInPresets: List<AudioEffectsPreset> = listOf(
         Neutral.copy(surround = 0.8f, stereoWidth = 1.5f)
     ),
     AudioEffectsPreset(
+        "echo_room", AudioEffectsPresetCategory.SCENE,
+        Neutral.copy(
+            stereoWidth = 1.15f,
+            reverb = 0.18f, reverbRoom = 0.7f, reverbDamping = 0.55f,
+            delayEnabled = true, delayTimeMs = 320f, delayFeedback = 0.4f, delayMix = 0.28f
+        )
+    ),
+    AudioEffectsPreset(
         "karaoke", AudioEffectsPresetCategory.SCENE,
         Neutral.copy(vocalRemoval = 0.9f, reverb = 0.25f, reverbRoom = 0.6f)
     ),

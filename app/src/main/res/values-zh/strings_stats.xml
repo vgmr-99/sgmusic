@@ -28,4 +28,18 @@
     <string name="stats_song_first_played">首次播放</string>
     <string name="stats_song_total_listen">累计收听</string>
     <string name="stats_song_play_count_label">播放次数</string>
+
+    <!-- Wrapped -->
+    <string name="wrapped_title">听歌总结</string>
+    <string name="wrapped_summary_headline">这段时间你听了这些</string>
+    <string name="wrapped_top_tracks">最常播放</string>
+    <string name="wrapped_top_artists">最爱艺人</string>
+    <string name="wrapped_share">分享听歌总结</string>
+    <string name="wrapped_share_text">这是我的听歌总结</string>
+    <string name="wrapped_artist_play_count">%1$d 次</string>
+    <string name="wrapped_period_day">今日</string>
+    <string name="wrapped_period_week">本周</string>
+    <string name="wrapped_period_month">本月</string>
+    <string name="wrapped_period_year">今年</string>
+    <string name="wrapped_period_all">全部</string>
 </resources>

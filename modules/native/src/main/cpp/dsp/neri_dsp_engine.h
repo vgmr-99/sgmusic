@@ -28,6 +28,8 @@ enum ActiveStage : int {
     kStageDynamics = 1 << 7,
     kStageSpeaker = 1 << 8,
     kStageOutput = 1 << 9,
+    kStageDelay = 1 << 10,
+    kStageLoudness = 1 << 11,
 };
 
 struct EngineStats {
@@ -109,6 +111,8 @@ private:
     ReverbStage reverb_;
     CompressorStage compressor_;
     SpeakerStage speaker_;
+    DelayStage delay_;
+    LoudnessNormalizationStage loudness_;
     OutputStage output_;
 
     std::vector<float> left_;

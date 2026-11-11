@@ -53,6 +53,7 @@
     <string name="audio_effects_preset_treble_boost">Treble boost</string>
     <string name="audio_effects_preset_warm">Warm vinyl</string>
     <string name="audio_effects_preset_live">Live concert</string>
+    <string name="audio_effects_preset_echo_room">Echo room</string>
     <string name="audio_effects_preset_concert_hall">Concert hall</string>
     <string name="audio_effects_preset_cinema">Cinema</string>
     <string name="audio_effects_preset_surround_3d">3D surround</string>
@@ -151,6 +152,12 @@
     <string name="audio_effects_reverb_room">Room size</string>
     <string name="audio_effects_reverb_brightness">Echo brightness</string>
     <string name="audio_effects_reverb_predelay">Echo delay</string>
+    <string name="audio_effects_delay">Delay echo</string>
+    <string name="audio_effects_delay_desc">Adds echoes after the dry signal, vocals and lyrics stay in sync</string>
+    <string name="audio_effects_delay_time">Echo time</string>
+    <string name="audio_effects_delay_mix">Echo amount</string>
+    <string name="audio_effects_delay_feedback">Echo feedback</string>
+    <string name="audio_effects_delay_feedback_desc" formatted="false">Higher feedback repeats the echo more; above 70% the tail gets obvious</string>
     <string name="audio_effects_mono_bass">Centered bass</string>
     <string name="audio_effects_mono_bass_desc">Merges bass below this frequency into the center for tighter, stronger bass</string>
     <string name="audio_effects_mono">Mono</string>
@@ -219,6 +226,12 @@
     <string name="audio_effects_per_output_desc">Speaker, wired, Bluetooth and USB each keep their own sound and switch automatically</string>
     <string name="audio_effects_usb_apply">Use effects in USB exclusive mode</string>
     <string name="audio_effects_usb_apply_desc">Off by default to stay bit-perfect. Still skipped while bit-perfect output is on.</string>
+    <string name="audio_effects_loudness_normalization">Loudness normalization</string>
+    <string name="audio_effects_loudness_normalization_desc">Measures loudness per ITU-R BS.1770 and levels different tracks to the same loudness</string>
+    <string name="audio_effects_loudness_target">Target loudness</string>
+    <string name="audio_effects_loudness_max_gain">Maximum boost</string>
+    <string name="audio_effects_loudness_max_gain_desc">Caps the correction so quiet passages are not pulled up abruptly</string>
+    <string name="audio_effects_loudness_master_off">Loudness normalization stays off while the sound effects master switch is off</string>
     <string name="audio_effects_reset_all">Reset current sound</string>
     <string name="audio_effects_reset_all_confirm">Restore the original sound and clear adjustments for the current device? Sounds saved under Mine are kept.</string>
     <string name="audio_effects_tab_presets">Presets</string>

@@ -4,6 +4,7 @@ add_library(
     neri_dsp_primitives.cpp
     neri_dsp_filter_stages.cpp
     neri_dsp_space_stages.cpp
+    neri_dsp_time_stages.cpp
     neri_dsp_dynamics_stages.cpp
     neri_dsp_engine.cpp
 )

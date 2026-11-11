@@ -114,11 +114,6 @@ internal enum class SettingsPage(    val titleRes: Int,
         AutoSettingsSchema.lxSource.metadata,
         Icons.Outlined.LibraryMusic
     ),
-    MusicServers(
-        titleRes = CoreCommonR.string.server_manage,
-        descriptionRes = CoreCommonR.string.server_settings_desc,
-        icon = Icons.Outlined.LibraryMusic
-    ),
     AudioQuality(
         AutoSettingsSchema.audioQuality.metadata,
         Icons.Filled.Audiotrack
@@ -217,7 +212,6 @@ internal fun settingsPageForTarget(target: SettingsPageTarget): SettingsPage? = 
 }
 
 internal fun SettingsPage.backTargetPage(): SettingsPage? = when (this) {
-    SettingsPage.MusicServers -> SettingsPage.Accounts
     SettingsPage.StorageCacheDetails -> SettingsPage.Storage
     SettingsPage.XiaomiSuperIsland -> SettingsPage.ExternalLyrics
     else -> null

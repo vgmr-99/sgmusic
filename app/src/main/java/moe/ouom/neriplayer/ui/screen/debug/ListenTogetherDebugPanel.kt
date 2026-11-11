@@ -788,11 +788,7 @@ private fun RoomActions(
                             roomSettings
                         )
                         sessionManager.joinRoom(
-                            baseUrl = resolveListenTogetherInviteJoinBaseUrl(
-                                invite = invite,
-                                savedBaseUrlInput = baseUrlInput,
-                                savedBaseUrl = effectiveBaseUrl
-                            ),
+                            baseUrl = resolveListenTogetherInviteJoinBaseUrl(invite = invite),
                             roomId = targetRoomId,
                             userUuid = joinUserUuid,
                             nickname = joinNickname,

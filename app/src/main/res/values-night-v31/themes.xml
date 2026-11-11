@@ -7,10 +7,13 @@
         <item name="android:windowDisablePreview">true</item>
     </style>
 
-    <!-- 拾光音乐新启动图（夜间同样用白色底+新 LOGO，与日间一致） -->
+    <!--
+      系统启动页只保留白底，图标用透明占位。
+      与日间保持一致，真正的启动画面是应用内自绘的动态启动页。
+    -->
     <style name="Theme.NeriPlayer.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#FFFFFFFF</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_system_placeholder</item>
         <item name="postSplashScreenTheme">@style/Theme.NeriPlayer</item>
     </style>
 </resources>

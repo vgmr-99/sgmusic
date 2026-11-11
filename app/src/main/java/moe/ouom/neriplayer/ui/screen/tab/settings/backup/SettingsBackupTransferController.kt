@@ -39,6 +39,12 @@ private class BackupSafResultHandler(
         playlists.importPlaylists(uri)
     }
 
+    fun onImportM3uPlaylist(uri: Uri?) {
+        if (uri == null) return
+        playlists.initialize(context)
+        playlists.importPlaylistFromM3u(uri)
+    }
+
     fun onExportConfig(uri: Uri?) {
         if (uri == null) {
             config.cancelExportSelection()
@@ -84,6 +90,7 @@ internal class SettingsBackupTransferController(
     private val config: ConfigTransferViewModel,
     private val launchPlaylistExport: (String) -> Unit,
     private val launchPlaylistImport: () -> Unit,
+    private val launchM3uPlaylistImport: () -> Unit,
     private val launchConfigImport: () -> Unit
 ) {
     fun exportPlaylists() {
@@ -94,6 +101,10 @@ internal class SettingsBackupTransferController(
 
     fun importPlaylists() {
         if (!playlistState.isImporting) launchPlaylistImport()
+    }
+
+    fun importM3uPlaylist() {
+        if (!playlistState.isImporting) launchM3uPlaylistImport()
     }
 
     fun exportConfig() {
@@ -146,6 +157,10 @@ internal fun rememberSettingsBackupTransferController(
         contract = OpenDocument(),
         onResult = handler::onImportPlaylist
     )
+    val importM3uPlaylist = rememberLauncherForActivityResult(
+        contract = OpenDocument(),
+        onResult = handler::onImportM3uPlaylist
+    )
     val exportConfig = rememberLauncherForActivityResult(
         contract = CreateDocument("application/json"),
         onResult = handler::onExportConfig
@@ -172,6 +187,7 @@ internal fun rememberSettingsBackupTransferController(
         config = config,
         launchPlaylistExport = { exportPlaylist.launch(it) },
         launchPlaylistImport = { importPlaylist.launch(arrayOf("*/*")) },
+        launchM3uPlaylistImport = { importM3uPlaylist.launch(arrayOf("*/*")) },
         launchConfigImport = { importConfig.launch(arrayOf("*/*")) }
     )
     val recreateAction = BackupImportRecreateAction(
@@ -226,6 +242,7 @@ internal fun LazyListScope.settingsBackupPageItems(
                 configTransferUiState = controller.configState,
                 onExportClick = controller::exportPlaylists,
                 onImportClick = controller::importPlaylists,
+                onImportM3uClick = controller::importM3uPlaylist,
                 onExportConfigClick = controller::exportConfig,
                 onImportConfigClick = controller::importConfig,
                 onClearExportStatus = controller::clearPlaylistExportStatus,

@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">音理音理! DEBUG</string>
+    <!--
+      测试版沿用「拾光音乐」品牌名，只保留测试版标识。
+      与正式版靠 applicationIdSuffix（.debug）区分，可同时安装。
+    -->
+    <string name="app_name">拾光音乐 · 测试版</string>
 </resources>

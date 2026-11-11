@@ -14,6 +14,14 @@
     <string name="settings_liquid_glass_requires_clean">Requires the clean style</string>
     <string name="settings_nowplaying_immersive_mode">Immersive mode</string>
     <string name="settings_nowplaying_immersive_mode_desc">Large-cover layout: full-width artwork, left-aligned title and no cover lyrics; long-press play on Now Playing to toggle</string>
+    <string name="settings_nowplaying_style">Now Playing style</string>
+    <string name="settings_nowplaying_style_desc">Switch the Now Playing visual between classic, expressive and Apple Music styles</string>
+    <string name="nowplaying_style_classic">Classic</string>
+    <string name="nowplaying_style_classic_desc">Artwork on top, controls below, following the app theme</string>
+    <string name="nowplaying_style_expressive">Expressive</string>
+    <string name="nowplaying_style_expressive_desc">Accent gradient backdrop with stronger artwork contrast</string>
+    <string name="nowplaying_style_apple_music">Apple Music</string>
+    <string name="nowplaying_style_apple_music_desc">Dark gradient backdrop that puts lyrics and artwork in focus</string>
     <string name="nowplaying_immersive_mode_on">Immersive mode on</string>
     <string name="nowplaying_immersive_mode_off">Immersive mode off</string>
     <string name="settings_page_language">Language &amp; region</string>

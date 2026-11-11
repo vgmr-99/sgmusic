@@ -11,6 +11,12 @@ import kotlin.math.abs
 const val AUDIO_EFFECTS_EQ_BAND_LIMIT_DB = 12f
 const val AUDIO_EFFECTS_PREAMP_MIN_DB = -12f
 const val AUDIO_EFFECTS_PREAMP_MAX_DB = 6f
+const val AUDIO_EFFECTS_DELAY_MIN_TIME_MS = 10f
+const val AUDIO_EFFECTS_DELAY_MAX_TIME_MS = 1000f
+const val AUDIO_EFFECTS_DELAY_MAX_FEEDBACK = 0.85f
+const val AUDIO_EFFECTS_LOUDNESS_TARGET_MIN_LUFS = -24f
+const val AUDIO_EFFECTS_LOUDNESS_TARGET_MAX_LUFS = -9f
+const val AUDIO_EFFECTS_LOUDNESS_MAX_GAIN_DB = 18f
 
 private const val NEUTRAL_EPSILON = 0.001f
 private val NeutralSoundDefaults = AudioEffectsSound()
@@ -52,6 +58,9 @@ fun AudioEffectsSound.normalized(): AudioEffectsSound = copy(
     reverbRoom = reverbRoom.finiteIn(0f, 1f, 0.5f),
     reverbDamping = reverbDamping.finiteIn(0f, 1f, 0.5f),
     reverbPreDelayMs = reverbPreDelayMs.finiteIn(0f, 100f, 10f),
+    delayTimeMs = delayTimeMs.finiteIn(AUDIO_EFFECTS_DELAY_MIN_TIME_MS, AUDIO_EFFECTS_DELAY_MAX_TIME_MS, 250f),
+    delayFeedback = delayFeedback.finiteIn(0f, 0.85f, 0.35f),
+    delayMix = delayMix.finiteIn(0f, 1f, 0.25f),
     compressorThresholdDb = compressorThresholdDb.finiteIn(-50f, 0f, -18f),
     compressorRatio = compressorRatio.finiteIn(1f, 20f, 2f),
     compressorAttackMs = compressorAttackMs.finiteIn(0.5f, 100f, 10f),
@@ -70,6 +79,15 @@ fun SpeakerOptimizerSettings.normalized(): SpeakerOptimizerSettings = copy(
     loudness = loudness.finiteIn(0f, 1f, 0.4f),
     clarity = clarity.finiteIn(0f, 1f, 0.3f),
     stereoExpand = stereoExpand.finiteIn(0f, 1f, 0.3f)
+)
+
+fun LoudnessNormalizationSettings.normalized(): LoudnessNormalizationSettings = copy(
+    targetLufs = targetLufs.finiteIn(
+        AUDIO_EFFECTS_LOUDNESS_TARGET_MIN_LUFS,
+        AUDIO_EFFECTS_LOUDNESS_TARGET_MAX_LUFS,
+        -14f
+    ),
+    maxGainDb = maxGainDb.finiteIn(0f, AUDIO_EFFECTS_LOUDNESS_MAX_GAIN_DB, 12f)
 )
 
 fun SpeakerOptimizerSettings.effectiveProtectionHz(): Float =
@@ -97,6 +115,7 @@ fun AudioEffectsSettings.normalized(): AudioEffectsSettings = copy(
         .distinctBy { it.id }
         .take(AUDIO_EFFECTS_USER_PRESET_LIMIT),
     speaker = speaker.normalized(),
+    loudnessNormalization = loudnessNormalization.normalized(),
     powerMode = AudioEffectsPowerMode.fromStorageValue(powerMode).storageValue,
     speedPitchLinked = speedPitchLinked || version < AUDIO_EFFECTS_LINKED_PITCH_VERSION,
     storedSpeed = storedSpeed.finiteIn(MIN_PLAYBACK_SPEED, MAX_PLAYBACK_SPEED, DEFAULT_PLAYBACK_SPEED),
@@ -120,7 +139,7 @@ private fun AudioEffectsSound.allProcessingNeutral(): Boolean {
     val colorNeutral = virtualBass.isZero() && warmth.isZero() && clarity.isZero() && vocal.isZero()
     val stereoNeutral = vocalRemoval.isZero() && (stereoWidth - 1f).isZero() && monoBassHz.isZero() &&
         !mono && !swapChannels && crossfeed.isZero()
-    val spaceNeutral = surround.isZero() && reverb.isZero()
+    val spaceNeutral = surround.isZero() && reverb.isZero() && !delayEnabled
     return equalizerNeutral && parametricNeutral && toneNeutral && colorNeutral &&
         stereoNeutral && spaceNeutral && !compressorEnabled && limiterNeutral()
 }

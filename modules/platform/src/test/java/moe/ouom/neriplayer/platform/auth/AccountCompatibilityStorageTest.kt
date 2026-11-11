@@ -87,6 +87,7 @@ class AccountCompatibilityStorageTest {
         AccountPreferencesOpener.fallback(context, "bili_auth_secure_prefs")
 
         val repository = BiliCookieRepository(context)
+        repository.awaitLegacyMigration()
 
         assertEquals("legacy-bili-session", repository.getCookiesOnce()["SESSDATA"])
         assertTrue(repository.requiresCompatibilityStorageWarning)
@@ -107,6 +108,7 @@ class AccountCompatibilityStorageTest {
         AccountPreferencesOpener.fallback(context, "netease_auth_secure_prefs")
 
         val repository = NeteaseCookieRepository(context)
+        repository.awaitLegacyMigration()
 
         assertEquals("legacy-netease-session", repository.getCookiesOnce()["MUSIC_U"])
         assertEquals("pc", repository.getCookiesOnce()["os"])

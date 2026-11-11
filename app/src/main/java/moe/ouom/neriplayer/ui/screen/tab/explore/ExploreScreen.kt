@@ -929,7 +929,7 @@ fun ExploreScreen(
                                         .padding(bottom = miniPlayerHeight),
                                     Alignment.Center
                                 ) {
-                                    Text(ui.searchError!!.asString(), color = MaterialTheme.colorScheme.error)
+                                    Text(ui.searchError?.asString().orEmpty(), color = MaterialTheme.colorScheme.error)
                                 }
                             }
                             ui.searchItems.isEmpty() -> {
@@ -1108,7 +1108,7 @@ fun ExploreScreen(
                                 } else if (ui.searchLoadMoreError != null) {
                                     item(key = "search-load-more-error") {
                                         SearchLoadMoreErrorRow(
-                                            error = ui.searchLoadMoreError!!.asString(),
+                                            error = ui.searchLoadMoreError?.asString().orEmpty(),
                                             onRetry = vm::loadMoreSearchResults
                                         )
                                     }
@@ -1175,7 +1175,8 @@ fun ExploreScreen(
     }
 
     if (showPartsSheet && partsInfo != null) {
-        val currentPartsInfo = partsInfo!!
+        // partsInfo 是可变状态，取局部快照拿到稳定引用，避免后续读取时状态已变
+        val currentPartsInfo = partsInfo ?: return
         BackHandler(enabled = partsSelectionMode) { exitPartsSelection() }
         ModalBottomSheet(
             onDismissRequest = {
@@ -1321,42 +1322,50 @@ fun ExploreScreen(
             selectedCount = selectedParts.size,
             onDismissRequest = { showExportSheet = false },
             onCreateAndExport = { name ->
-                val songs = partsInfo!!.pages
-                    .filter { selectedParts.contains(it.page) }
-                    .map { page -> vm.toSongItem(page, partsInfo!!, clickedSongCoverUrl) }
-                scope.launchLocalPlaylistMutation(
-                    operation = "createPlaylistFromExplore",
-                    onResult = { result ->
-                        scope.showPlaylistBatchExportCreatedResult(
-                            context = context,
-                            snackbarHostState = snackbarHostState,
-                            repository = repo,
-                            result = result
-                        )
+                // partsInfo 是可变状态，lambda 内无法 smart-cast；先取局部快照
+                val info = partsInfo
+                if (info != null) {
+                    val songs = info.pages
+                        .filter { selectedParts.contains(it.page) }
+                        .map { page -> vm.toSongItem(page, info, clickedSongCoverUrl) }
+                    scope.launchLocalPlaylistMutation(
+                        operation = "createPlaylistFromExplore",
+                        onResult = { result ->
+                            scope.showPlaylistBatchExportCreatedResult(
+                                context = context,
+                                snackbarHostState = snackbarHostState,
+                                repository = repo,
+                                result = result
+                            )
+                        }
+                    ) {
+                        repo.createPlaylistWithSongs(name, songs)
                     }
-                ) {
-                    repo.createPlaylistWithSongs(name, songs)
                 }
                 exitPartsSelection()
             },
             onExportToPlaylist = { playlist ->
-                val songs = partsInfo!!.pages
-                    .filter { selectedParts.contains(it.page) }
-                    .map { page -> vm.toSongItem(page, partsInfo!!, clickedSongCoverUrl) }
-                scope.launchLocalPlaylistMutation(
-                    operation = "exportSongsFromExplore",
-                    onResult = { result ->
-                        scope.showPlaylistBatchExportAddedResult(
-                            context = context,
-                            snackbarHostState = snackbarHostState,
-                            repository = repo,
-                            targetPlaylistId = playlist.id,
-                            targetPlaylistName = playlist.name,
-                            result = result
-                        )
+                // partsInfo 是可变状态，lambda 内无法 smart-cast；先取局部快照
+                val info = partsInfo
+                if (info != null) {
+                    val songs = info.pages
+                        .filter { selectedParts.contains(it.page) }
+                        .map { page -> vm.toSongItem(page, info, clickedSongCoverUrl) }
+                    scope.launchLocalPlaylistMutation(
+                        operation = "exportSongsFromExplore",
+                        onResult = { result ->
+                            scope.showPlaylistBatchExportAddedResult(
+                                context = context,
+                                snackbarHostState = snackbarHostState,
+                                repository = repo,
+                                targetPlaylistId = playlist.id,
+                                targetPlaylistName = playlist.name,
+                                result = result
+                            )
+                        }
+                    ) {
+                        repo.addSongsToPlaylistWithResult(playlist.id, songs)
                     }
-                ) {
-                    repo.addSongsToPlaylistWithResult(playlist.id, songs)
                 }
                 exitPartsSelection()
             }

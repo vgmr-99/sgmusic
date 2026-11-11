@@ -324,6 +324,13 @@ bool testEverythingAtExtremesStaysFiniteAndBounded() {
         params[kOutputGainDb] = 24.0f;
         params[kLimiterEnabled] = 1.0f;
         params[kDitherEnabled] = 1.0f;
+        params[kDelayEnabled] = 1.0f;
+        params[kDelayTimeMs] = 1000.0f;
+        params[kDelayFeedback] = 0.85f;
+        params[kDelayMix] = 1.0f;
+        params[kLoudnessNormalizationEnabled] = 1.0f;
+        params[kLoudnessTargetLufs] = -9.0f;
+        params[kLoudnessMaxGainDb] = 18.0f;
         Engine engine;
         CHECK(configured(engine, params));
         uint32_t seed = 1234567u;
@@ -645,10 +652,128 @@ bool testLimiterDoesNotModulateWithinBassCycles() {
     return true;
 }
 
+// 回声：干声立刻到达，延迟设定的时长后才出现第一次回声
+bool testDelayKeepsDrySignalAndAddsEchoLater() {
+    Params params = neutralParams();
+    params[kDelayEnabled] = 1.0f;
+    params[kDelayTimeMs] = 200.0f;
+    params[kDelayFeedback] = 0.0f;
+    params[kDelayMix] = 1.0f;
+    Engine engine;
+    CHECK(configured(engine, params));
+    const int frames = kSampleRate / 2;
+    std::vector<float> input(static_cast<size_t>(frames) * 2, 0.0f);
+    for (int i = 0; i < frames; ++i) {
+        input[static_cast<size_t>(i) * 2] = 0.5f;
+        input[static_cast<size_t>(i) * 2 + 1] = 0.5f;
+    }
+    const auto output = processFloat(engine, input);
+    const int delayFrames = kSampleRate / 5;
+    // 延迟之前只有干声
+    CHECK(std::fabs(output[0] - 0.5f) < 1.0e-4f);
+    CHECK(std::fabs(output[static_cast<size_t>(delayFrames - 10) * 2] - 0.5f) < 1.0e-3f);
+    // 延迟之后干声加上回声
+    const double after = output[static_cast<size_t>(delayFrames + 10) * 2];
+    CHECK(std::fabs(after - 1.0f) < 1.0e-2f);
+    return true;
+}
+
+// 回声不引入额外延迟：干声位置与输入完全对齐
+bool testDelayDoesNotShiftDrySignal() {
+    Params params = neutralParams();
+    params[kDelayEnabled] = 1.0f;
+    params[kDelayTimeMs] = 400.0f;
+    params[kDelayFeedback] = 0.3f;
+    params[kDelayMix] = 0.5f;
+    Engine engine;
+    CHECK(configured(engine, params));
+    const auto input = stereoSine(440.0f, 0.3f, 4096);
+    const auto output = processFloat(engine, input);
+    for (size_t i = 0; i < input.size(); i += 2) {
+        CHECK(std::fabs(output[i] - input[i]) < 1.0e-3f);
+    }
+    return true;
+}
+
+// 反馈越高回声越多，但整体有界
+bool testDelayFeedbackStaysBounded() {
+    Params params = neutralParams();
+    params[kDelayEnabled] = 1.0f;
+    params[kDelayTimeMs] = 150.0f;
+    params[kDelayFeedback] = 0.8f;
+    params[kDelayMix] = 0.4f;
+    Engine engine;
+    CHECK(configured(engine, params));
+    const auto output = processFloat(engine, stereoSine(300.0f, 0.2f, kSampleRate * 3));
+    for (const float sample : output) {
+        CHECK(std::isfinite(sample));
+        CHECK(std::fabs(sample) <= 1.0f);
+    }
+    // 回声确实存在：后半段的能量比没有回声时高
+    const double tail = rms(output, kSampleRate * 2);
+    CHECK(tail > 0.05);
+    return true;
+}
+
+// 响度标准化：把安静的曲子拉到目标响度
+bool testLoudnessNormalizationRaisesQuietTrack() {
+    Params params = neutralParams();
+    params[kLoudnessNormalizationEnabled] = 1.0f;
+    params[kLoudnessTargetLufs] = -14.0f;
+    params[kLoudnessMaxGainDb] = 18.0f;
+    params[kLimiterEnabled] = 1.0f;
+    params[kLimiterCeilingDb] = -1.0f;
+    Engine engine;
+    CHECK(configured(engine, params));
+    const auto input = stereoSine(1000.0f, 0.01f, kSampleRate * 6);
+    const auto output = processFloat(engine, input);
+    const double gainDb = 20.0 * std::log10(
+        rms(output, kSampleRate * 4) / rms(input, kSampleRate * 4)
+    );
+    std::printf("  loudness_boost gainDb=%.2f\n", gainDb);
+    CHECK(gainDb > 12.0);
+    CHECK(gainDb <= 18.5);
+    return true;
+}
+
+// 响度标准化：本来就够响的曲子不会被压过头
+bool testLoudnessNormalizationLeavesLoudTrackAlone() {
+    Params params = neutralParams();
+    params[kLoudnessNormalizationEnabled] = 1.0f;
+    params[kLoudnessTargetLufs] = -14.0f;
+    params[kLoudnessMaxGainDb] = 18.0f;
+    Engine engine;
+    CHECK(configured(engine, params));
+    const auto input = stereoSine(1000.0f, 0.5f, kSampleRate * 6);
+    const auto output = processFloat(engine, input);
+    const double gainDb = 20.0 * std::log10(
+        rms(output, kSampleRate * 4) / rms(input, kSampleRate * 4)
+    );
+    std::printf("  loudness_trim gainDb=%.2f\n", gainDb);
+    // 限幅器会先压住峰值，所以整体增益最多到目标附近的负值
+    CHECK(gainDb < 0.5);
+    return true;
+}
+
+// 关掉响度标准化后信号回到原样
+bool testLoudnessNormalizationDisabledIsTransparent() {
+    Params params = neutralParams();
+    params[kLoudnessNormalizationEnabled] = 0.0f;
+    params[kLoudnessTargetLufs] = -14.0f;
+    Engine engine;
+    CHECK(configured(engine, params));
+    const auto input = stereoSine(1000.0f, 0.2f, 8192);
+    const auto output = processFloat(engine, input);
+    for (size_t i = 0; i < input.size(); ++i) {
+        CHECK(std::fabs(input[i] - output[i]) < 1.0e-6f);
+    }
+    return true;
+}
+
 } // namespace
 
 int main() {
-    const std::array<std::pair<const char*, std::function<bool()>>, 23> tests = {{
+    const std::array<std::pair<const char*, std::function<bool()>>, 29> tests = {{
         {"disabled_passthrough", testDisabledEngineIsBitExactPassthrough},
         {"neutral_transparent", testNeutralEnabledChainIsTransparentForFloat},
         {"graphic_band_gain", testGraphicBandBoostMatchesRequestedGain},
@@ -672,6 +797,12 @@ int main() {
         {"attenuation_outside_limiter", testAttenuationIsNotUndoneByTheEnhancementLimiter},
         {"dynamic_bass_low_distortion", testDynamicBassDoesNotDistortLoudLows},
         {"limiter_bass_low_distortion", testLimiterDoesNotModulateWithinBassCycles},
+        {"delay_echo_appears_later", testDelayKeepsDrySignalAndAddsEchoLater},
+        {"delay_keeps_dry_timing", testDelayDoesNotShiftDrySignal},
+        {"delay_feedback_bounded", testDelayFeedbackStaysBounded},
+        {"loudness_boosts_quiet", testLoudnessNormalizationRaisesQuietTrack},
+        {"loudness_trims_loud", testLoudnessNormalizationLeavesLoudTrackAlone},
+        {"loudness_off_transparent", testLoudnessNormalizationDisabledIsTransparent},
     }};
     int failures = 0;
     for (const auto& [name, test] : tests) {

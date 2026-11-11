@@ -62,6 +62,9 @@ internal fun SettingsLyricSourceSection(
     val defaultLyricSource by repository.defaultLyricSourceFlow.collectAsState(
         initial = LyricSourcePreference.Automatic
     )
+    val mergeLyricsAcrossSources by repository.mergeLyricsAcrossSourcesFlow.collectAsState(
+        initial = false
+    )
     var showSourceDialog by remember { mutableStateOf(false) }
 
     AutoSettingSpecListItem(
@@ -79,6 +82,24 @@ internal fun SettingsLyricSourceSection(
         onHighlightFinished = onHighlightFinished,
         onClick = {
             scope.launch { repository.setPreferWordTimedLyrics(!preferWordTimedLyrics) }
+        }
+    )
+
+    AutoSettingSpecListItem(
+        setting = AutoSettingsSchema.lyricSource.mergeLyricsAcrossSources,
+        trailingContent = {
+            MiuixSettingsSwitch(
+                checked = mergeLyricsAcrossSources,
+                onCheckedChange = { enabled ->
+                    scope.launch { repository.setMergeLyricsAcrossSources(enabled) }
+                }
+            )
+        },
+        highlightTargetId = highlightTargetId,
+        highlightPulse = highlightPulse,
+        onHighlightFinished = onHighlightFinished,
+        onClick = {
+            scope.launch { repository.setMergeLyricsAcrossSources(!mergeLyricsAcrossSources) }
         }
     )
 

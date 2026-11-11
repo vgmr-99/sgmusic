@@ -25,6 +25,7 @@ package moe.ouom.neriplayer.data.settings
 
 import kotlinx.coroutines.flow.onEach
 import moe.ouom.neriplayer.data.model.settings.appearance.UiStyle
+import moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingStyle
 import moe.ouom.neriplayer.data.model.youtube.playback.YouTubePlaybackSourcePreference
 import moe.ouom.neriplayer.platform.youtube.settings.YouTubePlaybackSourcePreferencePolicy
 import moe.ouom.neriplayer.data.model.settings.appearance.AdvancedBlurQuality
@@ -148,6 +149,9 @@ class SettingsRepository(private val context: Context) {
 
     val uiStyleFlow: Flow<UiStyle> =
         dataStoreSettingFlow { UiStyle.fromStorage(it[SettingsKeys.UI_STYLE]) }
+
+    val nowPlayingStyleFlow: Flow<NowPlayingStyle> =
+        dataStoreSettingFlow { NowPlayingStyle.fromStorage(it[SettingsKeys.NOW_PLAYING_STYLE]) }
 
     val liquidGlassEnabledFlow: Flow<Boolean> =
         dataStoreSettingFlow { it[SettingsKeys.LIQUID_GLASS_ENABLED] ?: true }
@@ -371,6 +375,9 @@ class SettingsRepository(private val context: Context) {
 
     val preferWordTimedLyricsFlow: Flow<Boolean> =
         settingFlow(AutoSettingsSchema.lyricSource.preferWordTimedLyrics)
+
+    val mergeLyricsAcrossSourcesFlow: Flow<Boolean> =
+        settingFlow(AutoSettingsSchema.lyricSource.mergeLyricsAcrossSources)
 
     val defaultLyricSourceFlow: Flow<LyricSourcePreference> =
         settingFlow(AutoSettingsSchema.lyricSource.defaultLyricSource)
@@ -728,6 +735,10 @@ class SettingsRepository(private val context: Context) {
         persistThemeUiStyle(context, value)
     }
 
+    suspend fun setNowPlayingStyle(value: NowPlayingStyle) {
+        context.dataStore.edit { it[SettingsKeys.NOW_PLAYING_STYLE] = value.storageValue }
+    }
+
     suspend fun setDynamicColor(value: Boolean) {
         context.dataStore.edit { it[SettingsKeys.DYNAMIC_COLOR] = value }
         persistThemeDynamicColor(context, value)
@@ -816,6 +827,13 @@ class SettingsRepository(private val context: Context) {
     suspend fun setPreferWordTimedLyrics(enabled: Boolean) {
         setSetting(
             setting = AutoSettingsSchema.lyricSource.preferWordTimedLyrics,
+            value = enabled
+        )
+    }
+
+    suspend fun setMergeLyricsAcrossSources(enabled: Boolean) {
+        setSetting(
+            setting = AutoSettingsSchema.lyricSource.mergeLyricsAcrossSources,
             value = enabled
         )
     }

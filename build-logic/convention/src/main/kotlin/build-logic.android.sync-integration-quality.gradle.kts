@@ -63,7 +63,7 @@ val verifySyncIntegrationCrap = tasks.register<Exec>("verifySyncIntegrationCrap"
     inputs.file(rootProject.file("tools_pub/quality/crap_report.py"))
     workingDir(rootProject.projectDir)
     commandLine(
-        "python3", "-B", "tools_pub/quality/crap_report.py",
+        PythonLauncher.resolve(), "-B", "tools_pub/quality/crap_report.py",
         "--xml", layout.buildDirectory.file("reports/sync-crap/coverage.xml").get().asFile,
         "--source-root", layout.projectDirectory.dir("src/main/java").asFile,
         "--scope", syncIntegrationScope.get().asFile,

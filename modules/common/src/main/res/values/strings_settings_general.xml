@@ -102,6 +102,8 @@
     <string name="settings_lyric_source_desc">配置歌词来源与逐词优先策略</string>
     <string name="settings_prefer_word_timed_lyrics">优先使用逐词歌词</string>
     <string name="settings_prefer_word_timed_lyrics_desc">有逐词结果时优先使用；关闭后不再用 AMLL 补逐词</string>
+    <string name="settings_merge_lyrics_across_sources">跨源歌词合并</string>
+    <string name="settings_merge_lyrics_across_sources_desc">把多个歌词源按行合并：逐字歌词优先，缺失的行用其它源补齐</string>
     <string name="settings_default_lyric_source">默认歌词源</string>
     <string name="settings_default_lyric_source_desc">播放时优先使用的歌词来源，找不到时自动回退</string>
     <string name="settings_lyric_source_current">当前：%s</string>
@@ -311,6 +313,14 @@
     <string name="settings_download_parallelism">下载线程数量</string>
     <string name="settings_download_parallelism_desc">控制同时下载的歌曲任务数量，最多并行 8 个</string>
     <string name="settings_download_parallelism_current">当前：%1$d 个，最多 %2$d 个</string>
+    <string name="settings_smart_download">智能下载</string>
+    <string name="settings_smart_download_desc">自动下载播放次数较多的歌曲，让离线播放随时可用</string>
+    <string name="settings_smart_download_threshold">播放次数阈值</string>
+    <string name="settings_smart_download_threshold_desc">播放达到该次数的歌曲才会被自动下载</string>
+    <string name="settings_smart_download_threshold_current">当前：至少播放 %1$d 次</string>
+    <string name="settings_smart_download_max_count">单次下载数量</string>
+    <string name="settings_smart_download_max_count_desc">每轮自动下载的歌曲数量上限</string>
+    <string name="settings_smart_download_max_count_current">当前：最多 %1$d 首</string>
     <string name="settings_storage_download_section">下载目录</string>
     <string name="settings_storage_download_section_desc">选择下载文件保存的位置</string>
     <string name="settings_storage_filename_section">文件名格式</string>

@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FormatSize
-import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material3.Icon
@@ -29,7 +28,6 @@ internal fun SettingsListenTogetherSection(
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SettingsListenTogetherJoinItem(controller)
-        SettingsListenTogetherServerItem(controller)
         SettingsListenTogetherNicknameItem(controller)
         SettingsListenTogetherIdentityItem(controller)
     }
@@ -50,30 +48,6 @@ private fun SettingsListenTogetherJoinItem(controller: SettingsListenTogetherCon
         headlineContent = { Text(stringResource(CoreCommonR.string.listen_together_join_room)) },
         supportingContent = {
             Text(stringResource(listenTogetherJoinDescriptionId(controller.isInRoom)))
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-    )
-}
-
-@Composable
-private fun SettingsListenTogetherServerItem(controller: SettingsListenTogetherController) {
-    ListItem(
-        modifier = Modifier.settingsItemClickable(onClick = controller.openServerAction),
-        leadingContent = {
-            Icon(
-                imageVector = Icons.Outlined.Link,
-                contentDescription = stringResource(CoreCommonR.string.settings_listen_together_server_title),
-                modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.onSurface
-            )
-        },
-        headlineContent = { Text(stringResource(CoreCommonR.string.settings_listen_together_server_title)) },
-        supportingContent = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    stringResource(listenTogetherServerDescriptionId(controller.isUsingDefaultServer))
-                )
-            }
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
     )

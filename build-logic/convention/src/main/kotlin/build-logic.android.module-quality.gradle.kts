@@ -44,7 +44,7 @@ val generateModuleCrapScope = tasks.register<Exec>("generateModuleCrapScope") {
     outputs.file(moduleCrapScope)
     workingDir(rootProject.projectDir)
     commandLine(
-        "python3", "-B", "tools_pub/quality/module_scope.py",
+        PythonLauncher.resolve(), "-B", "tools_pub/quality/module_scope.py",
         "--scope", rootProject.file("config/quality/crap-scope.json"),
         "--source-root", layout.projectDirectory.dir("src/main/java").asFile,
         "--output", moduleCrapScope.get().asFile,
@@ -57,7 +57,7 @@ val verifyCrap = tasks.register<Exec>("verifyCrap") {
     inputs.file(rootProject.file("tools_pub/quality/crap_report.py"))
     workingDir(rootProject.projectDir)
     commandLine(
-        "python3", "-B", "tools_pub/quality/crap_report.py",
+        PythonLauncher.resolve(), "-B", "tools_pub/quality/crap_report.py",
         "--xml", layout.buildDirectory.file("reports/crap/coverage.xml").get().asFile,
         "--source-root", layout.projectDirectory.dir("src/main/java").asFile,
         "--scope", moduleCrapScope.get().asFile,

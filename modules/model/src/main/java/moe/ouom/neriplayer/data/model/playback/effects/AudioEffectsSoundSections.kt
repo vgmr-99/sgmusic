@@ -59,7 +59,11 @@ fun AudioEffectsSound.withSectionDefaults(section: AudioEffectsSoundSection): Au
         reverb = SoundDefaults.reverb,
         reverbRoom = SoundDefaults.reverbRoom,
         reverbDamping = SoundDefaults.reverbDamping,
-        reverbPreDelayMs = SoundDefaults.reverbPreDelayMs
+        reverbPreDelayMs = SoundDefaults.reverbPreDelayMs,
+        delayEnabled = SoundDefaults.delayEnabled,
+        delayTimeMs = SoundDefaults.delayTimeMs,
+        delayFeedback = SoundDefaults.delayFeedback,
+        delayMix = SoundDefaults.delayMix
     )
     AudioEffectsSoundSection.DYNAMICS -> copy(
         dynamicsEnabled = SoundDefaults.dynamicsEnabled,

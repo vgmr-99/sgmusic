@@ -55,7 +55,6 @@ internal fun shouldLoadSettingsAccountProfiles(
 @Composable
 internal fun SettingsLoginExpandedContent(
     controller: SettingsAccountAuthController,
-    onOpenMusicServers: () -> Unit,
     isActive: Boolean = true,
     highlightTargetId: String? = null,
     highlightPulse: Int = 0,
@@ -143,7 +142,6 @@ internal fun SettingsLoginExpandedContent(
             highlightPulse = highlightPulse,
             onHighlightFinished = onHighlightFinished
         )
-        SettingsMusicServerCard(onOpenMusicServers)
     }
 }
 

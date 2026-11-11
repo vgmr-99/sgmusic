@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- 关于：拾光音乐基于上游 NeriPlayer 二次开发，GPLv3 -->
-    <string name="about_app_footer">拾光音乐 • 基于上游 NeriPlayer 二次开发 • GPLv3 • 上游 cwuom/NeriPlayer • 本项目 vgmr-99/sgmusic</string>
+    
+    <string name="about_app_name">拾光音乐 · Timber</string>
+    <string name="about_app_footer">基于上游NeriPlayer项目二次开发</string>
 </resources>

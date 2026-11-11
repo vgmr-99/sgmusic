@@ -166,6 +166,17 @@ android {
         unitTests.isIncludeAndroidResources = true
     }
 
+    lint {
+        // 硬编码文案与翻译缺失属于发布阻断问题，由 app/lint.xml 提升为 error
+        abortOnError = true
+        warningsAsErrors = false
+        // 依赖库的 lint 不由本项目阻断（且会让离线构建去解析未缓存的依赖）
+        checkDependencies = false
+        // 依赖版本升级提示需要人工确认，不阻断构建
+        disable += "GradleDependency"
+        lintConfig = file("lint.xml")
+    }
+
     sourceSets {
         getByName("androidTest") {
             assets.directories.add(project(":database").layout.projectDirectory.dir("schemas").asFile.path)

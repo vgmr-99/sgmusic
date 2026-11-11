@@ -1580,6 +1580,9 @@ private fun NeriAppContent(
                         onOpenStats = {
                             navController.navigate(Destinations.PlaybackStats.route)
                         },
+                        onOpenWrapped = {
+                            navController.navigate(Destinations.Wrapped.route)
+                        },
                         offlineMode = offlineMode,
                         coherentFeedbackEnabled = coherentFeedbackEnabled,
                         renderScene = { revealTop, translationY, scale, sceneDepth, sceneContent ->

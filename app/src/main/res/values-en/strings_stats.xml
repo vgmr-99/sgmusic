@@ -28,4 +28,18 @@
     <string name="stats_song_first_played">First played</string>
     <string name="stats_song_total_listen">Total listened</string>
     <string name="stats_song_play_count_label">Play count</string>
+
+    <!-- Wrapped -->
+    <string name="wrapped_title">Listening Recap</string>
+    <string name="wrapped_summary_headline">Here is what you listened to</string>
+    <string name="wrapped_top_tracks">Most Played</string>
+    <string name="wrapped_top_artists">Top Artists</string>
+    <string name="wrapped_share">Share listening recap</string>
+    <string name="wrapped_share_text">Here is my listening recap</string>
+    <string name="wrapped_artist_play_count">%1$d plays</string>
+    <string name="wrapped_period_day">Today</string>
+    <string name="wrapped_period_week">This Week</string>
+    <string name="wrapped_period_month">This Month</string>
+    <string name="wrapped_period_year">This Year</string>
+    <string name="wrapped_period_all">All Time</string>
 </resources>

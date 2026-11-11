@@ -2,6 +2,7 @@ package moe.ouom.neriplayer.ui.screen.tab.settings.audio
 
 import moe.ouom.neriplayer.ui.component.common.NeriChoiceChip
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -22,12 +23,16 @@ import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.data.model.playback.MAX_PLAYBACK_PITCH
 import moe.ouom.neriplayer.data.model.playback.MIN_PLAYBACK_PITCH
 import moe.ouom.neriplayer.data.model.playback.PlaybackSoundState
+import moe.ouom.neriplayer.data.model.playback.effects.AUDIO_EFFECTS_LOUDNESS_MAX_GAIN_DB
+import moe.ouom.neriplayer.data.model.playback.effects.AUDIO_EFFECTS_LOUDNESS_TARGET_MAX_LUFS
+import moe.ouom.neriplayer.data.model.playback.effects.AUDIO_EFFECTS_LOUDNESS_TARGET_MIN_LUFS
 import moe.ouom.neriplayer.data.model.playback.effects.AudioEffectsPowerMode
 import moe.ouom.neriplayer.data.model.playback.effects.AudioEffectsProfile
 import moe.ouom.neriplayer.data.model.playback.effects.AudioEffectsSettings
 import moe.ouom.neriplayer.data.model.playback.effects.AudioOutputRoute
 import moe.ouom.neriplayer.data.model.playback.effects.SpeakerSize
 import moe.ouom.neriplayer.data.model.playback.effects.effectiveProtectionHz
+import moe.ouom.neriplayer.data.model.playback.effects.profileFor
 import moe.ouom.neriplayer.data.model.playback.pitchToSemitoneOffset
 import moe.ouom.neriplayer.data.model.playback.semitoneOffsetToPitch
 import moe.ouom.neriplayer.core.player.PlayerManager
@@ -244,6 +249,48 @@ internal fun AudioEffectsAdvancedCard(settings: AudioEffectsSettings, route: Aud
         checked = settings.applyInUsbExclusive,
         onCheckedChange = { enabled -> editor.settings { it.copy(applyInUsbExclusive = enabled) } }
     )
+    AudioEffectsSwitchRow(
+        title = stringResource(AppR.string.audio_effects_loudness_normalization),
+        description = stringResource(AppR.string.audio_effects_loudness_normalization_desc),
+        checked = settings.loudnessNormalization.enabled,
+        onCheckedChange = { enabled ->
+            editor.settings { it.copy(loudnessNormalization = it.loudnessNormalization.copy(enabled = enabled)) }
+        }
+    )
+    if (settings.loudnessNormalization.enabled) {
+        if (!settings.profileFor(route).enabled) {
+            AudioEffectsNote(stringResource(AppR.string.audio_effects_loudness_master_off))
+        }
+        Column {
+            AudioEffectsSliderRow(
+                title = stringResource(AppR.string.audio_effects_loudness_target),
+                value = settings.loudnessNormalization.targetLufs,
+                valueRange = AUDIO_EFFECTS_LOUDNESS_TARGET_MIN_LUFS..AUDIO_EFFECTS_LOUDNESS_TARGET_MAX_LUFS,
+                step = 1f,
+                formatValue = ::formatLufs,
+                input = AudioEffectsInputs.Lufs,
+                onValueChange = { value ->
+                    editor.settings {
+                        it.copy(loudnessNormalization = it.loudnessNormalization.copy(targetLufs = value))
+                    }
+                }
+            )
+            AudioEffectsSliderRow(
+                title = stringResource(AppR.string.audio_effects_loudness_max_gain),
+                description = stringResource(AppR.string.audio_effects_loudness_max_gain_desc),
+                value = settings.loudnessNormalization.maxGainDb,
+                valueRange = 0f..AUDIO_EFFECTS_LOUDNESS_MAX_GAIN_DB,
+                step = 1f,
+                formatValue = ::formatSignedDb,
+                input = AudioEffectsInputs.Db,
+                onValueChange = { value ->
+                    editor.settings {
+                        it.copy(loudnessNormalization = it.loudnessNormalization.copy(maxGainDb = value))
+                    }
+                }
+            )
+        }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()

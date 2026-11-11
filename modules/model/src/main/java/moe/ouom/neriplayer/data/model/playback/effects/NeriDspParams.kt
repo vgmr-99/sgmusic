@@ -2,7 +2,7 @@ package moe.ouom.neriplayer.data.model.playback.effects
 
 /** 与 native dsp/neri_dsp_params.h 逐项对应，改动下标时两边同步修改 */
 object NeriDspParams {
-    const val COUNT = 104
+    const val COUNT = 111
     const val GRAPHIC_BAND_COUNT = 10
     const val PARAMETRIC_BAND_COUNT = 10
     const val PARAMETRIC_BAND_STRIDE = 5
@@ -58,6 +58,13 @@ object NeriDspParams {
     const val SPEAKER_LOUDNESS = BASS_GAIN_DB + 31
     const val SPEAKER_CLARITY = BASS_GAIN_DB + 32
     const val SPEAKER_STEREO_EXPAND = BASS_GAIN_DB + 33
+    const val DELAY_ENABLED = SPEAKER_STEREO_EXPAND + 1
+    const val DELAY_TIME_MS = SPEAKER_STEREO_EXPAND + 2
+    const val DELAY_FEEDBACK = SPEAKER_STEREO_EXPAND + 3
+    const val DELAY_MIX = SPEAKER_STEREO_EXPAND + 4
+    const val LOUDNESS_NORMALIZATION_ENABLED = SPEAKER_STEREO_EXPAND + 5
+    const val LOUDNESS_TARGET_LUFS = SPEAKER_STEREO_EXPAND + 6
+    const val LOUDNESS_MAX_GAIN_DB = SPEAKER_STEREO_EXPAND + 7
 }
 
 data class AudioEffectsRuntimeContext(
@@ -83,7 +90,10 @@ fun AudioEffectsSettings.resolveDsp(context: AudioEffectsRuntimeContext): AudioE
     if (!profile.enabled) return inactive(AudioEffectsInactiveReason.DISABLED)
     val soundActive = !profile.sound.isNeutral()
     val speakerActive = settings.speaker.enabled && context.route == AudioOutputRoute.SPEAKER
-    if (!soundActive && !speakerActive) return inactive(AudioEffectsInactiveReason.NEUTRAL)
+    val loudnessActive = settings.loudnessNormalization.enabled
+    if (!soundActive && !speakerActive && !loudnessActive) {
+        return inactive(AudioEffectsInactiveReason.NEUTRAL)
+    }
     val sound = if (soundActive) profile.sound.effective() else AudioEffectsSound()
     val params = neutralDspParams()
     params[NeriDspParams.MASTER_ENABLED] = 1f
@@ -93,6 +103,7 @@ fun AudioEffectsSettings.resolveDsp(context: AudioEffectsRuntimeContext): AudioE
     val headroom = if (settings.autoHeadroom) sound.estimatedHeadroomDb() else 0f
     params.writeSound(sound, headroom)
     if (speakerActive) params.writeSpeaker(settings.speaker)
+    params.writeLoudness(settings.loudnessNormalization)
     return AudioEffectsResolution(active = true, params = params, inactiveReason = null)
 }
 
@@ -122,6 +133,11 @@ fun neutralDspParams(): FloatArray = FloatArray(NeriDspParams.COUNT).also { para
     params[NeriDspParams.COMPRESSOR_RELEASE_MS] = 150f
     params[NeriDspParams.COMPRESSOR_KNEE_DB] = 6f
     params[NeriDspParams.SPEAKER_HIGH_PASS_HZ] = SpeakerSize.PHONE.protectionHz
+    params[NeriDspParams.DELAY_TIME_MS] = 250f
+    params[NeriDspParams.DELAY_FEEDBACK] = 0.35f
+    params[NeriDspParams.DELAY_MIX] = 0.25f
+    params[NeriDspParams.LOUDNESS_TARGET_LUFS] = -14f
+    params[NeriDspParams.LOUDNESS_MAX_GAIN_DB] = 12f
 }
 
 private fun FloatArray.flag(index: Int, value: Boolean) {
@@ -177,6 +193,16 @@ private fun FloatArray.writeSpace(sound: AudioEffectsSound) {
     this[NeriDspParams.REVERB_ROOM_SIZE] = sound.reverbRoom
     this[NeriDspParams.REVERB_DAMPING] = sound.reverbDamping
     this[NeriDspParams.REVERB_PRE_DELAY_MS] = sound.reverbPreDelayMs
+    flag(NeriDspParams.DELAY_ENABLED, sound.delayEnabled)
+    this[NeriDspParams.DELAY_TIME_MS] = sound.delayTimeMs
+    this[NeriDspParams.DELAY_FEEDBACK] = sound.delayFeedback
+    this[NeriDspParams.DELAY_MIX] = sound.delayMix
+}
+
+private fun FloatArray.writeLoudness(loudness: LoudnessNormalizationSettings) {
+    flag(NeriDspParams.LOUDNESS_NORMALIZATION_ENABLED, loudness.enabled)
+    this[NeriDspParams.LOUDNESS_TARGET_LUFS] = loudness.targetLufs
+    this[NeriDspParams.LOUDNESS_MAX_GAIN_DB] = loudness.maxGainDb
 }
 
 private fun FloatArray.writeDynamics(sound: AudioEffectsSound) {

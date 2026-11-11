@@ -32,8 +32,11 @@ object Common {
 
     private fun getShortGitRevision(): String {
         val command = "git rev-parse --short HEAD"
-        val processBuilder = ProcessBuilder(*command.split(" ").toTypedArray())
-        val process = processBuilder.start()
+        // 没有安装 git 时不能中断构建, 版本号退回 no_commit
+        val process = runCatching {
+            val processBuilder = ProcessBuilder(*command.split(" ").toTypedArray())
+            processBuilder.start()
+        }.getOrNull() ?: return "no_commit"
 
         val output = process.inputStream.bufferedReader().use { it.readText() }
         val exitCode = process.waitFor()

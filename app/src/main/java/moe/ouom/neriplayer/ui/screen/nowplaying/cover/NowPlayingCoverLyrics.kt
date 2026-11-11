@@ -11,11 +11,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import moe.ouom.neriplayer.data.model.SongItem
 import moe.ouom.neriplayer.data.model.stableKey
+import moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingStyle
 import moe.ouom.neriplayer.data.settings.lyrics.scaledLyricFontSize
 import moe.ouom.neriplayer.data.model.lyrics.LyricEntry
 import moe.ouom.neriplayer.lyrics.parser.flattenWordTimedEntries
@@ -54,7 +56,11 @@ internal data class NowPlayingEmbeddedLyricStyle(
     val fontScale: Float,
     val translationFontScale: Float,
     val blurEnabled: Boolean,
-    val blurAmount: Float
+    val blurAmount: Float,
+    /**
+     * 播放页视觉样式，Apple Music 风格会换成大字号、无缩放倾斜的歌词排版。
+     */
+    val nowPlayingStyle: NowPlayingStyle = NowPlayingStyle.Classic
 )
 
 internal data class NowPlayingSyncedLyricPlayback(
@@ -135,16 +141,44 @@ internal fun NowPlayingEmbeddedLyricsContent(
         ),
         modifier = modifier,
         style = NowPlayingSyncedLyricStyle(
-            textColor = MaterialTheme.colorScheme.onBackground,
-            fontSize = scaledLyricFontSize(18f, style.fontScale).sp,
+            textColor = if (style.nowPlayingStyle == NowPlayingStyle.AppleMusic) {
+                Color.White
+            } else {
+                MaterialTheme.colorScheme.onBackground
+            },
+            fontSize = scaledLyricFontSize(
+                if (style.nowPlayingStyle == NowPlayingStyle.AppleMusic) 22f else 18f,
+                style.fontScale
+            ).sp,
             translationFontSize = scaledLyricFontSize(14f, style.translationFontScale).sp,
-            visualSpec = LyricVisualSpec(),
+            visualSpec = resolveNowPlayingLyricVisualSpec(style.nowPlayingStyle),
             blurEnabled = style.blurEnabled,
             blurAmount = style.blurAmount
         ),
         actions = actions
     )
 }
+
+/**
+ * 按播放页样式决定歌词视觉规格。
+ *
+ * Apple Music 风格取消缩放与倾斜，让歌词以平铺的大字号逐字推进。
+ */
+internal fun resolveNowPlayingLyricVisualSpec(style: NowPlayingStyle): LyricVisualSpec =
+    when (style) {
+        NowPlayingStyle.AppleMusic -> LyricVisualSpec(
+            pageTiltDeg = 0f,
+            activeScale = 1.06f,
+            nearScale = 1.02f,
+            farScale = 1f,
+            farScaleMin = 1f,
+            farScaleFalloffPerStep = 0f,
+            inactiveBlurNear = 0.dp,
+            inactiveBlurFar = 0.dp
+        )
+
+        else -> LyricVisualSpec()
+    }
 
 @Composable
 internal fun NowPlayingLyricsPane(

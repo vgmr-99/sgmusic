@@ -63,12 +63,22 @@ enum Param : int {
     kSpeakerLoudness,
     kSpeakerClarity,
     kSpeakerStereoExpand,
+    // 独立延迟/回声效果
+    kDelayEnabled,
+    kDelayTimeMs,
+    kDelayFeedback,
+    kDelayMix,
+    // ITU-R BS.1770 响度标准化
+    kLoudnessNormalizationEnabled,
+    kLoudnessTargetLufs,
+    kLoudnessMaxGainDb,
     kParamCount
 };
 
-static_assert(kParamCount == 104, "parameter layout changed: update Kotlin NeriDspParams");
+static_assert(kParamCount == 111, "parameter layout changed: update Kotlin NeriDspParams");
 static_assert(kBassGainDb == 70 && kStereoWidth == 81, "parameter layout changed: update Kotlin NeriDspParams");
 static_assert(kCompressorEnabled == 91 && kSpeakerEnabled == 98, "parameter layout changed: update Kotlin NeriDspParams");
+static_assert(kDelayEnabled == 104 && kLoudnessNormalizationEnabled == 108, "parameter layout changed: update Kotlin NeriDspParams");
 
 enum class QualityMode : int {
     Eco = 0,

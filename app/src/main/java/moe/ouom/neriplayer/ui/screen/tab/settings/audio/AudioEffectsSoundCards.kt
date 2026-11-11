@@ -8,6 +8,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
+import moe.ouom.neriplayer.data.model.playback.effects.AUDIO_EFFECTS_DELAY_MAX_FEEDBACK
+import moe.ouom.neriplayer.data.model.playback.effects.AUDIO_EFFECTS_DELAY_MAX_TIME_MS
+import moe.ouom.neriplayer.data.model.playback.effects.AUDIO_EFFECTS_DELAY_MIN_TIME_MS
 import moe.ouom.neriplayer.data.model.playback.effects.AudioEffectsSound
 import moe.ouom.neriplayer.data.model.playback.effects.compressorAmount
 import moe.ouom.neriplayer.data.model.playback.effects.withCompressorAmount
@@ -239,6 +242,44 @@ internal fun AudioEffectsSpaceCard(sound: AudioEffectsSound, editor: AudioEffect
         checked = sound.swapChannels,
         onCheckedChange = { enabled -> editor.sound { it.copy(swapChannels = enabled) } }
     )
+    AudioEffectsSwitchRow(
+        title = stringResource(AppR.string.audio_effects_delay),
+        description = stringResource(AppR.string.audio_effects_delay_desc),
+        checked = sound.delayEnabled,
+        onCheckedChange = { enabled -> editor.sound { it.copy(delayEnabled = enabled) } }
+    )
+    if (sound.delayEnabled) {
+        Column {
+            AudioEffectsSliderRow(
+                title = stringResource(AppR.string.audio_effects_delay_time),
+                value = sound.delayTimeMs,
+                valueRange = AUDIO_EFFECTS_DELAY_MIN_TIME_MS..AUDIO_EFFECTS_DELAY_MAX_TIME_MS,
+                step = 5f,
+                formatValue = ::formatMilliseconds,
+                input = AudioEffectsInputs.Ms,
+                onValueChange = { value -> editor.sound { it.copy(delayTimeMs = value) } }
+            )
+            AudioEffectsSliderRow(
+                title = stringResource(AppR.string.audio_effects_delay_mix),
+                value = sound.delayMix,
+                valueRange = 0f..1f,
+                step = 0.05f,
+                formatValue = ::formatPercent,
+                input = AudioEffectsInputs.Percent,
+                onValueChange = { value -> editor.sound { it.copy(delayMix = value) } }
+            )
+            AudioEffectsSliderRow(
+                title = stringResource(AppR.string.audio_effects_delay_feedback),
+                description = stringResource(AppR.string.audio_effects_delay_feedback_desc),
+                value = sound.delayFeedback,
+                valueRange = 0f..AUDIO_EFFECTS_DELAY_MAX_FEEDBACK,
+                step = 0.05f,
+                formatValue = ::formatPercent,
+                input = AudioEffectsInputs.Percent,
+                onValueChange = { value -> editor.sound { it.copy(delayFeedback = value) } }
+            )
+        }
+    }
 }
 
 @Composable

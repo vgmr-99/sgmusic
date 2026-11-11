@@ -18,7 +18,7 @@
     <string name="settings_explore_search_history">Explore Search History</string>
     <string name="settings_explore_search_history_desc">Show and record search keywords on Explore</string>
     <string name="settings_usb_device_attach_handling">Handle USB DAC Attach</string>
-    <string name="settings_usb_device_attach_handling_desc">Turn off to stop 拾光音乐 from opening to handle USB DACs or FreeDSP cables when attached</string>
+    <string name="settings_usb_device_attach_handling_desc">Turn off to stop Shiguang Music from opening to handle USB DACs or FreeDSP cables when attached</string>
     <string name="settings_playback_idle_shutdown">Exit playback service when paused</string>
     <string name="settings_playback_idle_shutdown_desc">Remove notification after timeout; keep queue and progress</string>
     <string name="settings_prefer_high_refresh_rate">High Refresh Rate</string>
@@ -102,6 +102,8 @@
     <string name="settings_lyric_source_desc">Configure lyric sources and word-timing preference</string>
     <string name="settings_prefer_word_timed_lyrics">Prefer Word-Timed Lyrics</string>
     <string name="settings_prefer_word_timed_lyrics_desc">Use word-timed results when available; turning this off also stops AMLL from filling word timing</string>
+    <string name="settings_merge_lyrics_across_sources">Merge lyrics across sources</string>
+    <string name="settings_merge_lyrics_across_sources_desc">Combine several lyric sources line by line: word-timed lyrics win, missing lines are filled from other sources</string>
     <string name="settings_default_lyric_source">Default Lyric Source</string>
     <string name="settings_default_lyric_source_desc">Preferred lyric source during playback; falls back automatically</string>
     <string name="settings_lyric_source_current">Current: %s</string>
@@ -128,7 +130,7 @@
     <string name="settings_usb_exclusive_playback">USB Exclusive Playback</string>
     <string name="settings_usb_exclusive_playback_desc">Try direct exclusive output when a USB DAC is connected</string>
     <string name="settings_usb_exclusive_background_permission_title">Allow USB exclusive background playback</string>
-    <string name="settings_usb_exclusive_background_permission_desc">USB exclusive output needs the foreground service and wake lock to keep running. To avoid screen-off limits, set 拾光音乐 battery/background behavior to unrestricted or fully allowed in system settings.</string>
+    <string name="settings_usb_exclusive_background_permission_desc">USB exclusive output needs the foreground service and wake lock to keep running. To avoid screen-off limits, set Shiguang Music battery/background behavior to unrestricted or fully allowed in system settings.</string>
     <string name="settings_usb_exclusive_background_permission_battery">Request battery optimization exemption</string>
     <string name="settings_usb_exclusive_background_permission_app_settings">Open app settings</string>
     <string name="settings_usb_exclusive_background_permission_never">Don\'t show again</string>
@@ -257,7 +259,7 @@
     <string name="settings_allow_mixed_playback">Allow Mixed Playback</string>
     <string name="settings_allow_mixed_playback_desc">Do not take audio focus so other apps can play</string>
     <string name="settings_preempt_audio_focus">Preempt Audio Focus</string>
-    <string name="settings_preempt_audio_focus_desc">Take audio focus when the main screen opens and playback is idle, only if no other audio is playing, making headset controls more likely to target 拾光音乐</string>
+    <string name="settings_preempt_audio_focus_desc">Take audio focus when the main screen opens and playback is idle, only if no other audio is playing, making headset controls more likely to target Shiguang Music</string>
     <string name="settings_lyrics_cover_lyric_font_size">Cover lyric font</string>
     <string name="settings_lyrics_cover_translation_font_size">Cover translation font</string>
     <string name="settings_lyrics_page_lyric_font_size">Lyrics page font</string>
@@ -311,6 +313,14 @@
     <string name="settings_download_parallelism">Download thread count</string>
     <string name="settings_download_parallelism_desc">Controls how many song download tasks can run at the same time, up to 8</string>
     <string name="settings_download_parallelism_current">Current: %1$d, max %2$d</string>
+    <string name="settings_smart_download">Smart download</string>
+    <string name="settings_smart_download_desc">Automatically download the songs you listen to most, so offline playback is always ready</string>
+    <string name="settings_smart_download_threshold">Play count threshold</string>
+    <string name="settings_smart_download_threshold_desc">Only songs played at least this many times are downloaded automatically</string>
+    <string name="settings_smart_download_threshold_current">Current: at least %1$d plays</string>
+    <string name="settings_smart_download_max_count">Songs per round</string>
+    <string name="settings_smart_download_max_count_desc">Maximum number of songs downloaded in one round</string>
+    <string name="settings_smart_download_max_count_current">Current: up to %1$d songs</string>
     <string name="settings_storage_download_section">Download Directory</string>
     <string name="settings_storage_download_section_desc">Choose where downloaded files are saved.</string>
     <string name="settings_storage_filename_section">File Name Format</string>

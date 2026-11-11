@@ -151,11 +151,8 @@ fun EditSongInfoSheet(
 
     // 监听当前播放的歌曲, 以便在"获取歌曲信息"后更新UI
     val currentSong by PlayerManager.currentSongFlow.collectAsStateWithLifecycle()
-    val actualSong = if (currentSong?.sameIdentityAs(originalSong) == true) {
-        currentSong!!
-    } else {
-        originalSong
-    }
+    // currentSong 是委托属性，取局部快照避免后续读取时状态已变
+    val actualSong = currentSong?.takeIf { it.sameIdentityAs(originalSong) } ?: originalSong
     val actualSongKey = actualSong.stableKey()
     val canReplaceCoverFromLocalFile = shouldAllowLocalCoverReplacement(actualSong, context)
     val resolvedDisplayCoverUrl = rememberSongDisplayCoverUrl(actualSong)
@@ -459,9 +456,10 @@ fun EditSongInfoSheet(
     }
 
     // 填充选项对话框
-    if (selectedSongForFill != null) {
+    val fillSong = selectedSongForFill
+    if (fillSong != null) {
         FillOptionsDialog(
-            songResult = selectedSongForFill!!,
+            songResult = fillSong,
             enabled = !isSaving && !isOriginalInfoRestoring,
             onDismiss = { selectedSongForFill = null },
             onConfirm = { fillCover, fillTitle, fillArtist, fillLyrics ->
@@ -484,14 +482,15 @@ fun EditSongInfoSheet(
     }
 
     // 歌词编辑器
-    if (lyricsEditorSeed != null) {
+    val editorSeed = lyricsEditorSeed
+    if (editorSeed != null) {
         LyricsEditorSheet(
             originalSong = actualSong,
-            initialLyrics = lyricsEditorSeed!!.lyrics,
-            initialTranslatedLyrics = lyricsEditorSeed!!.translatedLyrics,
-            initialRomanizedLyrics = lyricsEditorSeed!!.romanizedLyrics,
-            editingSource = lyricsEditorSeed!!.source,
-            hasExistingSidecar = lyricsEditorSeed!!.hasSidecar,
+            initialLyrics = editorSeed.lyrics,
+            initialTranslatedLyrics = editorSeed.translatedLyrics,
+            initialRomanizedLyrics = editorSeed.romanizedLyrics,
+            editingSource = editorSeed.source,
+            hasExistingSidecar = editorSeed.hasSidecar,
             onSaveLyrics = { draft -> owner.saveEditorLyrics(actualSong, draft) },
             onSaveFailed = {
                 coroutineScope.launch {

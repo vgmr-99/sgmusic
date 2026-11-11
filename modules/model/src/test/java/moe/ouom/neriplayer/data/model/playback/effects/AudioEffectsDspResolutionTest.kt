@@ -11,13 +11,16 @@ class AudioEffectsDspResolutionTest {
 
     @Test
     fun `param indices mirror the native layout`() {
-        assertEquals(104, NeriDspParams.COUNT)
+        assertEquals(111, NeriDspParams.COUNT)
         assertEquals(19, NeriDspParams.PARAMETRIC_EQ_ENABLED)
         assertEquals(70, NeriDspParams.BASS_GAIN_DB)
         assertEquals(81, NeriDspParams.STEREO_WIDTH)
         assertEquals(91, NeriDspParams.COMPRESSOR_ENABLED)
         assertEquals(98, NeriDspParams.SPEAKER_ENABLED)
-        assertEquals(NeriDspParams.COUNT - 1, NeriDspParams.SPEAKER_STEREO_EXPAND)
+        assertEquals(103, NeriDspParams.SPEAKER_STEREO_EXPAND)
+        assertEquals(104, NeriDspParams.DELAY_ENABLED)
+        assertEquals(108, NeriDspParams.LOUDNESS_NORMALIZATION_ENABLED)
+        assertEquals(NeriDspParams.COUNT - 1, NeriDspParams.LOUDNESS_MAX_GAIN_DB)
     }
 
     @Test
@@ -163,5 +166,82 @@ class AudioEffectsDspResolutionTest {
         assertEquals(9_000f, params[base + NeriDspParams.BAND_FREQUENCY_HZ])
         assertEquals(-3f, params[base + NeriDspParams.BAND_GAIN_DB])
         assertEquals(0f, params[base + NeriDspParams.PARAMETRIC_BAND_STRIDE + NeriDspParams.BAND_ENABLED])
+    }
+
+    @Test
+    fun `delay effect reaches the native params`() {
+        val sound = AudioEffectsSound(
+            delayEnabled = true,
+            delayTimeMs = 320f,
+            delayFeedback = 0.4f,
+            delayMix = 0.3f
+        )
+        val params = AudioEffectsSettings(main = AudioEffectsProfile(enabled = true, sound = sound))
+            .resolveDsp(headphones).params
+        assertEquals(1f, params[NeriDspParams.DELAY_ENABLED])
+        assertEquals(320f, params[NeriDspParams.DELAY_TIME_MS])
+        assertEquals(0.4f, params[NeriDspParams.DELAY_FEEDBACK])
+        assertEquals(0.3f, params[NeriDspParams.DELAY_MIX])
+    }
+
+    @Test
+    fun `delay alone keeps the engine active`() {
+        val sound = AudioEffectsSound(delayEnabled = true)
+        assertFalse(sound.isNeutral())
+        val resolution = AudioEffectsSettings(main = AudioEffectsProfile(enabled = true, sound = sound))
+            .resolveDsp(headphones)
+        assertTrue(resolution.active)
+    }
+
+    @Test
+    fun `turning the space section off also turns the delay off`() {
+        val sound = AudioEffectsSound(delayEnabled = true, delayTimeMs = 400f)
+        val effective = sound.copy(spaceEnabled = false).effective()
+        assertFalse(effective.delayEnabled)
+        assertTrue(effective.isNeutral())
+    }
+
+    @Test
+    fun `loudness normalization alone keeps the engine active`() {
+        val settings = AudioEffectsSettings(
+            main = AudioEffectsProfile(enabled = true),
+            loudnessNormalization = LoudnessNormalizationSettings(
+                enabled = true,
+                targetLufs = -16f,
+                maxGainDb = 9f
+            )
+        )
+        val resolution = settings.resolveDsp(headphones)
+        assertTrue(resolution.active)
+        assertEquals(1f, resolution.params[NeriDspParams.LOUDNESS_NORMALIZATION_ENABLED])
+        assertEquals(-16f, resolution.params[NeriDspParams.LOUDNESS_TARGET_LUFS])
+        assertEquals(9f, resolution.params[NeriDspParams.LOUDNESS_MAX_GAIN_DB])
+    }
+
+    @Test
+    fun `loudness normalization follows the master switch`() {
+        val settings = AudioEffectsSettings(
+            main = AudioEffectsProfile(enabled = false),
+            loudnessNormalization = LoudnessNormalizationSettings(enabled = true)
+        )
+        val resolution = settings.resolveDsp(headphones)
+        assertFalse(resolution.active)
+        assertEquals(AudioEffectsInactiveReason.DISABLED, resolution.inactiveReason)
+    }
+
+    @Test
+    fun `loudness normalization stays inside safe ranges`() {
+        val loudness = LoudnessNormalizationSettings(
+            enabled = true,
+            targetLufs = -99f,
+            maxGainDb = 99f
+        ).normalized()
+        assertEquals(-24f, loudness.targetLufs)
+        assertEquals(18f, loudness.maxGainDb)
+
+        val sound = AudioEffectsSound(delayTimeMs = 9999f, delayFeedback = 5f, delayMix = 9f).normalized()
+        assertEquals(1000f, sound.delayTimeMs)
+        assertEquals(0.85f, sound.delayFeedback)
+        assertEquals(1f, sound.delayMix)
     }
 }

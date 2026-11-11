@@ -24,6 +24,7 @@ package moe.ouom.neriplayer.data.backup
  */
 
 import moe.ouom.neriplayer.data.identity.identity
+import moe.ouom.neriplayer.data.identity.stableKey
 import moe.ouom.neriplayer.data.sync.identity.identity
 import android.content.Context
 import android.net.Uri
@@ -41,6 +42,7 @@ import moe.ouom.neriplayer.data.model.transfer.TransferIOException
 import moe.ouom.neriplayer.data.history.PlayHistoryRepository
 import moe.ouom.neriplayer.data.local.playlist.LocalPlaylistRepository
 import moe.ouom.neriplayer.data.model.playlist.LocalPlaylist
+import moe.ouom.neriplayer.data.model.SongItem
 import moe.ouom.neriplayer.data.local.playlist.system.SystemLocalPlaylists
 import moe.ouom.neriplayer.data.sync.SyncCoordinator
 import moe.ouom.neriplayer.data.sync.store.github.SecureTokenStorage
@@ -77,6 +79,8 @@ class BackupManager internal constructor(
         private const val TAG = "BackupManager"
         private const val BACKUP_FILE_PREFIX = "neriplayer_backup"
         private const val BACKUP_FILE_EXTENSION = ".json"
+        private const val BACKUP_M3U_FILE_EXTENSION = ".m3u8"
+        private val UNSAFE_FILE_NAME_CHARS = Regex("[\\\\/:*?\"<>|]")
     }
 
     private data class PlaylistLookup(
@@ -539,6 +543,142 @@ class BackupManager internal constructor(
      */
     fun generateBackupFileName(): String {
         return "${BACKUP_FILE_PREFIX}_${dateFormat.format(Date())}$BACKUP_FILE_EXTENSION"
+    }
+
+    /**
+     * 把单个歌单导出为 M3U8。
+     *
+     * M3U 是通用歌单交换格式，可以被其它播放器直接导入。
+     */
+    suspend fun exportPlaylistAsM3u(uri: Uri, playlistId: Long): Result<String> =
+        withContext(Dispatchers.IO) {
+            try {
+                val playlistRepo = LocalPlaylistRepository.getInstance(context)
+                requirePlaylistInitialized(playlistRepo)
+                val playlist = playlistRepo.playlists.value.firstOrNull { it.id == playlistId }
+                    ?: throw TransferArgumentException(
+                        TransferFailureKind.NO_PLAYLIST_DATA,
+                        "Playlist $playlistId not found"
+                    )
+                val text = M3uPlaylistCodec.encode(playlist.songs, playlist.name)
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    output.write(text.toByteArray(Charsets.UTF_8))
+                } ?: throw TransferIOException(
+                    TransferFailureKind.OUTPUT_UNAVAILABLE,
+                    "Cannot open output stream"
+                )
+                val fileName = buildM3uFileName(playlist.name)
+                NPLogger.d(TAG, context.getString(CoreCommonR.string.backup_export_success_file, fileName))
+                Result.success(fileName)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                NPLogger.e(TAG, context.getString(CoreCommonR.string.backup_export_failed), e)
+                Result.failure(e)
+            }
+        }
+
+    /**
+     * 从 M3U8 导入歌单。
+     *
+     * 条目按"歌手 - 歌名"或纯歌名匹配本地已有歌曲，匹配不到的条目会被跳过。
+     */
+    suspend fun importPlaylistFromM3u(uri: Uri, playlistName: String?): Result<ImportResult> =
+        withContext(Dispatchers.IO) {
+            try {
+                val raw = context.contentResolver.openInputStream(uri)?.use { input ->
+                    input.readBytes().toString(Charsets.UTF_8)
+                } ?: throw TransferIOException(
+                    TransferFailureKind.OUTPUT_UNAVAILABLE,
+                    "Cannot open input stream"
+                )
+                if (!M3uPlaylistCodec.looksLikeM3u(raw)) {
+                    throw TransferArgumentException(
+                        TransferFailureKind.NO_PLAYLIST_DATA,
+                        "File is not an M3U playlist"
+                    )
+                }
+                val entries = M3uPlaylistCodec.decode(raw)
+                if (entries.isEmpty()) {
+                    throw TransferArgumentException(
+                        TransferFailureKind.NO_PLAYLIST_DATA,
+                        "No playable entries in M3U playlist"
+                    )
+                }
+
+                val playlistRepo = LocalPlaylistRepository.getInstance(context)
+                requirePlaylistInitialized(playlistRepo)
+                val localSongs = playlistRepo.playlists.value
+                    .flatMap { it.songs }
+                    .distinctBy { it.stableKey() }
+
+                val matched = mutableListOf<SongItem>()
+                var skipped = 0
+                entries.forEach { entry ->
+                    val song = matchM3uEntry(entry, localSongs)
+                    if (song != null) matched += song else skipped++
+                }
+
+                SyncCoordinator.withExclusive {
+                    val targetName = playlistName?.takeIf { it.isNotBlank() }
+                        ?: "M3U ${dateFormat.format(Date())}"
+                    if (matched.isNotEmpty()) {
+                        playlistRepo.createPlaylistWithSongs(targetName, matched)
+                    }
+                }
+
+                Result.success(
+                    ImportResult(
+                        importedCount = matched.size,
+                        skippedCount = skipped,
+                        mergedCount = 0,
+                        totalCount = entries.size,
+                        backupDate = dateFormat.format(Date())
+                    )
+                )
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                NPLogger.e(TAG, context.getString(CoreCommonR.string.backup_import_failed), e)
+                Result.failure(e)
+            }
+        }
+
+    /**
+     * 生成 M3U 导出文件名。
+     */
+    fun generateM3uFileName(playlistName: String): String {
+        val safeName = playlistName.trim()
+            .replace(UNSAFE_FILE_NAME_CHARS, "_")
+            .take(48)
+            .ifBlank { "playlist" }
+        return "$safeName$BACKUP_M3U_FILE_EXTENSION"
+    }
+
+    private fun buildM3uFileName(playlistName: String): String = generateM3uFileName(playlistName)
+
+    /**
+     * 把 M3U 条目匹配到本地歌曲。
+     *
+     * 先按路径精确匹配本地文件，再退化为"歌手 + 歌名"匹配。
+     */
+    private fun matchM3uEntry(entry: M3uEntry, localSongs: List<SongItem>): SongItem? {
+        val location = entry.location.trim()
+        if (location.isEmpty()) return null
+        localSongs.firstOrNull { song ->
+            song.localFilePath?.equals(location, ignoreCase = true) == true ||
+                song.mediaUri?.equals(location, ignoreCase = true) == true
+        }?.let { return it }
+
+        val (artist, title) = entry.splitArtistAndTitle()
+        return localSongs.firstOrNull { song ->
+            val songTitle = song.customName ?: song.name
+            val songArtist = song.customArtist ?: song.artist
+            val titleMatches = songTitle.equals(title, ignoreCase = true) ||
+                songTitle.contains(title, ignoreCase = true)
+            val artistMatches = artist.isNullOrBlank() ||
+                songArtist.contains(artist, ignoreCase = true) ||
+                artist.contains(songArtist, ignoreCase = true)
+            titleMatches && artistMatches
+        }
     }
     
     /**

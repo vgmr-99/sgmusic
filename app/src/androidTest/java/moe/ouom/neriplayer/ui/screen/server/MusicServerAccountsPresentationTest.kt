@@ -32,7 +32,6 @@ import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.data.model.settings.appearance.UiStyle
 import moe.ouom.neriplayer.platform.subsonic.auth.SubsonicProfile
 import moe.ouom.neriplayer.testutil.assumeComposeHostAvailable
-import moe.ouom.neriplayer.ui.screen.tab.settings.auth.SettingsMusicServerCard
 import moe.ouom.neriplayer.ui.theme.NeriTheme
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -61,9 +60,6 @@ class MusicServerAccountsPresentationTest {
 
     @Test fun cleanRemovalHonorsBusyState() = verifyRemoval(UiStyle.Clean)
     @Test fun materialRemovalHonorsBusyState() = verifyRemoval(UiStyle.Material)
-
-    @Test fun cleanAccountEntryOpensManagement() = verifyEntry(UiStyle.Clean)
-    @Test fun materialAccountEntryOpensManagement() = verifyEntry(UiStyle.Material)
 
     @Test fun cleanLargeFontSaveFailureIsVisibleAndRetryable() = verifySaveFailure(UiStyle.Clean)
     @Test fun materialLargeFontSaveFailureIsVisibleAndRetryable() = verifySaveFailure(UiStyle.Material)
@@ -175,21 +171,6 @@ class MusicServerAccountsPresentationTest {
         composeRule.onNodeWithTag("serverAccountRemoveConfirm").assertIsNotEnabled()
         composeRule.onNodeWithTag("serverAccountRemoveCancel").assertIsNotEnabled()
         capture("server-account-remove-${style.storageValue}")
-    }
-
-    private fun verifyEntry(style: UiStyle) {
-        var opened = 0
-        composeRule.setContent {
-            AccountFixture(style) {
-                Surface(Modifier.fillMaxSize()) {
-                    Column(Modifier.padding(16.dp)) {
-                        SettingsMusicServerCard { opened++ }
-                    }
-                }
-            }
-        }
-        composeRule.onNodeWithTag("settingsMusicServerCard").assertIsDisplayed().performClick()
-        composeRule.runOnIdle { assertEquals(1, opened) }
     }
 
     private fun capture(name: String) {

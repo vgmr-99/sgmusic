@@ -57,10 +57,12 @@ import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Upload
 import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.PlaylistPlay
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -139,6 +141,7 @@ internal fun SettingsBackupRestoreSection(
     configTransferUiState: ConfigTransferUiState,
     onExportClick: () -> Unit,
     onImportClick: () -> Unit,
+    onImportM3uClick: () -> Unit,
     onExportConfigClick: () -> Unit,
     onImportConfigClick: () -> Unit,
     onClearExportStatus: () -> Unit,
@@ -369,7 +372,15 @@ internal fun SettingsBackupRestoreSection(
                         onHighlightFinished = onHighlightFinished
                     ),
                     onExport = onExportClick,
-                    onImport = onImportClick
+                    onImport = onImportClick,
+                    extraLabel = stringResource(CoreCommonR.string.playlist_import_m3u),
+                    extraModifier = Modifier.settingsHighlightTarget(
+                        targetId = "manual:playlist_import_m3u",
+                        highlightTargetId = highlightTargetId,
+                        highlightPulse = highlightPulse,
+                        onHighlightFinished = onHighlightFinished
+                    ),
+                    onExtra = onImportM3uClick
                 )
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -463,6 +474,28 @@ internal fun SettingsBackupRestoreSection(
                         onHighlightFinished = onHighlightFinished
                     )
                     .settingsItemClickable(onClick = onImportClick),
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+            )
+
+            ListItem(
+                leadingContent = {
+                    SettingRowIcon(
+                        key = null,
+                        Icons.Outlined.PlaylistPlay,
+                        contentDescription = stringResource(CoreCommonR.string.playlist_import_m3u),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                headlineContent = { Text(stringResource(CoreCommonR.string.playlist_import_m3u)) },
+                supportingContent = { Text(stringResource(CoreCommonR.string.playlist_import_m3u_desc)) },
+                modifier = Modifier
+                    .settingsHighlightTarget(
+                        targetId = "manual:playlist_import_m3u",
+                        highlightTargetId = highlightTargetId,
+                        highlightPulse = highlightPulse,
+                        onHighlightFinished = onHighlightFinished
+                    )
+                    .settingsItemClickable(onClick = onImportM3uClick),
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent)
             )
 
@@ -1393,7 +1426,10 @@ private fun CleanBackupTransferGroup(
     exportModifier: Modifier,
     importModifier: Modifier,
     onExport: () -> Unit,
-    onImport: () -> Unit
+    onImport: () -> Unit,
+    extraLabel: String? = null,
+    extraModifier: Modifier = Modifier,
+    onExtra: (() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
@@ -1422,7 +1458,7 @@ private fun CleanBackupTransferGroup(
                 )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CleanBackupActionTile(
                 icon = Icons.Rounded.FileUpload,
                 label = exportLabel,
@@ -1437,6 +1473,15 @@ private fun CleanBackupTransferGroup(
                 modifier = importModifier.weight(1f),
                 onClick = onImport
             )
+            if (extraLabel != null && onExtra != null) {
+                CleanBackupActionTile(
+                    icon = Icons.Rounded.PlaylistPlay,
+                    label = extraLabel,
+                    hint = stringResource(CoreCommonR.string.settings_backup_action_import_hint),
+                    modifier = extraModifier.weight(1f),
+                    onClick = onExtra
+                )
+            }
         }
     }
 }
@@ -1452,14 +1497,14 @@ private fun CleanBackupActionTile(
     val colors = MaterialTheme.colorScheme
     Column(
         modifier = modifier
-            .heightIn(min = 76.dp)
+            .heightIn(min = 72.dp)
             .clip(BackupActionShape)
             .background(colors.onSurface.copy(alpha = 0.06f))
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 10.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Icon(icon, contentDescription = null, tint = colors.primary, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = null, tint = colors.primary, modifier = Modifier.size(20.dp))
         Text(
             label,
             style = MaterialTheme.typography.labelLarge,

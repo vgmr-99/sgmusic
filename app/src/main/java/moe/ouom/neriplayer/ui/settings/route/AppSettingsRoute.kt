@@ -39,7 +39,6 @@ internal fun AppSettingsRoute(
             repository = repo,
             listenTogether = AppSettingsListenTogetherDependencies(
                 preferences = AppContainer.listenTogetherPreferences,
-                api = AppContainer.listenTogetherApi,
                 sessionManager = AppContainer.listenTogetherSessionManager
             ),
             state = settingsState,

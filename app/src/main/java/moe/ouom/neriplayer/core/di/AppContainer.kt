@@ -34,6 +34,9 @@ import moe.ouom.neriplayer.platform.subsonic.auth.SubsonicAccounts
 import moe.ouom.neriplayer.platform.youtube.api.auth.hasEffectiveAuth
 import moe.ouom.neriplayer.platform.youtube.api.auth.normalized
 import kotlinx.coroutines.flow.first
+import moe.ouom.neriplayer.core.download.GlobalDownloadManager
+import moe.ouom.neriplayer.data.download.SmartDownloadScheduler
+import moe.ouom.neriplayer.data.settings.generated.AutoSettingsRepository
 import moe.ouom.neriplayer.platform.netease.api.auth.NeteaseYdDeviceTokenProvider
 import android.app.Application
 import android.content.Context
@@ -312,6 +315,21 @@ object AppContainer {
     }
     val playbackStatsRepo by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         PlaybackStatsRepository.getInstance(application)
+    }
+    /**
+     * 智能下载调度器：依据播放统计挑选常听歌曲并自动下载。
+     */
+    private val smartDownloadScheduler by lazy {
+        SmartDownloadScheduler(
+            context = application,
+            statsRepository = playbackStatsRepo,
+            downloader = { song ->
+                scope.launch {
+                    AudioDownloadManager.downloadSong(application, song)
+                }
+            },
+            scope = scope
+        )
     }
     val trafficStatsRepo by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         TrafficStatsRepository.getInstance(application)
@@ -610,7 +628,58 @@ object AppContainer {
         startYouTubeAuthObserver()
         startSettingsObserver()
         warmYouTubePlaybackOnAppStart()
+        warmAccountLegacyMigrations()
+        scheduleSmartDownload()
     }
+
+    /**
+     * 预热网易云/B 站的旧版账号数据迁移。
+     *
+     * 迁移本身在各自的 IO 协程里执行，这里只是等它跑完，
+     * 保证界面读到凭据时不会看到迁移中间的空状态。
+     */
+    private fun warmAccountLegacyMigrations() {
+        scope.launch {
+            runCatching {
+                neteaseCookieRepo.awaitLegacyMigration()
+                biliCookieRepo.awaitLegacyMigration()
+            }.onFailure { error ->
+                NPLogger.e("AppContainer", "Account legacy migration warm-up failed", error)
+            }
+        }
+    }
+
+    /**
+     * 触发一轮智能下载。
+     *
+     * 只在开关打开时执行；统计与下载都在 IO 协程里完成，不阻塞启动。
+     */
+    private fun scheduleSmartDownload() {
+        scope.launch {
+            runCatching {
+                val autoSettings = AutoSettingsRepository(application)
+                if (!autoSettings.smartDownloadEnabledFlow.first()) return@runCatching
+                val threshold = autoSettings.smartDownloadPlayCountThresholdFlow.first()
+                val maxCount = autoSettings.smartDownloadMaxCountFlow.first()
+                smartDownloadScheduler.schedule(
+                    playCountThreshold = threshold,
+                    maxCount = maxCount,
+                    alreadyDownloaded = ::downloadedSongKeys
+                )
+            }.onFailure { error ->
+                NPLogger.e("AppContainer", "Smart download scheduling failed", error)
+            }
+        }
+    }
+
+    /**
+     * 收集已下载歌曲的标识，避免重复下载。
+     */
+    private fun downloadedSongKeys(): Set<String> = runCatching {
+        GlobalDownloadManager.downloadedSongs.value
+            .mapNotNull { song -> song.stableKey }
+            .toSet()
+    }.getOrDefault(emptySet())
 
     private fun warmLocalPlaylistRepository() {
         scope.launch {

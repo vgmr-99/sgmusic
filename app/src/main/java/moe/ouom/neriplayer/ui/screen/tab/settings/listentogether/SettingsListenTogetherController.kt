@@ -25,19 +25,10 @@ import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.data.listentogether.ListenTogetherPreferences
 import moe.ouom.neriplayer.data.ltw.ListenTogetherSessionManager
 import moe.ouom.neriplayer.data.model.ltw.session.ListenTogetherInvite
-import moe.ouom.neriplayer.data.ltw.invite.configuredListenTogetherBaseUrlOrNull
-import moe.ouom.neriplayer.data.ltw.invite.isDefaultListenTogetherBaseUrl
 import moe.ouom.neriplayer.data.ltw.invite.parseListenTogetherInvite
-import moe.ouom.neriplayer.data.ltw.invite.resolveListenTogetherBaseUrl
 import moe.ouom.neriplayer.data.ltw.invite.resolveListenTogetherInviteJoinBaseUrl
-import moe.ouom.neriplayer.api.ltw.http.ListenTogetherApi
-import moe.ouom.neriplayer.data.model.ltw.ListenTogetherServerTestResult
 import moe.ouom.neriplayer.data.model.ltw.session.ListenTogetherSessionState
 import moe.ouom.neriplayer.data.ltw.validation.validateListenTogetherNickname
-
-internal fun isDefaultListenTogetherSettingsServer(input: String): Boolean =
-    input.isBlank() || configuredListenTogetherBaseUrlOrNull(input)
-        ?.let(::isDefaultListenTogetherBaseUrl) == true
 
 internal fun validListenTogetherClipboardInvite(text: String?): String =
     text?.takeIf { parseListenTogetherInvite(it) != null }.orEmpty()
@@ -49,36 +40,9 @@ internal fun readSettingsListenTogetherClipboardText(context: Context): String? 
     clip.getItemAt(0).coerceToText(context).toString()
 }.getOrNull()
 
-internal fun listenTogetherServerTestMessageId(
-    result: ListenTogetherServerTestResult,
-    usingDefaultServer: Boolean
-): Int = when {
-    result.ok && usingDefaultServer -> CoreCommonR.string.settings_listen_together_server_test_success_default
-    result.ok -> CoreCommonR.string.settings_listen_together_server_test_success_custom
-    result.message == "invalid_response" -> CoreCommonR.string.settings_listen_together_server_test_invalid
-    else -> CoreCommonR.string.settings_listen_together_server_test_failed
-}
-
-internal fun normalizedSettingsListenTogetherServerInput(input: String): String? {
-    val normalized = configuredListenTogetherBaseUrlOrNull(input)
-    return if (input.isNotBlank() && normalized == null) null else normalized.orEmpty()
-}
-
-internal data class SettingsListenTogetherServerProbeRequest(
-    val endpoint: String,
-    val usingDefaultServer: Boolean
-)
-
-internal fun settingsListenTogetherServerProbeRequest(normalizedInput: String): SettingsListenTogetherServerProbeRequest =
-    SettingsListenTogetherServerProbeRequest(
-        endpoint = normalizedInput.ifEmpty { resolveListenTogetherBaseUrl(null) },
-        usingDefaultServer = normalizedInput.isEmpty()
-    )
-
 @Composable
 internal fun rememberSettingsListenTogetherController(
     preferences: ListenTogetherPreferences,
-    api: ListenTogetherApi,
     sessionManager: ListenTogetherSessionManager,
     onMessage: (String) -> Unit
 ): SettingsListenTogetherController {
@@ -88,20 +52,16 @@ internal fun rememberSettingsListenTogetherController(
     val observed = collectSettingsListenTogetherValues(preferences, sessionManager)
     val drafts = rememberSettingsListenTogetherDrafts()
     val currentOnMessage = rememberUpdatedState(onMessage)
-    val dependencies = listOf(context, resources, preferences, api, sessionManager)
+    val dependencies = listOf(context, resources, preferences, sessionManager)
     val controller = remember(dependencies) {
         SettingsListenTogetherController(
             context = context,
             resources = resources,
             scope = scope,
             preferences = preferences,
-            serverProbe = api::testServerAvailability,
             sessionManager = sessionManager,
             sessionState = observed.session,
-            workerBaseUrl = observed.workerBaseUrl,
-            workerBaseUrlInput = observed.workerBaseUrlInput,
             nickname = observed.nickname,
-            serverInputState = drafts.serverInput,
             nicknameInputState = drafts.nicknameInput,
             onMessage = { currentOnMessage.value(it) }
         )
@@ -112,8 +72,6 @@ internal fun rememberSettingsListenTogetherController(
 
 private class SettingsListenTogetherObservedValues(
     val session: State<ListenTogetherSessionState>,
-    val workerBaseUrl: State<String>,
-    val workerBaseUrlInput: State<String>,
     val nickname: State<String>
 )
 
@@ -123,20 +81,16 @@ private fun collectSettingsListenTogetherValues(
     sessionManager: ListenTogetherSessionManager
 ): SettingsListenTogetherObservedValues = SettingsListenTogetherObservedValues(
     session = sessionManager.sessionState.collectAsState(),
-    workerBaseUrl = preferences.workerBaseUrlFlow.collectAsState(initial = ""),
-    workerBaseUrlInput = preferences.workerBaseUrlInputFlow.collectAsState(initial = ""),
     nickname = preferences.nicknameFlow.collectAsState(initial = "")
 )
 
 private class SettingsListenTogetherDrafts(
-    val serverInput: MutableState<String>,
     val nicknameInput: MutableState<String>
 )
 
 @Composable
 private fun rememberSettingsListenTogetherDrafts(): SettingsListenTogetherDrafts =
     SettingsListenTogetherDrafts(
-        serverInput = rememberSaveable { mutableStateOf("") },
         nicknameInput = rememberSaveable { mutableStateOf("") }
     )
 
@@ -145,9 +99,6 @@ private fun SyncSettingsListenTogetherDrafts(
     controller: SettingsListenTogetherController,
     observed: SettingsListenTogetherObservedValues
 ) {
-    LaunchedEffect(controller, observed.workerBaseUrlInput.value) {
-        controller.syncServerInput()
-    }
     LaunchedEffect(controller, observed.nickname.value, controller.showNicknameDialog) {
         controller.syncNicknameInput()
     }
@@ -158,25 +109,17 @@ internal class SettingsListenTogetherController(
     private val resources: Resources,
     private val scope: CoroutineScope,
     private val preferences: ListenTogetherPreferences,
-    private val serverProbe: suspend (String) -> ListenTogetherServerTestResult,
     private val sessionManager: ListenTogetherSessionManager,
     private val sessionState: State<ListenTogetherSessionState>,
-    private val workerBaseUrl: State<String>,
-    private val workerBaseUrlInput: State<String>,
     private val nickname: State<String>,
-    serverInputState: MutableState<String>,
     nicknameInputState: MutableState<String>,
     private val onMessage: (String) -> Unit
 ) {
     var showResetUuidDialog by mutableStateOf(false)
         private set
-    var showServerDialog by mutableStateOf(false)
-        private set
     var showNicknameDialog by mutableStateOf(false)
         private set
     var showJoinDialog by mutableStateOf(false)
-        private set
-    var serverInput by serverInputState
         private set
     var nicknameInput by nicknameInputState
         private set
@@ -188,32 +131,18 @@ internal class SettingsListenTogetherController(
         private set
     var joining by mutableStateOf(false)
         private set
-    var serverTesting by mutableStateOf(false)
-        private set
-    var serverTestMessage by mutableStateOf<String?>(null)
-        private set
 
     val openJoinAction: () -> Unit = ::openJoinDialog
-    val openServerAction: () -> Unit = ::openServerDialog
     val openNicknameAction: () -> Unit = ::openNicknameDialog
     val openResetUuidAction: () -> Unit = ::openResetUuidDialog
     val dismissJoinAction: () -> Unit = ::dismissJoinDialog
-    val dismissServerAction: () -> Unit = ::dismissServerDialog
     val dismissNicknameAction: () -> Unit = ::dismissNicknameDialog
     val dismissResetUuidAction: () -> Unit = ::dismissResetUuidDialog
     val updateInviteAction: (String) -> Unit = ::updateInviteInput
-    val updateServerAction: (String) -> Unit = ::updateServerInput
     val updateNicknameAction: (String) -> Unit = ::updateNicknameInput
-    val testServerAction: () -> Unit = ::testServer
-    val resetServerInputAction: () -> Unit = ::resetServerInput
 
     val isInRoom: Boolean get() = !sessionState.value.roomId.isNullOrBlank()
-    val isUsingDefaultServer: Boolean get() = isDefaultListenTogetherSettingsServer(serverInput)
     val currentNickname: String get() = nickname.value
-
-    fun syncServerInput() {
-        if (serverInput != workerBaseUrlInput.value) serverInput = workerBaseUrlInput.value
-    }
 
     fun syncNicknameInput() {
         if (!showNicknameDialog) {
@@ -259,11 +188,7 @@ internal class SettingsListenTogetherController(
         joining = true
         inviteError = null
         try {
-            val joinBaseUrl = resolveListenTogetherInviteJoinBaseUrl(
-                invite = invite,
-                savedBaseUrlInput = workerBaseUrlInput.value,
-                savedBaseUrl = workerBaseUrl.value
-            )
+            val joinBaseUrl = resolveListenTogetherInviteJoinBaseUrl(invite = invite)
             sessionManager.joinRoom(
                 baseUrl = joinBaseUrl,
                 roomId = invite.roomId,
@@ -279,75 +204,6 @@ internal class SettingsListenTogetherController(
         } finally {
             joining = false
         }
-    }
-
-    fun openServerDialog() {
-        serverTestMessage = null
-        showServerDialog = true
-    }
-
-    fun updateServerInput(value: String) {
-        serverInput = value
-        serverTestMessage = null
-    }
-
-    fun resetServerInput() {
-        serverInput = ""
-        serverTestMessage = resources.getString(CoreCommonR.string.settings_listen_together_server_reset_done)
-    }
-
-    fun dismissServerDialog() {
-        if (serverTesting) return
-        showServerDialog = false
-        serverInput = workerBaseUrlInput.value
-        serverTestMessage = null
-    }
-
-    fun testServer() {
-        scope.launch {
-            val normalized = validatedServerInput() ?: return@launch
-            testValidatedServer(normalized)
-        }
-    }
-
-    internal suspend fun testValidatedServer(normalized: String) {
-        val request = settingsListenTogetherServerProbeRequest(normalized)
-        serverTesting = true
-        try {
-            val result = serverProbe(request.endpoint)
-            serverTestMessage = formatServerTestResult(result, request.usingDefaultServer)
-        } finally {
-            serverTesting = false
-        }
-    }
-
-    private fun formatServerTestResult(result: ListenTogetherServerTestResult, usingDefault: Boolean): String {
-        val messageId = listenTogetherServerTestMessageId(result, usingDefault)
-        return if (messageId == CoreCommonR.string.settings_listen_together_server_test_failed) {
-            resources.getString(messageId, result.message)
-        } else {
-            resources.getString(messageId)
-        }
-    }
-
-    fun applyServer() {
-        scope.launch {
-            val normalized = validatedServerInput() ?: return@launch
-            preferences.setWorkerBaseUrl(normalized)
-            preferences.setWorkerBaseUrlInput(normalized)
-            serverInput = normalized
-            showServerDialog = false
-            serverTestMessage = null
-            showMessage(CoreCommonR.string.settings_listen_together_server_saved)
-        }
-    }
-
-    private fun validatedServerInput(): String? {
-        val normalized = normalizedSettingsListenTogetherServerInput(serverInput)
-        if (normalized == null) {
-            serverTestMessage = resources.getString(CoreCommonR.string.settings_listen_together_server_input_invalid)
-        }
-        return normalized
     }
 
     fun openNicknameDialog() {

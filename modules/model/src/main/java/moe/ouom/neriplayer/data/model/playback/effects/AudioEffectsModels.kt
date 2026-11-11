@@ -101,6 +101,10 @@ data class AudioEffectsSound(
     val reverbRoom: Float = 0.5f,
     val reverbDamping: Float = 0.5f,
     val reverbPreDelayMs: Float = 10f,
+    val delayEnabled: Boolean = false,
+    val delayTimeMs: Float = 250f,
+    val delayFeedback: Float = 0.35f,
+    val delayMix: Float = 0.25f,
     val compressorEnabled: Boolean = false,
     val compressorThresholdDb: Float = -18f,
     val compressorRatio: Float = 2f,
@@ -142,6 +146,19 @@ data class SpeakerOptimizerSettings(
     val stereoExpand: Float = 0.3f
 )
 
+/**
+ * ITU-R BS.1770 响度标准化：把不同素材的响度拉到同一个目标值。
+ *
+ * 这是全局设置，不随音效预设变化；目标响度与最大补偿量都有限制，
+ * 避免过大的增益把安静的段落突然拉起来。
+ */
+@Serializable
+data class LoudnessNormalizationSettings(
+    val enabled: Boolean = false,
+    val targetLufs: Float = -14f,
+    val maxGainDb: Float = 12f
+)
+
 @Serializable
 data class AudioEffectsSettings(
     val version: Int = AUDIO_EFFECTS_SETTINGS_VERSION,
@@ -150,6 +167,7 @@ data class AudioEffectsSettings(
     val outputProfiles: Map<String, AudioEffectsProfile> = emptyMap(),
     val userPresets: List<AudioEffectsUserPreset> = emptyList(),
     val speaker: SpeakerOptimizerSettings = SpeakerOptimizerSettings(),
+    val loudnessNormalization: LoudnessNormalizationSettings = LoudnessNormalizationSettings(),
     val powerMode: String = AudioEffectsPowerMode.BALANCED.storageValue,
     val autoHeadroom: Boolean = true,
     val applyInUsbExclusive: Boolean = false,

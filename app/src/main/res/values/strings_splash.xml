@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash screen -->
+    <string name="splash_app_name">拾光音乐</string>
+    <string name="splash_app_tagline">拾起每一段时光的声音</string>
+</resources>

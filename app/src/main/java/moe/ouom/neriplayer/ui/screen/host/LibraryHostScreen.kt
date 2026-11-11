@@ -297,6 +297,7 @@ fun LibraryHostScreen(
     localPlaylistSourceRoute: (Long) -> String? = { null },
     onOpenRecent: () -> Unit,
     onOpenStats: () -> Unit = {},
+    onOpenWrapped: () -> Unit = {},
     offlineMode: Boolean = false,
     coherentFeedbackEnabled: Boolean = false,
     renderScene: @Composable (
@@ -725,7 +726,8 @@ fun LibraryHostScreen(
                                 }
                             },
                             onOpenRecent = onOpenRecent,
-                            onOpenStats = onOpenStats
+                            onOpenStats = onOpenStats,
+                            onOpenWrapped = onOpenWrapped
                         )
                         }
                         }

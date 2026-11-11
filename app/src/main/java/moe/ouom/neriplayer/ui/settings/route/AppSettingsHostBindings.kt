@@ -50,6 +50,5 @@ internal class AppSettingsHostBindings(
 
 internal class AppSettingsListenTogetherDependencies(
     val preferences: ListenTogetherPreferences,
-    val api: ListenTogetherApi,
     val sessionManager: ListenTogetherSessionManager
 )

@@ -8,6 +8,7 @@ import android.content.res.Resources
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
@@ -96,12 +97,17 @@ internal fun SettingsAboutPageContent(
         onInlineMessageChange = onInlineMessageChange,
         onShowMessage = onShowMessage
     )
+    val disclaimerState = remember { mutableStateOf(false) }
     SettingsAboutContent(
         devModeEnabled = devModeEnabled,
         onVersionClick = actions::onVersionClick,
         onCopyValue = actions::onCopyValue,
         onOpenGitHubRepo = actions::onOpenGitHubRepo,
         onOpenUpstreamGitHubRepo = actions::onOpenUpstreamGitHubRepo,
-        onOpenForkGitHubRepo = actions::onOpenForkGitHubRepo
+        onOpenForkGitHubRepo = actions::onOpenForkGitHubRepo,
+        onOpenDisclaimer = { disclaimerState.value = true }
     )
+    if (disclaimerState.value) {
+        SettingsDisclaimerDialog(onDismiss = { disclaimerState.value = false })
+    }
 }

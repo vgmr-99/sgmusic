@@ -42,7 +42,7 @@
     <string name="listen_together_copy_invite">Copy Invite</string>
     <string name="listen_together_invite_copied">Invite copied</string>
     <string name="listen_together_clipboard_invite_missing">No valid Listen Together invite was found in the clipboard.</string>
-    <string name="listen_together_invite_share_text">%1$s invites you to join room %2$s in 拾光音乐. Copy this invitation and open the app to join.</string>
+    <string name="listen_together_invite_share_text">%1$s invites you to join room %2$s in Shiguang Music. Copy this invitation and open the app to join.</string>
     <string name="listen_together_creating_room">Creating room</string>
     <string name="listen_together_joining_room">Joining room</string>
     <string name="listen_together_refreshing_room_state">Refreshing room state</string>

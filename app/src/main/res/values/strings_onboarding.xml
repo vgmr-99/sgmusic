@@ -3,13 +3,19 @@
     <!-- Onboarding & Disclaimer -->
     <string name="disclaimer_title">使用说明与隐私</string>
     <string name="disclaimer_intro">请确认应用如何连接第三方服务、保存数据与请求权限</string>
+    <string name="disclaimer_button_title">免责声明</string>
+    <string name="disclaimer_project_title">拾光音乐补充说明</string>
+    <string name="disclaimer_project_license_body">本项目基于上游 NeriPlayer 二次开发，遵循 GPLv3 协议发布。二次开发部分的著作权归本项目作者所有。</string>
+    <string name="disclaimer_project_source_body">本项目源码仅供个人学习与研究使用，不提供任何形式的商业服务，也不针对特定平台批量抓取或二次分发内容。</string>
+    <string name="disclaimer_project_no_media_body">本应用不托管、不存储、不预先内置任何音频或视频文件，所有内容均来自你主动访问的第三方平台或你自行导入的本地文件。</string>
+    <string name="disclaimer_project_local_data_body">设置、播放历史、下载记录与本地诊断信息默认仅保存在你自己的设备上，不会用于广告投放或行为画像。</string>
     <string name="disclaimer_last_updated">更新于 2026 年 8 月 8 日</string>
     <string name="disclaimer_summary_content_title">内容来自第三方</string>
     <string name="disclaimer_summary_content_body">拾光音乐 用于浏览和播放你主动访问的平台内容，不托管音视频文件。</string>
     <string name="disclaimer_summary_data_title">数据默认留在设备</string>
     <string name="disclaimer_summary_data_body">设置、历史、下载记录和本地诊断默认保存在设备中，不用于广告或行为画像。</string>
     <string name="disclaimer_summary_sync_title">同步由你决定</string>
-    <string name="disclaimer_summary_sync_body">只有启用 GitHub、WebDAV 或自建服务后，选中的数据才会发送到对应服务。</string>
+    <string name="disclaimer_summary_sync_body">只有启用 GitHub 或 WebDAV 后，选中的数据才会发送到对应服务。</string>
     <string name="disclaimer_show_details">查看完整说明</string>
     <string name="disclaimer_hide_details">收起完整说明</string>
     <string name="disclaimer_section1_title">软件与内容范围</string>
@@ -149,10 +155,10 @@
     <string name="disclaimer_section2_bullet4">因你的访问、下载、分享或传播行为产生的风险，应由你依适用法律自行承担。</string>
     <string name="disclaimer_section3_bullet1">平台登录、Cookie、播放地址和内容元数据受对应第三方平台的条款与隐私政策约束。</string>
     <string name="disclaimer_section3_bullet2">第三方服务的可用性、内容、接口和地区限制可能随时变化，应用不对此作出保证。</string>
-    <string name="disclaimer_section3_bullet3">启用第三方账号或自建服务前，请自行阅读并确认其服务条款与隐私政策。</string>
+    <string name="disclaimer_section3_bullet3">启用第三方账号前，请自行阅读并确认其服务条款与隐私政策。</string>
     <string name="disclaimer_section4_bullet1">播放历史、收藏、设置、下载任务和本地诊断默认保存在你的设备中。</string>
     <string name="disclaimer_section4_bullet2">应用不会将本地诊断自动上传；只有你主动导出、分享或配置同步时，相关数据才会离开设备。</string>
-    <string name="disclaimer_section4_bullet3">GitHub、WebDAV 和自建 Listen Together 服务均为可选功能；启用后，选中的同步数据会发送至你配置的服务。</string>
+    <string name="disclaimer_section4_bullet3">GitHub 和 WebDAV 均为可选功能；启用后，选中的同步数据会发送至你配置的服务。</string>
     <string name="disclaimer_section5_bullet1">通知权限用于显示播放状态和媒体控制；拒绝后仍可使用大多数播放功能。</string>
     <string name="disclaimer_section5_bullet2">本地音乐权限仅用于扫描和播放设备中的音频文件；在线播放和下载不依赖该权限。</string>
     <string name="disclaimer_section5_bullet3">悬浮歌词、蓝牙和后台播放等权限或系统设置，只会在你开启相应功能时按需请求。</string>

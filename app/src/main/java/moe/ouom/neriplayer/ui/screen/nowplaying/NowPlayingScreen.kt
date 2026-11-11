@@ -88,7 +88,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
@@ -112,10 +111,7 @@ import moe.ouom.neriplayer.platform.comments.resolveCommentSource
 import moe.ouom.neriplayer.core.di.AppContainer
 import moe.ouom.neriplayer.core.download.GlobalDownloadManager
 import moe.ouom.neriplayer.core.download.ManagedDownloadStorage
-import moe.ouom.neriplayer.data.model.download.DownloadTask
-import moe.ouom.neriplayer.core.download.presentation.shouldHideRemoteDownloadAction
 import moe.ouom.neriplayer.core.player.PlayerManager
-import moe.ouom.neriplayer.data.model.playback.PlaybackAudioSource
 import moe.ouom.neriplayer.data.model.playback.queue.PlayerQueueDisplayState
 import moe.ouom.neriplayer.data.model.playback.forSource
 import moe.ouom.neriplayer.data.local.media.isLocalSong
@@ -131,6 +127,7 @@ import moe.ouom.neriplayer.data.identity.playbackVisualKeyAliases
 import moe.ouom.neriplayer.data.model.stableKey
 import moe.ouom.neriplayer.data.model.BiliUploaderSummary
 import moe.ouom.neriplayer.platform.youtube.media.isYouTubeMusicSong
+import moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingStyle
 import moe.ouom.neriplayer.data.model.settings.lyrics.LyricFontScaleTarget
 import moe.ouom.neriplayer.data.model.settings.lyrics.LyricFontScales
 import moe.ouom.neriplayer.data.settings.appearance.ThemeDefaults
@@ -207,256 +204,6 @@ import kotlin.time.Duration.Companion.milliseconds
 import moe.ouom.neriplayer.ui.screen.host.rememberHostPredictiveBackTransition
 import moe.ouom.neriplayer.R as AppR
 
-private const val LyricsPageTransitionDurationMs = 300
-private const val CoverSourceBadgeRevealBufferMs = 120
-private const val LyricsBackCancelMinimumDurationMs = 160
-private const val CoverSourceBadgeRevealDelayMs =
-    LyricsPageTransitionDurationMs + CoverSourceBadgeRevealBufferMs
-private const val HighUiDensityScaleThreshold = 1.1f
-private const val CompactNowPlayingPortraitMaxHeightDp = 600f
-private const val PlaybackActionToolbarItemCount = 5
-private val PlaybackActionToolbarMinimumTouchTarget = 48.dp
-private val PlaybackActionToolbarSmallSlotThreshold = 40.dp
-private val NowPlayingMainControlsMinimumSpacing = 4.dp
-
-internal enum class NowPlayingWideLyricsMode {
-    NO_LYRICS,
-    ADVANCED,
-    SYNCED
-}
-
-internal fun resolveNowPlayingWideLyricsMode(
-    hasLyrics: Boolean,
-    advancedLyricsEnabled: Boolean
-): NowPlayingWideLyricsMode = when {
-    !hasLyrics -> NowPlayingWideLyricsMode.NO_LYRICS
-    advancedLyricsEnabled -> NowPlayingWideLyricsMode.ADVANCED
-    else -> NowPlayingWideLyricsMode.SYNCED
-}
-
-internal fun shouldUseCompactNowPlayingPortraitLayout(
-    isLandscape: Boolean,
-    availableHeightDp: Float,
-    uiDensityScale: Float
-): Boolean {
-    if (isLandscape) {
-        return false
-    }
-    return uiDensityScale >= HighUiDensityScaleThreshold ||
-            (availableHeightDp > 0f && availableHeightDp <= CompactNowPlayingPortraitMaxHeightDp)
-}
-
-internal fun shouldShowNowPlayingCoverLyrics(
-    coverLyricsEnabled: Boolean,
-    useCompactPortraitLayout: Boolean
-): Boolean = coverLyricsEnabled && !useCompactPortraitLayout
-
-internal fun shouldUseNowPlayingToolbarDock(
-    toolbarDockEnabled: Boolean,
-    useCompactPortraitLayout: Boolean,
-    controlsAtBottom: Boolean = false
-): Boolean = toolbarDockEnabled && !useCompactPortraitLayout && !controlsAtBottom
-
-internal data class NowPlayingCoverPagePresentation(
-    val beforeCoverSpacing: Dp,
-    val afterCoverSpacing: Dp,
-    val preferredCoverSize: Dp?,
-    val trackIdentityLayout: NowPlayingTrackIdentityLayout,
-    val lyricsAdjustBehavior: Boolean
-)
-
-internal fun resolveNowPlayingCoverPagePresentation(
-    immersiveMode: Boolean,
-    lyricsAdjustBehavior: Boolean
-): NowPlayingCoverPagePresentation = if (immersiveMode) {
-    NowPlayingCoverPagePresentation(
-        16.dp, 28.dp, NowPlayingImmersiveCoverSize, NowPlayingTrackIdentityLayout.LargeCover, false
-    )
-} else {
-    NowPlayingCoverPagePresentation(
-        8.dp, 16.dp, null, NowPlayingTrackIdentityLayout.Expanded, lyricsAdjustBehavior
-    )
-}
-
-internal data class PlaybackActionToolbarLayout(
-    val horizontalPadding: Dp,
-    val minimumInteractiveComponentSize: Dp,
-    val iconSize: Dp,
-    val useEqualWidthSlots: Boolean
-)
-
-internal fun resolvePlaybackActionToolbarLayout(
-    availableWidth: Dp,
-    preferredHorizontalPadding: Dp,
-    defaultIconSize: Dp,
-    preferredMinimumTouchTarget: Dp = PlaybackActionToolbarMinimumTouchTarget
-): PlaybackActionToolbarLayout {
-    val minimumTouchTarget = preferredMinimumTouchTarget.coerceAtLeast(0.dp)
-    val preferredSlotWidth = (
-            (availableWidth - preferredHorizontalPadding * 2) / PlaybackActionToolbarItemCount
-            ).coerceAtLeast(0.dp)
-    if (preferredSlotWidth >= minimumTouchTarget) {
-        return PlaybackActionToolbarLayout(
-            horizontalPadding = preferredHorizontalPadding,
-            minimumInteractiveComponentSize = minimumTouchTarget,
-            iconSize = defaultIconSize,
-            useEqualWidthSlots = false
-        )
-    }
-
-    val compactSlotWidth = (availableWidth / PlaybackActionToolbarItemCount).coerceAtLeast(0.dp)
-    return PlaybackActionToolbarLayout(
-        horizontalPadding = 0.dp,
-        minimumInteractiveComponentSize = minOf(
-            minimumTouchTarget,
-            compactSlotWidth
-        ),
-        iconSize = if (compactSlotWidth < PlaybackActionToolbarSmallSlotThreshold) {
-            18.dp
-        } else {
-            defaultIconSize
-        },
-        useEqualWidthSlots = true
-    )
-}
-
-internal data class NowPlayingMainControlsLayout(
-    val secondaryButtonSize: Dp,
-    val primaryButtonSize: Dp,
-    val spacing: Dp
-)
-
-internal fun resolveNowPlayingMainControlsLayout(
-    availableWidth: Dp,
-    secondaryButtonSize: Dp,
-    primaryButtonSize: Dp,
-    preferredSpacing: Dp
-): NowPlayingMainControlsLayout {
-    val gapCount = PlaybackActionToolbarItemCount - 1
-    val requestedButtonWidth = secondaryButtonSize * 4 + primaryButtonSize
-    val minimumSpacing = minOf(
-        NowPlayingMainControlsMinimumSpacing,
-        availableWidth / gapCount
-    )
-    val availableButtonWidth = (availableWidth - minimumSpacing * gapCount)
-        .coerceAtLeast(0.dp)
-    val buttonScale = if (
-        requestedButtonWidth.value > 0f && requestedButtonWidth > availableButtonWidth
-    ) {
-        (availableButtonWidth.value / requestedButtonWidth.value).coerceIn(0f, 1f)
-    } else {
-        1f
-    }
-    val resolvedSecondaryButtonSize = secondaryButtonSize * buttonScale
-    val resolvedPrimaryButtonSize = primaryButtonSize * buttonScale
-    val maximumSpacing = (
-            (availableWidth - resolvedSecondaryButtonSize * 4 - resolvedPrimaryButtonSize) /
-                    gapCount
-            ).coerceAtLeast(0.dp)
-    return NowPlayingMainControlsLayout(
-        secondaryButtonSize = resolvedSecondaryButtonSize,
-        primaryButtonSize = resolvedPrimaryButtonSize,
-        spacing = minOf(preferredSpacing, maximumSpacing)
-    )
-}
-
-internal fun shouldHideDownloadActionForSong(
-    hasLocalDownload: Boolean,
-    currentTask: DownloadTask?
-): Boolean = shouldHideRemoteDownloadAction(hasLocalDownload, currentTask)
-
-internal fun resolveNowPlayingPlaybackSourceType(
-    isLocalSong: Boolean,
-    isYouTubeMusicSong: Boolean,
-    isFromNeteaseTag: Boolean,
-    isFromBiliTag: Boolean,
-    currentMediaUrl: String?,
-    playbackAudioSource: PlaybackAudioSource?,
-    isNeteaseLocalFallback: Boolean = false
-): PlaybackSourceType? {
-    if (isLocalSong || isNeteaseLocalFallback) return PlaybackSourceType.LOCAL
-
-    when (playbackAudioSource) {
-        PlaybackAudioSource.SUBSONIC -> return PlaybackSourceType.SUBSONIC
-        PlaybackAudioSource.NETEASE -> return PlaybackSourceType.NETEASE
-        PlaybackAudioSource.BILIBILI -> return PlaybackSourceType.BILIBILI
-        PlaybackAudioSource.YOUTUBE_MUSIC -> return PlaybackSourceType.YOUTUBE_MUSIC
-        PlaybackAudioSource.LX -> return PlaybackSourceType.LX
-        PlaybackAudioSource.LOCAL,
-        null -> Unit
-    }
-
-    if (isYouTubeMusicSong) return PlaybackSourceType.YOUTUBE_MUSIC
-
-    val isFromNeteaseUrl = currentMediaUrl?.contains("music.126.net", ignoreCase = true) == true
-    val isFromBiliUrl = currentMediaUrl?.contains("bilivideo.", ignoreCase = true) == true
-    return when {
-        isFromBiliTag || (!isFromNeteaseTag && isFromBiliUrl) -> PlaybackSourceType.BILIBILI
-        isFromNeteaseTag || (!isFromBiliTag && isFromNeteaseUrl) -> PlaybackSourceType.NETEASE
-        else -> null
-    }
-}
-
-internal fun hasPublishedManagedDownload(
-    song: SongItem,
-    catalogLookup: (SongItem) -> Boolean = { candidate ->
-        GlobalDownloadManager.hasDownloadedSongCached(candidate)
-    }
-): Boolean = catalogLookup(song)
-
-internal fun hasCachedLocalDownload(song: SongItem): Boolean {
-    return hasPublishedManagedDownload(song)
-}
-
-private fun seekToLyricSafely(
-    positionMs: Long,
-    playbackDurationMs: Long,
-    songDurationMs: Long
-) {
-    val knownDurationMs = maxOf(playbackDurationMs, songDurationMs)
-    resolveLyricSeekPosition(positionMs, knownDurationMs)?.let(PlayerManager::seekTo)
-}
-
-@Composable
-private fun NowPlayingImmersivePortraitLayout(
-    modifier: Modifier,
-    beforeCoverSpacing: Dp,
-    topBar: @Composable () -> Unit,
-    cover: @Composable () -> Unit,
-    leadingContent: @Composable ColumnScope.() -> Unit,
-    trailingContent: @Composable ColumnScope.() -> Unit
-) {
-    Layout(
-        modifier = modifier,
-        content = {
-            Box { topBar() }
-            Box { cover() }
-            Column(horizontalAlignment = Alignment.CenterHorizontally, content = leadingContent)
-            Column(horizontalAlignment = Alignment.CenterHorizontally, content = trailingContent)
-        }
-    ) { measurables, constraints ->
-        val width = constraints.maxWidth
-        val height = constraints.maxHeight
-        val childConstraints = constraints.copy(minWidth = 0, minHeight = 0)
-        val (topBarMeasurable, coverMeasurable, leadingMeasurable, trailingMeasurable) = measurables
-        val topBarPlaceable = topBarMeasurable.measure(childConstraints)
-        val leadingPlaceable = leadingMeasurable.measure(childConstraints)
-        val trailingPlaceable = trailingMeasurable.measure(childConstraints)
-        val coverTop = topBarPlaceable.height + beforeCoverSpacing.roundToPx()
-        // 先为真实文字和操作区留足高度，再让封面使用剩余空间
-        val coverHeight = (height - coverTop - leadingPlaceable.height -
-            trailingPlaceable.height).coerceAtLeast(0)
-        val coverPlaceable = coverMeasurable.measure(childConstraints.copy(maxHeight = coverHeight))
-        layout(width, height) {
-            topBarPlaceable.placeRelative((width - topBarPlaceable.width) / 2, 0)
-            coverPlaceable.placeRelative((width - coverPlaceable.width) / 2, coverTop)
-            leadingPlaceable.placeRelative((width - leadingPlaceable.width) / 2,
-                coverTop + coverPlaceable.height)
-            trailingPlaceable.placeRelative((width - trailingPlaceable.width) / 2,
-                height - trailingPlaceable.height)
-        }
-    }
-}
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -548,6 +295,9 @@ fun NowPlayingScreen(
     val immersiveMode by settingsRepo
         .nowPlayingImmersiveModeFlow
         .collectAsStateWithLifecycle(initialValue = false)
+    val nowPlayingStyle by settingsRepo
+        .nowPlayingStyleFlow
+        .collectAsStateWithLifecycle(initialValue = NowPlayingStyle.Classic)
     val playbackControlLayoutPreferences by settingsRepo
         .playbackControlLayoutPreferencesFlow
         .collectAsStateWithLifecycle(initialValue = settingsRepo.defaultPlaybackControlLayoutPreferences)
@@ -1149,6 +899,12 @@ fun NowPlayingScreen(
             val coverFlight = if (useWideLandscapeLayout) null else rememberedCoverFlight
             SharedTransitionLayout {
                 Box(modifier = Modifier.fillMaxSize()) {
+                    ProvideNowPlayingCoverPaletteColor(
+                        coverAverageColor = coverOwner.displayedFrame
+                            ?.decodedBitmap
+                            ?.let { bitmap -> bitmap.toArgbPaletteColor() }
+                    ) {
+                    NowPlayingStyleShell(style = nowPlayingStyle) {
                     lyricsTransition.AnimatedContent(
                         transitionSpec = {
                             (fadeIn(
@@ -1631,7 +1387,8 @@ fun NowPlayingScreen(
                                 fontScale = coverLyricFontScale,
                                 translationFontScale = coverTranslationFontScale,
                                 blurEnabled = lyricBlurEnabled,
-                                blurAmount = lyricBlurAmount
+                                blurAmount = lyricBlurAmount,
+                                nowPlayingStyle = nowPlayingStyle
                             )
                             val embeddedLyricPlayback = NowPlayingSyncedLyricPlayback(
                                 positionFlow = PlayerManager.playbackPositionFlow,
@@ -1970,6 +1727,8 @@ fun NowPlayingScreen(
                                 }
                             )
                         }
+                    }
+                    }
                     }
                     if (coverFlight != null) {
                         NowPlayingLyricsCoverFlightLayer(coverFlight) { modifier ->

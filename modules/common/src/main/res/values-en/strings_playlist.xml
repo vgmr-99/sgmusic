@@ -13,6 +13,8 @@
     <string name="playlist_import">Import Playlist</string>
     <string name="playlist_export_desc">Export as backup</string>
     <string name="playlist_import_desc">Restore from backup</string>
+    <string name="playlist_import_m3u">Import M3U playlist</string>
+    <string name="playlist_import_m3u_desc">Import from an M3U/M3U8 file and match local songs</string>
     <string name="playlist_export_success">Export Successful</string>
     <string name="playlist_export_failed">Export Failed</string>
     <string name="playlist_import_failed">Import Failed</string>

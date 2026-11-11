@@ -38,6 +38,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -257,6 +258,7 @@ fun LibraryScreen(
     onBiliPlaylistClick: (BiliPlaylist) -> Unit = {},
     onOpenRecent: () -> Unit = {},
     onOpenStats: () -> Unit = {},
+    onOpenWrapped: () -> Unit = {},
     offlineMode: Boolean = false
 ) {
     val vm: LibraryViewModel = viewModel()
@@ -382,6 +384,12 @@ fun LibraryScreen(
                     Icon(
                         Icons.Filled.BarChart,
                         contentDescription = stringResource(AppR.string.stats_title)
+                    )
+                }
+                HapticIconButton(onClick = onOpenWrapped) {
+                    Icon(
+                        Icons.Filled.AutoAwesome,
+                        contentDescription = stringResource(AppR.string.wrapped_title)
                     )
                 }
                 HapticIconButton(onClick = onOpenRecent) {

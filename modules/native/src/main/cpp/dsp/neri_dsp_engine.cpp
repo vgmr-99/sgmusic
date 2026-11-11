@@ -132,6 +132,8 @@ void Engine::rebuildStages() {
     reverb_.configure(context_);
     compressor_.configure(context_);
     speaker_.configure(context_);
+    delay_.configure(context_);
+    loudness_.configure(context_);
     output_.configure(context_);
     shapingError_.fill(0.0f);
 }
@@ -238,6 +240,17 @@ void Engine::applyParams() {
         p(kLimiterCeilingDb),
         p(kLimiterReleaseMs)
     );
+    delay_.setTargets(
+        flag(p(kDelayEnabled)),
+        p(kDelayTimeMs),
+        p(kDelayFeedback),
+        p(kDelayMix)
+    );
+    loudness_.setTargets(
+        flag(p(kLoudnessNormalizationEnabled)),
+        p(kLoudnessTargetLufs),
+        p(kLoudnessMaxGainDb)
+    );
     ditherEnabled_ = flag(p(kDitherEnabled));
     mix_.setTarget(flag(p(kMasterEnabled)) ? 1.0f : 0.0f);
 }
@@ -258,6 +271,8 @@ void Engine::resetStages() {
     reverb_.reset();
     compressor_.reset();
     speaker_.reset();
+    delay_.reset();
+    loudness_.reset();
     output_.reset();
     shapingError_.fill(0.0f);
 }
@@ -277,6 +292,8 @@ void Engine::snapStages() {
     surround_.snapToTargets();
     reverb_.snapToTargets();
     speaker_.snapToTargets();
+    delay_.snapToTargets();
+    loudness_.snapToTargets();
     output_.snapToTargets();
 }
 
@@ -340,8 +357,12 @@ void Engine::runChain(int frames) {
     crossfeed_.process(left, right, frames);
     surround_.process(left, right, frames);
     reverb_.process(left, right, frames);
+    // 回声放在混响之后，干声不进延迟线，整条链路依旧零延迟
+    delay_.process(left, right, frames);
     speaker_.process(left, right, frames);
     compressor_.process(left, right, frames);
+    // 响度标准化放在压缩之后、输出增益之前，测量到的就是最终听感
+    loudness_.process(left, right, frames);
     output_.process(left, right, frames);
 }
 
@@ -521,6 +542,8 @@ int Engine::computeActiveMask() const {
     if (reverb_.active()) mask |= kStageReverb;
     if (compressor_.active()) mask |= kStageDynamics;
     if (speaker_.active()) mask |= kStageSpeaker;
+    if (delay_.active()) mask |= kStageDelay;
+    if (loudness_.active()) mask |= kStageLoudness;
     if (!idle()) mask |= kStageOutput;
     return mask;
 }

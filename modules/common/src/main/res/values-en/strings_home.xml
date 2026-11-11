@@ -33,9 +33,9 @@
     <string name="home_favorite_playlist">Favorite Playlist</string>
     <string name="home_unfavorited">Unfavorited</string>
     <string name="continue_playing_remove">Remove</string>
-    <string name="home_title_brand_loud">拾光音乐</string>
-    <string name="home_title_brand_wave">拾光音乐</string>
-    <string name="home_title_brand_call">拾光音乐</string>
+    <string name="home_title_brand_loud">Shiguang Music</string>
+    <string name="home_title_brand_wave">Shiguang Music</string>
+    <string name="home_title_brand_call">Shiguang Music</string>
     <string name="home_all_cards_hidden">All home cards are hidden. Re-enable them in Settings.</string>
     <string name="home_offline_no_continue">Offline mode only shows Continue Playing. Nothing is available yet.</string>
     <string name="offline_mode_title">Offline Mode</string>

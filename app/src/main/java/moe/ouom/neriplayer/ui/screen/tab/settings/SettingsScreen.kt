@@ -106,6 +106,7 @@ import moe.ouom.neriplayer.ui.screen.tab.settings.page.settingsHighlightTarget
 import moe.ouom.neriplayer.ui.feedback.AppFeedback
 import moe.ouom.neriplayer.ui.screen.tab.settings.about.SettingsAboutPageContent
 import moe.ouom.neriplayer.ui.screen.tab.settings.appearance.SettingsUiStyleSelector
+import moe.ouom.neriplayer.ui.screen.tab.settings.appearance.SettingsNowPlayingStyleSelector
 import moe.ouom.neriplayer.ui.screen.tab.settings.appearance.BackgroundImagePickerPort
 import moe.ouom.neriplayer.ui.screen.tab.settings.audio.AudioEffectsSettingsPage
 import moe.ouom.neriplayer.ui.screen.tab.settings.appearance.EnforceNowPlayingBackgroundExclusion
@@ -186,7 +187,6 @@ internal fun SettingsScreen(
     val autoSettingsRepository = remember(context) { AutoSettingsRepository(context) }
     val listenTogetherSettings = rememberSettingsListenTogetherController(
         preferences = listenTogether.preferences,
-        api = listenTogether.api,
         sessionManager = listenTogether.sessionManager,
         onMessage = { AppFeedback.showToast(context = context, message = it) }
     )
@@ -544,7 +544,6 @@ internal fun SettingsScreen(
                             item(key = "${selectedPage.name}:content") {
                                 SettingsLoginExpandedContent(
                                     controller = accountAuth,
-                                    onOpenMusicServers = { navigation.activePage = SettingsPage.MusicServers },
                                     isActive = accountProfilesActive,
                                     highlightTargetId = settingsHighlightTargetId,
                                     highlightPulse = settingsHighlightPulse,
@@ -595,6 +594,9 @@ internal fun SettingsScreen(
                         },
 
                         SettingsPage.NowPlaying to {
+                            item(key = "${selectedPage.name}:card:1") {
+                                SettingsNowPlayingStyleSelector()
+                            }
                             item(key = "${selectedPage.name}:card:2") {
                                 SettingsPersonalizationPlaybackInfoCard(
                                     autoSettingsRepository = autoSettingsRepository,
@@ -944,12 +946,6 @@ internal fun SettingsScreen(
                                     settingsRepository = repository,
                                     modifier = Modifier.animateItem()
                                 )
-                            }
-                        },
-
-                        SettingsPage.MusicServers to {
-                            item(key = "${selectedPage.name}:content") {
-                                moe.ouom.neriplayer.ui.screen.server.MusicServerSettingsContent()
                             }
                         },
 

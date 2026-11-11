@@ -48,6 +48,7 @@ AGENTS.md
 /app/datastore/
 *.jks
 *.keystore
+/*.apk
 
 # 本机样本生成和验证记录，音频样本仍需纳入版本控制
 /app/src/androidTest/assets/metadata/synthetic-fixture-provenance.txt

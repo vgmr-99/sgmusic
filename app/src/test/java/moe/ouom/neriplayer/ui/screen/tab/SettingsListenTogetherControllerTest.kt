@@ -8,25 +8,16 @@ import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.test.runTest
 import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.data.listentogether.ListenTogetherPreferences
 import moe.ouom.neriplayer.data.ltw.ListenTogetherSessionManager
-import moe.ouom.neriplayer.data.model.ltw.ListenTogetherServerTestResult
 import moe.ouom.neriplayer.data.model.ltw.session.ListenTogetherSessionState
 import moe.ouom.neriplayer.ui.screen.tab.settings.listentogether.SettingsListenTogetherController
-import moe.ouom.neriplayer.ui.screen.tab.settings.listentogether.isDefaultListenTogetherSettingsServer
 import moe.ouom.neriplayer.ui.screen.tab.settings.listentogether.listenTogetherIdentityDescriptionId
 import moe.ouom.neriplayer.ui.screen.tab.settings.listentogether.listenTogetherJoinButtonLabelId
 import moe.ouom.neriplayer.ui.screen.tab.settings.listentogether.listenTogetherJoinDescriptionId
 import moe.ouom.neriplayer.ui.screen.tab.settings.listentogether.listenTogetherNicknameDescription
-import moe.ouom.neriplayer.ui.screen.tab.settings.listentogether.listenTogetherServerDescriptionId
-import moe.ouom.neriplayer.ui.screen.tab.settings.listentogether.listenTogetherServerTestMessageId
-import moe.ouom.neriplayer.ui.screen.tab.settings.listentogether.normalizedSettingsListenTogetherServerInput
 import moe.ouom.neriplayer.ui.screen.tab.settings.listentogether.readSettingsListenTogetherClipboardText
-import moe.ouom.neriplayer.ui.screen.tab.settings.listentogether.settingsListenTogetherServerProbeRequest
 import moe.ouom.neriplayer.ui.screen.tab.settings.listentogether.validListenTogetherClipboardInvite
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -36,30 +27,6 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
 
 class SettingsListenTogetherControllerTest {
-    @Test
-    fun `server description follows normalized default address`() {
-        assertTrue(isDefaultListenTogetherSettingsServer(""))
-        assertTrue(isDefaultListenTogetherSettingsServer("https://neriplayer.hancat.work/"))
-        assertFalse(isDefaultListenTogetherSettingsServer("https://example.com"))
-        assertFalse(isDefaultListenTogetherSettingsServer("not-a-url"))
-        assertEquals("", normalizedSettingsListenTogetherServerInput(" "))
-        assertEquals("https://example.com",
-            normalizedSettingsListenTogetherServerInput("https://example.com/")
-        )
-        assertEquals(null, normalizedSettingsListenTogetherServerInput("not-a-url"))
-    }
-
-    @Test
-    fun `server probe request uses resolved default or normalized custom endpoint`() {
-        val defaultRequest = settingsListenTogetherServerProbeRequest("")
-        assertEquals("https://neriplayer.hancat.work", defaultRequest.endpoint)
-        assertTrue(defaultRequest.usingDefaultServer)
-
-        val customRequest = settingsListenTogetherServerProbeRequest("https://example.com")
-        assertEquals("https://example.com", customRequest.endpoint)
-        assertFalse(customRequest.usingDefaultServer)
-    }
-
     @Test
     fun `join prefill only accepts a complete invitation`() {
         val invite = "neriplayer://listen-together/join?roomId=GTV42X&secret=secret-value"
@@ -99,31 +66,7 @@ class SettingsListenTogetherControllerTest {
     }
 
     @Test
-    fun `server test messages distinguish default custom and malformed responses`() {
-        val reachable = ListenTogetherServerTestResult(ok = true, message = "reachable")
-        val malformed = ListenTogetherServerTestResult(ok = false, message = "invalid_response")
-        val unavailable = ListenTogetherServerTestResult(ok = false, message = "timeout")
-
-        assertEquals(
-            CoreCommonR.string.settings_listen_together_server_test_success_default,
-            listenTogetherServerTestMessageId(reachable, usingDefaultServer = true)
-        )
-        assertEquals(
-            CoreCommonR.string.settings_listen_together_server_test_success_custom,
-            listenTogetherServerTestMessageId(reachable, usingDefaultServer = false)
-        )
-        assertEquals(
-            CoreCommonR.string.settings_listen_together_server_test_invalid,
-            listenTogetherServerTestMessageId(malformed, usingDefaultServer = false)
-        )
-        assertEquals(
-            CoreCommonR.string.settings_listen_together_server_test_failed,
-            listenTogetherServerTestMessageId(unavailable, usingDefaultServer = true)
-        )
-    }
-
-    @Test
-    fun `room and server rows display the active restriction and endpoint`() {
+    fun `room rows display the active restriction`() {
         assertEquals(
             CoreCommonR.string.settings_listen_together_join_room_disabled,
             listenTogetherJoinDescriptionId(isInRoom = true)
@@ -139,14 +82,6 @@ class SettingsListenTogetherControllerTest {
         assertEquals(
             CoreCommonR.string.settings_listen_together_reset_identity_desc,
             listenTogetherIdentityDescriptionId(isInRoom = false)
-        )
-        assertEquals(
-            CoreCommonR.string.settings_listen_together_server_default_desc,
-            listenTogetherServerDescriptionId(usingDefault = true)
-        )
-        assertEquals(
-            CoreCommonR.string.settings_listen_together_server_custom_desc,
-            listenTogetherServerDescriptionId(usingDefault = false)
         )
         assertEquals(CoreCommonR.string.listen_together_joining_room,
             listenTogetherJoinButtonLabelId(joining = true)
@@ -219,81 +154,8 @@ class SettingsListenTogetherControllerTest {
         assertEquals("changedElsewhere", fixture.controller.nicknameInput)
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    @Test
-    fun `server probe reports custom endpoint success and clears loading state`() = runTest {
-        val result = ListenTogetherServerTestResult(ok = true, message = "reachable")
-        val fixture = controllerFixture(scope = this, serverProbe = { baseUrl ->
-            assertEquals("https://example.com", baseUrl)
-            result
-        })
-        `when`(fixture.resources.getString(CoreCommonR.string.settings_listen_together_server_test_success_custom))
-            .thenReturn("custom server available")
-
-        fixture.controller.updateServerInput("https://example.com/")
-        fixture.controller.testServer()
-        testScheduler.advanceUntilIdle()
-
-        assertEquals("custom server available", fixture.controller.serverTestMessage)
-        assertFalse(fixture.controller.serverTesting)
-    }
-
-    @OptIn(ExperimentalCoroutinesApi::class)
-    @Test
-    fun `server probe uses default endpoint for empty configuration`() = runTest {
-        val fixture = controllerFixture(scope = this, serverProbe = { baseUrl ->
-            assertEquals("https://neriplayer.hancat.work", baseUrl)
-            ListenTogetherServerTestResult(ok = true, message = "reachable")
-        })
-        `when`(fixture.resources.getString(CoreCommonR.string.settings_listen_together_server_test_success_default))
-            .thenReturn("default server available")
-
-        fixture.controller.testServer()
-        testScheduler.advanceUntilIdle()
-
-        assertEquals("default server available", fixture.controller.serverTestMessage)
-        assertFalse(fixture.controller.serverTesting)
-    }
-
-    @OptIn(ExperimentalCoroutinesApi::class)
-    @Test
-    fun `server probe keeps loading visible while suspended then clears it`() = runTest {
-        val fixture = controllerFixture(scope = this, serverProbe = {
-            delay(10)
-            ListenTogetherServerTestResult(ok = true, message = "reachable")
-        })
-        `when`(fixture.resources.getString(CoreCommonR.string.settings_listen_together_server_test_success_custom))
-            .thenReturn("custom server available")
-
-        fixture.controller.updateServerInput("https://example.com")
-        fixture.controller.testServer()
-        testScheduler.runCurrent()
-        assertTrue(fixture.controller.serverTesting)
-        testScheduler.advanceUntilIdle()
-
-        assertEquals("custom server available", fixture.controller.serverTestMessage)
-        assertFalse(fixture.controller.serverTesting)
-    }
-
-    @Test
-    fun `server probe clears loading when transport throws`() = runTest {
-        val fixture = controllerFixture(scope = this, serverProbe = {
-            throw IllegalStateException("offline")
-        })
-
-        val error = runCatching {
-            fixture.controller.testValidatedServer("https://example.com")
-        }.exceptionOrNull()
-
-        assertEquals("offline", error?.message)
-        assertFalse(fixture.controller.serverTesting)
-    }
-
     private fun controllerFixture(
-        scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
-        serverProbe: suspend (String) -> ListenTogetherServerTestResult = {
-            error("server probe was not expected")
-        }
+        scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
     ): ControllerFixture {
         val context = mock(Context::class.java)
         val resources = mock(Resources::class.java)
@@ -304,13 +166,9 @@ class SettingsListenTogetherControllerTest {
             resources = resources,
             scope = scope,
             preferences = mock(ListenTogetherPreferences::class.java),
-            serverProbe = serverProbe,
             sessionManager = mock(ListenTogetherSessionManager::class.java),
             sessionState = session,
-            workerBaseUrl = mutableStateOf(""),
-            workerBaseUrlInput = mutableStateOf(""),
             nickname = nickname,
-            serverInputState = mutableStateOf(""),
             nicknameInputState = mutableStateOf(""),
             onMessage = {}
         )

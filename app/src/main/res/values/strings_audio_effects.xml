@@ -53,6 +53,7 @@
     <string name="audio_effects_preset_treble_boost">高音增强</string>
     <string name="audio_effects_preset_warm">温暖黑胶</string>
     <string name="audio_effects_preset_live">现场演唱会</string>
+    <string name="audio_effects_preset_echo_room">回声空间</string>
     <string name="audio_effects_preset_concert_hall">音乐厅</string>
     <string name="audio_effects_preset_cinema">影院</string>
     <string name="audio_effects_preset_surround_3d">3D 环绕</string>
@@ -151,6 +152,12 @@
     <string name="audio_effects_reverb_room">房间大小</string>
     <string name="audio_effects_reverb_brightness">回声明亮度</string>
     <string name="audio_effects_reverb_predelay">回声延迟</string>
+    <string name="audio_effects_delay">延迟回声</string>
+    <string name="audio_effects_delay_desc">在干声之后叠加回声，主唱和歌词仍然对齐</string>
+    <string name="audio_effects_delay_time">回声时间</string>
+    <string name="audio_effects_delay_mix">回声强度</string>
+    <string name="audio_effects_delay_feedback">回声反馈</string>
+    <string name="audio_effects_delay_feedback_desc" formatted="false">反馈越高回声重复越多，超过 70% 会明显拖尾</string>
     <string name="audio_effects_mono_bass">低频居中</string>
     <string name="audio_effects_mono_bass_desc">把这个频率以下的低音合到中间，低音更集中有力</string>
     <string name="audio_effects_mono">单声道</string>
@@ -219,6 +226,12 @@
     <string name="audio_effects_per_output_desc">扬声器、有线耳机、蓝牙和 USB 各记住一套音效，切换设备时自动更换</string>
     <string name="audio_effects_usb_apply">USB 独占时也使用音效</string>
     <string name="audio_effects_usb_apply_desc">默认关闭以保持比特完美；开启「比特完美输出」时仍会跳过</string>
+    <string name="audio_effects_loudness_normalization">响度标准化</string>
+    <string name="audio_effects_loudness_normalization_desc">按 ITU-R BS.1770 测量响度，把不同素材拉到同一水平，切换歌曲时音量不再忽大忽小</string>
+    <string name="audio_effects_loudness_target">目标响度</string>
+    <string name="audio_effects_loudness_max_gain">最大补偿</string>
+    <string name="audio_effects_loudness_max_gain_desc">限制响度补偿的上限，避免过大的增益把安静的段落突然拉起来</string>
+    <string name="audio_effects_loudness_master_off">音效总开关关闭时响度标准化不会生效</string>
     <string name="audio_effects_reset_all">重置当前音效</string>
     <string name="audio_effects_reset_all_confirm">恢复为原声并清除当前设备的所有调整？「我的音效」中保存的内容不会删除</string>
     <string name="audio_effects_tab_presets">音效</string>

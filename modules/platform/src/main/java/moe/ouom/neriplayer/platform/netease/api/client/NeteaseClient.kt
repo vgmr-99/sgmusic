@@ -852,7 +852,11 @@ class NeteaseClient(
         return try {
             val code = JSONObject(resp).optInt("code", -1)
             if (code == 301 && hasLogin()) {
-                try { ensureWeapiSession() } catch (_: Exception) {}
+                try {
+                    ensureWeapiSession()
+                } catch (error: Exception) {
+                    NPLogger.w("NERI-NeteaseClient", "ensureWeapiSession failed before retry", error)
+                }
                 resp = call(usePersistedCookies = true)
             }
             resp
@@ -1427,10 +1431,16 @@ class NeteaseClient(
         try {
             val code = JSONObject(resp).optInt("code", 200)
             if (code == 301 && this.hasLogin()) {
-                try { this.ensureWeapiSession() } catch (_: Exception) {}
+                try {
+                    this.ensureWeapiSession()
+                } catch (error: Exception) {
+                    NPLogger.w("NERI-NeteaseClient", "ensureWeapiSession failed before retry", error)
+                }
                 resp = call()
             }
-        } catch (_: Exception) { }
+        } catch (error: Exception) {
+            NPLogger.w("NERI-NeteaseClient", "Failed to inspect response code for weapi retry", error)
+        }
         return resp
     }
 

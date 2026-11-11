@@ -25,6 +25,7 @@ import moe.ouom.neriplayer.ui.screen.download.DownloadManagerScreen
 import moe.ouom.neriplayer.ui.screen.download.DownloadProgressScreen
 import moe.ouom.neriplayer.ui.screen.history.RecentScreen
 import moe.ouom.neriplayer.ui.screen.history.stats.PlaybackStatsScreen
+import moe.ouom.neriplayer.ui.screen.history.stats.WrappedScreen
 import moe.ouom.neriplayer.ui.screen.debug.BiliApiProbeScreen
 import moe.ouom.neriplayer.ui.screen.debug.CrashLogListScreen
 import moe.ouom.neriplayer.ui.screen.debug.ListenTogetherDebugScreen
@@ -693,6 +694,28 @@ private fun NavGraphBuilder.registerLibraryDetailRoutes(
                 onBack = { navController.popBackStack() },
                 onSongClick = onSongClick,
                 offlineMode = offlineMode
+            )
+        }
+    }
+
+    composable(
+        route = Destinations.Wrapped.route,
+        enterTransition = {
+            transparentDetailEnterTransition(coherentFeedbackEnabled)
+        },
+        exitTransition = {
+            transparentDetailExitTransition(coherentFeedbackEnabled)
+        },
+        popEnterTransition = {
+            transparentDetailPopEnterTransition(coherentFeedbackEnabled)
+        },
+        popExitTransition = {
+            transparentDetailPopExitTransition(coherentFeedbackEnabled)
+        }
+    ) {
+        renderScene(Destinations.Wrapped.route) {
+            WrappedScreen(
+                onBack = { navController.popBackStack() }
             )
         }
     }

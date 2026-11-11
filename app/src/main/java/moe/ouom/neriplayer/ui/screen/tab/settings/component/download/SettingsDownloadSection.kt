@@ -69,6 +69,8 @@ import kotlinx.coroutines.launch
 import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.core.download.GlobalDownloadManager
 import moe.ouom.neriplayer.core.player.download.network.MAX_DOWNLOAD_PARALLELISM
+import moe.ouom.neriplayer.data.model.settings.download.MAX_SMART_DOWNLOAD_MAX_COUNT
+import moe.ouom.neriplayer.data.model.settings.download.SMART_DOWNLOAD_PLAY_COUNT_THRESHOLD_RANGE
 import moe.ouom.neriplayer.core.player.download.network.normalizeDownloadParallelism
 import moe.ouom.neriplayer.data.settings.AutoSettingsSchema
 import moe.ouom.neriplayer.data.settings.autoSettingFlow
@@ -163,6 +165,14 @@ private fun SettingsDownloadExpandedContent(
         Spacer(modifier = Modifier.height(4.dp))
 
         DownloadParallelismSettingItem(
+            highlightTargetId = highlightTargetId,
+            highlightPulse = highlightPulse,
+            onHighlightFinished = onHighlightFinished
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        SmartDownloadSettingItem(
             highlightTargetId = highlightTargetId,
             highlightPulse = highlightPulse,
             onHighlightFinished = onHighlightFinished
@@ -523,6 +533,109 @@ private fun DownloadAudioQualityListItem(
         highlightPulse = highlightPulse,
         onHighlightFinished = onHighlightFinished
     )
+}
+
+@Composable
+private fun SmartDownloadSettingItem(
+    highlightTargetId: String?,
+    highlightPulse: Int,
+    onHighlightFinished: (() -> Unit)?
+) {
+    val enabledSetting = AutoSettingsSchema.download.smartDownloadEnabled
+    val thresholdSetting = AutoSettingsSchema.download.smartDownloadPlayCountThreshold
+    val maxCountSetting = AutoSettingsSchema.download.smartDownloadMaxCount
+    val repository = rememberAutoSettingSpecRepository()
+    val scope = rememberCoroutineScope()
+
+    val enabledFlow = remember(repository, enabledSetting) { repository.flow(enabledSetting) }
+    val thresholdFlow = remember(repository, thresholdSetting) { repository.flow(thresholdSetting) }
+    val maxCountFlow = remember(repository, maxCountSetting) { repository.flow(maxCountSetting) }
+
+    val enabled by enabledFlow.collectAsState(initial = enabledSetting.defaultValue)
+    val threshold by thresholdFlow.collectAsState(initial = thresholdSetting.defaultValue)
+    val maxCount by maxCountFlow.collectAsState(initial = maxCountSetting.defaultValue)
+
+    val normalizedThreshold = threshold.coerceIn(
+        SMART_DOWNLOAD_PLAY_COUNT_THRESHOLD_RANGE.first,
+        SMART_DOWNLOAD_PLAY_COUNT_THRESHOLD_RANGE.last
+    )
+    val normalizedMaxCount = maxCount.coerceIn(1, MAX_SMART_DOWNLOAD_MAX_COUNT)
+
+    var thresholdSlider by remember { mutableFloatStateOf(normalizedThreshold.toFloat()) }
+    var maxCountSlider by remember { mutableFloatStateOf(normalizedMaxCount.toFloat()) }
+
+    LaunchedEffect(normalizedThreshold) {
+        if (thresholdSlider.roundToInt() != normalizedThreshold) {
+            thresholdSlider = normalizedThreshold.toFloat()
+        }
+    }
+    LaunchedEffect(normalizedMaxCount) {
+        if (maxCountSlider.roundToInt() != normalizedMaxCount) {
+            maxCountSlider = normalizedMaxCount.toFloat()
+        }
+    }
+
+    Column {
+        AutoSettingSpecListItem(
+            setting = enabledSetting,
+            highlightTargetId = highlightTargetId,
+            highlightPulse = highlightPulse,
+            onHighlightFinished = onHighlightFinished,
+            supportingContent = {
+                if (enabled) {
+                    Text(
+                        text = stringResource(
+                            CoreCommonR.string.settings_smart_download_threshold_current,
+                            normalizedThreshold
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    MiuixSettingsSlider(
+                        value = thresholdSlider,
+                        onValueChange = { value ->
+                            thresholdSlider = value.coerceIn(
+                                SMART_DOWNLOAD_PLAY_COUNT_THRESHOLD_RANGE.first.toFloat(),
+                                SMART_DOWNLOAD_PLAY_COUNT_THRESHOLD_RANGE.last.toFloat()
+                            )
+                        },
+                        onValueChangeFinished = {
+                            val next = thresholdSlider.roundToInt().coerceIn(
+                                SMART_DOWNLOAD_PLAY_COUNT_THRESHOLD_RANGE.first,
+                                SMART_DOWNLOAD_PLAY_COUNT_THRESHOLD_RANGE.last
+                            )
+                            thresholdSlider = next.toFloat()
+                            scope.launch { repository.set(thresholdSetting, next) }
+                        },
+                        valueRange = SMART_DOWNLOAD_PLAY_COUNT_THRESHOLD_RANGE.first.toFloat()..
+                            SMART_DOWNLOAD_PLAY_COUNT_THRESHOLD_RANGE.last.toFloat(),
+                        steps = SMART_DOWNLOAD_PLAY_COUNT_THRESHOLD_RANGE.count() - 2
+                    )
+                    Text(
+                        text = stringResource(
+                            CoreCommonR.string.settings_smart_download_max_count_current,
+                            normalizedMaxCount
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    MiuixSettingsSlider(
+                        value = maxCountSlider,
+                        onValueChange = { value ->
+                            maxCountSlider = value.coerceIn(1f, MAX_SMART_DOWNLOAD_MAX_COUNT.toFloat())
+                        },
+                        onValueChangeFinished = {
+                            val next = maxCountSlider.roundToInt().coerceIn(1, MAX_SMART_DOWNLOAD_MAX_COUNT)
+                            maxCountSlider = next.toFloat()
+                            scope.launch { repository.set(maxCountSetting, next) }
+                        },
+                        valueRange = 1f..MAX_SMART_DOWNLOAD_MAX_COUNT.toFloat(),
+                        steps = MAX_SMART_DOWNLOAD_MAX_COUNT - 2
+                    )
+                }
+            }
+        )
+    }
 }
 
 @Composable

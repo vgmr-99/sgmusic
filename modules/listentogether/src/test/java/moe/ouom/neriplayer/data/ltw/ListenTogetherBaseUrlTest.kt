@@ -13,10 +13,9 @@ import org.junit.Test
 class ListenTogetherBaseUrlTest {
 
     @Test
-    fun `invite join falls back through normalized saved server to bundled default`() {
+    fun `invite join falls back to bundled default when invite has no usable server`() {
         val invite = ListenTogetherInvite(roomId = "room", baseUrl = "invalid")
-        assertEquals("https://saved.example.com", resolveListenTogetherInviteJoinBaseUrl(invite, "invalid", "https://saved.example.com/"))
-        assertEquals("https://neriplayer.hancat.work", resolveListenTogetherInviteJoinBaseUrl(invite, null, "invalid"))
+        assertEquals("https://neriplayer.hancat.work", resolveListenTogetherInviteJoinBaseUrl(invite))
     }
 
     @Test
@@ -49,7 +48,7 @@ class ListenTogetherBaseUrlTest {
     }
 
     @Test
-    fun `invite join base url prefers invite server over saved server`() {
+    fun `invite join base url prefers invite server over bundled default`() {
         val invite = ListenTogetherInvite(
             roomId = "GTV42X",
             baseUrl = "https://neriplayerltw.cwuomcwuom.workers.dev"
@@ -57,25 +56,17 @@ class ListenTogetherBaseUrlTest {
 
         assertEquals(
             "https://neriplayerltw.cwuomcwuom.workers.dev",
-            resolveListenTogetherInviteJoinBaseUrl(
-                invite = invite,
-                savedBaseUrlInput = "https://saved.example.com",
-                savedBaseUrl = "https://normalized.example.com"
-            )
+            resolveListenTogetherInviteJoinBaseUrl(invite)
         )
     }
 
     @Test
-    fun `invite join base url falls back to saved server when invite has none`() {
+    fun `invite join base url falls back to bundled default when invite has none`() {
         val invite = ListenTogetherInvite(roomId = "GTV42X")
 
         assertEquals(
-            "https://saved.example.com",
-            resolveListenTogetherInviteJoinBaseUrl(
-                invite = invite,
-                savedBaseUrlInput = "https://saved.example.com/",
-                savedBaseUrl = null
-            )
+            "https://neriplayer.hancat.work",
+            resolveListenTogetherInviteJoinBaseUrl(invite)
         )
     }
 

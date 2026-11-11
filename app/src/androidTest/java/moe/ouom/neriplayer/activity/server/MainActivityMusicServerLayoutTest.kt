@@ -84,8 +84,6 @@ import moe.ouom.neriplayer.platform.subsonic.repository.ServerLibraryCategory
 import moe.ouom.neriplayer.testutil.grantRuntimePermissions
 import moe.ouom.neriplayer.testutil.playbackRuntimePermissions
 import moe.ouom.neriplayer.ui.screen.server.captureMusicServerBitmap
-import moe.ouom.neriplayer.ui.screen.tab.settings.page.SettingsPage
-import moe.ouom.neriplayer.ui.screen.tab.settings.page.settingsPageRowTestTag
 import moe.ouom.neriplayer.ui.theme.NeriMotionStyle
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -104,14 +102,10 @@ class MainActivityMusicServerLayoutTest {
 
     @Test fun cleanBrowserUsesRealLibraryInsets() = browserInsets(UiStyle.Clean)
     @Test fun materialBrowserUsesRealLibraryInsets() = browserInsets(UiStyle.Material)
-    @Test fun cleanSettingsCardsMatchExistingAccountInsets() = settingsInsets(UiStyle.Clean)
-    @Test fun materialSettingsCardsMatchExistingAccountInsets() = settingsInsets(UiStyle.Material)
     @Test fun cleanAlbumUsesDetailLayoutAndRestoresBrowser() = albumNavigation(UiStyle.Clean)
     @Test fun materialAlbumUsesDetailLayoutAndRestoresBrowser() = albumNavigation(UiStyle.Material)
     @Test fun cleanDarkBrowserUsesRealLibraryInsets() = browserInsets(UiStyle.Clean, dark = true)
     @Test fun materialDarkBrowserUsesRealLibraryInsets() = browserInsets(UiStyle.Material, dark = true)
-    @Test fun cleanDarkSettingsCardsMatchExistingAccountInsets() = settingsInsets(UiStyle.Clean, dark = true)
-    @Test fun materialDarkSettingsCardsMatchExistingAccountInsets() = settingsInsets(UiStyle.Material, dark = true)
     @Test fun cleanDarkAlbumUsesDetailLayoutAndRestoresBrowser() = albumNavigation(UiStyle.Clean, dark = true)
     @Test fun materialDarkAlbumUsesDetailLayoutAndRestoresBrowser() = albumNavigation(UiStyle.Material, dark = true)
     @Test fun albumMoreMenuCompletesARealWifiDownload() = downloadFromAlbumMenu()
@@ -376,37 +370,6 @@ class MainActivityMusicServerLayoutTest {
         assertTrue("server songs must not add a second page inset",
             songTitle.boundsInRoot.left - songRow.left <= dp(92f))
         capture(session, "songs")
-        assertAppChrome()
-    }
-
-    private fun settingsInsets(style: UiStyle, dark: Boolean = false) = withRealActivity(style, "accounts", settingsStart = true, dark = dark) { session ->
-        composeRule.onNodeWithTag(settingsPageRowTestTag(SettingsPage.Accounts))
-            .performScrollTo().performClick()
-        val existingCard = composeRule.onNodeWithTag("settingsAccountCard:netease")
-        await { existingCard.isDisplayed() }
-        val existingBounds = existingCard.fetchSemanticsNode().boundsInRoot
-        val existingButton = composeRule.onNodeWithTag("settingsAccountLogin:netease")
-            .fetchSemanticsNode().boundsInRoot
-        val referenceInset = existingBounds.right - existingButton.right
-        val card = composeRule.onNodeWithTag("settingsMusicServerCard")
-        card.performScrollTo()
-        await { card.isDisplayed() }
-        val bounds = card.fetchSemanticsNode().boundsInRoot
-        val manage = clickableBounds(visibleText(text(CoreCommonR.string.server_manage_accounts)).fetchSemanticsNode())
-        assertEquals("server settings entry must use the existing account card's action inset",
-            referenceInset, bounds.right - manage.right, 2f)
-        val manageButton = unobscuredAppContentTarget { clickableText(text(CoreCommonR.string.server_manage_accounts)) }
-        capture(session, "accounts")
-        manageButton.performTouchInput { click() }
-        val profileCard = composeRule.onNodeWithTag("serverAccount:${session.profile.id}")
-        await { composeRule.onNodeWithTag("serverAccountIntro").isDisplayed() || profileCard.isDisplayed() }
-        profileCard.performScrollTo()
-        await { profileCard.isDisplayed() }
-        val accountBounds = profileCard.fetchSemanticsNode().boundsInRoot
-        val label = visibleText(session.profile.label).fetchSemanticsNode().boundsInRoot
-        capture(session, "server-settings")
-        assertTrue("saved server profile text needs the shared settings card's inner inset",
-            label.left - accountBounds.left >= referenceInset - 2f)
         assertAppChrome()
     }
 

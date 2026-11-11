@@ -199,7 +199,8 @@ class SettingsBackupSyncPreferenceUiTest {
                     SettingsBackupRestoreSection(
                         expanded = true, arrowRotation = 0f, onExpandedChange = {}, showHeader = false,
                         currentPlaylistCount = 0, backupRestoreUiState = BackupRestoreUiState(), configTransferUiState = configState.value,
-                        onExportClick = {}, onImportClick = {}, onExportConfigClick = {}, onImportConfigClick = {},
+                        onExportClick = {}, onImportClick = {}, onImportM3uClick = {},
+                        onExportConfigClick = {}, onImportConfigClick = {},
                         onClearExportStatus = {}, onClearImportStatus = {}, onClearConfigExportStatus = {}, onClearConfigImportStatus = {},
                         autoSettingsRepository = repository, scope = rememberCoroutineScope(),
                         showGitHubConfigDialog = false, showWebDavConfigDialog = false,

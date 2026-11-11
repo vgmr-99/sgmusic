@@ -772,13 +772,6 @@ internal fun manualSettingsSearchEntries(resources: Resources): List<SettingsSea
         ),
         entry(
             page = SettingsPage.ListenTogether,
-            titleRes = CoreCommonR.string.settings_listen_together_server_title,
-            descriptionRes = CoreCommonR.string.settings_listen_together_expand,
-            id = "listen_together_server",
-            aliases = listOf("listen together", "lt", "worker", "room", "server", "url", "yiqiting")
-        ),
-        entry(
-            page = SettingsPage.ListenTogether,
             titleRes = CoreCommonR.string.settings_listen_together_default_nickname_title,
             descriptionRes = CoreCommonR.string.listen_together_nickname,
             id = "listen_together_nickname",

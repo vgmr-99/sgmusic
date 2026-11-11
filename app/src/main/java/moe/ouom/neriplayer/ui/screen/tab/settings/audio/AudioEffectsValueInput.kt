@@ -47,6 +47,7 @@ internal object AudioEffectsInputs {
     val Hz = AudioEffectsValueInput("Hz", 0)
     val Ms = AudioEffectsValueInput("ms", 1)
     val Ratio = AudioEffectsValueInput(":1", 1)
+    val Lufs = AudioEffectsValueInput("LUFS", 0)
     val Multiplier = AudioEffectsValueInput("x", 2)
     val Semitones = AudioEffectsValueInput("", 1)
     val Plain = AudioEffectsValueInput("", 2)
