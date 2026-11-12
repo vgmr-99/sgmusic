@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteForever
+import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -43,18 +44,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.util.concurrent.atomic.AtomicBoolean
 import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.core.di.AppContainer
 import moe.ouom.neriplayer.data.settings.SettingsRepository
+import moe.ouom.neriplayer.platform.lxsource.CurrentScriptInfo
+import moe.ouom.neriplayer.platform.lxsource.LxQualityProbe
+import moe.ouom.neriplayer.platform.lxsource.LxSourceItem
 import moe.ouom.neriplayer.platform.lxsource.LxSourceState
+import moe.ouom.neriplayer.platform.lxsource.LxSourceTestReport
+import moe.ouom.neriplayer.platform.lxsource.LxTestMode
 import moe.ouom.neriplayer.ui.feedback.AppFeedback
 import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsSwitch
 import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsTextButton
 
 /**
- * LX 自定义源兜底 页：总开关 + 脚本列表（导入、启停、删除）。
+ * LX 自定义源兜底 页：脚本列表（导入、启停、删除、检测）。
  * 脚本状态三态：OK（已 init）/ FAIL（脚本报错，error 展示）/ DISABLED（停用）。
  */
 @Composable
@@ -71,6 +79,11 @@ internal fun SettingsLxSourceSection(
     val scripts by lxRepository.items.collectAsStateWithLifecycle()
     var importing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var testPhase by remember { mutableStateOf<LxTestPhase?>(null) }
+    var testTarget by remember { mutableStateOf<LxSourceItem?>(null) }
+    var testProbes by remember { mutableStateOf<List<LxQualityProbe>>(emptyList()) }
+    var testReport by remember { mutableStateOf<LxSourceTestReport?>(null) }
+    val testCancelFlag = remember { AtomicBoolean(false) }
 
     val scriptPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -91,6 +104,38 @@ internal fun SettingsLxSourceSection(
         }
     }
 
+    /**
+     * 音质检测：在独立实例里跑脚本，按"平台 × 音质"逐项验证能否换出可用的播放地址。
+     */
+    fun startTest(item: LxSourceItem, mode: LxTestMode) {
+        if (testPhase == LxTestPhase.RUNNING) return
+        testTarget = item
+        testProbes = emptyList()
+        testReport = null
+        testCancelFlag.set(false)
+        testPhase = LxTestPhase.RUNNING
+        AppContainer.launchBackgroundIo {
+            val report = runCatching {
+                AppContainer.lxSourceTester.test(
+                    scriptText = item.scriptText,
+                    scriptInfo = CurrentScriptInfo(name = item.name),
+                    mode = mode,
+                    onProgress = { probe -> testProbes = testProbes + probe },
+                    isCancelled = { testCancelFlag.get() }
+                )
+            }.getOrElse { error ->
+                LxSourceTestReport(
+                    sourceName = item.name,
+                    initialized = false,
+                    initError = error.message ?: error.toString()
+                )
+            }
+            testProbes = report.probes
+            testReport = report
+            testPhase = LxTestPhase.RESULT
+        }
+    }
+
     Column(modifier = modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             text = stringResource(CoreCommonR.string.settings_lx_source_desc),
@@ -99,29 +144,48 @@ internal fun SettingsLxSourceSection(
             modifier = Modifier.padding(vertical = 8.dp)
         )
 
-        // LX 总开关已移除：脚本只要存在（已启用）即可作为自动箤底；其启用状态由脚本行开关决定
-        MiuixSettingsTextButton(onClick = { scriptPicker.launch(arrayOf("text/javascript", "text/plain", "*/*")) }) {
-            Text(stringResource(CoreCommonR.string.settings_lx_import_file))
-        }
-        MiuixSettingsTextButton(
-            onClick = {
-                if (importing) return@MiuixSettingsTextButton
-                importing = true
-                AppContainer.launchBackgroundIo {
-                    val result = runCatching {
-                        val text = context.assets.open("script/example-source.js").bufferedReader().use { it.readText() }
-                        LxScriptImporter.import(lxRepository, "example-source.js", text)
-                    }
-                    importing = false
-                    errorMessage = result.exceptionOrNull()?.message
-                        ?: result.getOrNull()?.errorMessage
-                    if (result.isSuccess) {
-                        AppFeedback.showToast(context, context.getString(CoreCommonR.string.settings_lx_imported))
-                    }
-                }
-            }
+        // 两个导入入口并排，避免长列表里被拉开距离
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(stringResource(CoreCommonR.string.settings_lx_import_example))
+            MiuixSettingsTextButton(
+                onClick = { scriptPicker.launch(arrayOf("text/javascript", "text/plain", "*/*")) },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = stringResource(CoreCommonR.string.settings_lx_import_file),
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            MiuixSettingsTextButton(
+                onClick = {
+                    if (importing) return@MiuixSettingsTextButton
+                    importing = true
+                    AppContainer.launchBackgroundIo {
+                        val result = runCatching {
+                            val text = context.assets.open("script/example-source.js").bufferedReader().use { it.readText() }
+                            LxScriptImporter.import(lxRepository, "example-source.js", text)
+                        }
+                        importing = false
+                        errorMessage = result.exceptionOrNull()?.message
+                            ?: result.getOrNull()?.errorMessage
+                        if (result.isSuccess) {
+                            AppFeedback.showToast(context, context.getString(CoreCommonR.string.settings_lx_imported))
+                        }
+                    }
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = stringResource(CoreCommonR.string.settings_lx_import_example),
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
 
         errorMessage?.let { msg ->
@@ -164,6 +228,20 @@ internal fun SettingsLxSourceSection(
                     },
                     trailingContent = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = {
+                                    testTarget = item
+                                    testProbes = emptyList()
+                                    testReport = null
+                                    testPhase = LxTestPhase.CHOOSE
+                                },
+                                enabled = testPhase == null
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Science,
+                                    contentDescription = stringResource(CoreCommonR.string.settings_lx_test_action)
+                                )
+                            }
                             MiuixSettingsSwitch(
                                 checked = item.enabled,
                                 onCheckedChange = { next ->
@@ -175,6 +253,27 @@ internal fun SettingsLxSourceSection(
                             }
                         }
                     }
+                )
+            }
+        }
+
+        testPhase?.let { phase ->
+            val target = testTarget
+            if (target != null) {
+                LxSourceTestDialog(
+                    sourceName = target.name,
+                    phase = phase,
+                    probes = testProbes,
+                    report = testReport,
+                    onStart = { mode -> startTest(item = target, mode = mode) },
+                    onCancel = {
+                        if (phase == LxTestPhase.RUNNING) {
+                            testCancelFlag.set(true)
+                        } else {
+                            testPhase = null
+                        }
+                    },
+                    onDismiss = { testPhase = null }
                 )
             }
         }

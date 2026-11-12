@@ -134,13 +134,19 @@ class LxRuntime(
         platform: LxPlatform,
         quality: LxQuality,
         timeoutMs: Long = 20_000,
+        hash: String = "",
     ): LxResult<String> = withContext(jsDispatcher) {
         val ctx = ctxRef.get() ?: return@withContext LxResult.Err("no_ctx", "runtime not inited")
         try {
             val payload = JSONObject(mapOf(
                 "action" to "musicUrl",
                 "source" to platform.code,
-                "info" to mapOf("songmid" to songMid, "hash" to "", "type" to quality.code)
+                "info" to mapOf(
+                    "songmid" to songMid,
+                    // 酷狗等平台的取流接口认 hash，两个字段都带上，兼容不同脚本的取值习惯
+                    "hash" to hash,
+                    "type" to quality.code
+                )
             )).toString()
             val escaped = payload.replace("\\", "\\\\").replace("\"", "\\\"")
             ctx.evaluate("globalThis.__lx_req = JSON.parse(\"$escaped\");")
@@ -159,8 +165,68 @@ class LxRuntime(
             if (last.isEmpty() || last == "{}") {
                 return@withContext LxResult.Err("timeout", "musicUrl timeout or empty")
             }
-            val url = JSONObject(last).optString("url", "")
+            val payloadJson = JSONObject(last)
+            payloadJson.optString("error").takeIf { it.isNotBlank() }?.let {
+                return@withContext LxResult.Err("script_error", it)
+            }
+            val url = payloadJson.optString("url", "")
             if (url.isEmpty()) LxResult.Err("empty", last) else LxResult.Ok(url)
+        } catch (e: Exception) {
+            LxResult.Err("request_fail", (e.message ?: e.toString()))
+        }
+    }
+
+    /**
+     * 通用请求：按 action 派发给脚本并等待结果。
+     *
+     * 音源接口自检用它逐个探测 search/musicUrl/lyric/pic，
+     * 结果统一从 __lx_lastResults[action] 取。
+     */
+    suspend fun request(
+        action: String,
+        source: LxPlatform,
+        info: JSONObject,
+        timeoutMs: Long = 12_000,
+    ): LxResult<String> = withContext(jsDispatcher) {
+        val ctx = ctxRef.get() ?: return@withContext LxResult.Err("no_ctx", "runtime not inited")
+        try {
+            val payload = JSONObject()
+                .put("action", action)
+                .put("source", source.code)
+                .put("info", info)
+                .toString()
+            val escaped = payload.replace("\\", "\\\\").replace("\"", "\\\"")
+            ctx.evaluate("globalThis.__lx_req = JSON.parse(\"$escaped\");")
+            ctx.evaluate("globalThis.__lx_lastResults = {};")
+            ctx.evaluate(
+                "try { globalThis.__lx_dispatch(globalThis.__lx_req); } " +
+                    "catch (e) { globalThis.__lx_lastResults = { error: String(e) }; }"
+            )
+            val pump = "if (globalThis.__lx_tickTimers) globalThis.__lx_tickTimers();"
+            val deadline = System.currentTimeMillis() + timeoutMs
+            var last = ""
+            while (System.currentTimeMillis() < deadline) {
+                ctx.evaluate(pump)
+                val v = ctx.evaluate("JSON.stringify(globalThis.__lx_lastResults || {})")
+                if (v is String) last = v
+                if (last.isNotEmpty() && last != "{}") break
+                pumpSleep(80)
+            }
+            if (last.isEmpty() || last == "{}") {
+                return@withContext LxResult.Err("timeout", "$action timeout or empty")
+            }
+            val payloadJson = JSONObject(last)
+            if (!payloadJson.has(action)) {
+                return@withContext LxResult.Err("no_result", "$action 没有返回结果")
+            }
+            val value = payloadJson.opt(action)
+            if (value == null || value === JSONObject.NULL) {
+                return@withContext LxResult.Err("no_result", "$action 没有返回内容")
+            }
+            if (value is JSONObject && value.has("error")) {
+                return@withContext LxResult.Err("script_error", value.optString("error"))
+            }
+            LxResult.Ok(value.toString())
         } catch (e: Exception) {
             LxResult.Err("request_fail", (e.message ?: e.toString()))
         }
@@ -206,6 +272,11 @@ class LxRuntime(
             }
             if (last.isEmpty() || last == "{}") {
                 return@withContext LxResult.Err("timeout", "search timeout or empty")
+            }
+            // 脚本 reject 会带上 error 字段，这里直接透传给调用方，避免把"不支持"误报成超时
+            val errorMessage = runCatching { JSONObject(last).optString("error") }.getOrNull().orEmpty()
+            if (errorMessage.isNotBlank()) {
+                return@withContext LxResult.Err("script_error", errorMessage)
             }
             LxResult.Ok(parseSearchCandidates(last))
         } catch (e: Exception) {

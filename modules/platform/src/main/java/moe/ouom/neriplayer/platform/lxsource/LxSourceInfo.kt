@@ -35,6 +35,7 @@ enum class LxPlatform(val code: String) {
     TX("tx"),
     WY("wy"),
     MG("mg"),
+    QS("qs"),
     LOCAL("local"),
 }
 
@@ -42,7 +43,12 @@ enum class LxQuality(val code: String) {
     Q128("128k"),
     Q320("320k"),
     FLAC("flac"),
-    FLAC24("flac24bit"),
+    FLAC24("flac24bit");
+
+    companion object {
+        /** 界面展示顺序固定：128k -> 320k -> 无损 -> 母带 */
+        val STANDARD_ORDER: List<LxQuality> = listOf(Q128, Q320, FLAC, FLAC24)
+    }
 }
 
 data class CurrentScriptInfo(

@@ -55,12 +55,26 @@
   globalThis.__lx_dispatch = function (opts) {
     const r = handlers.request && handlers.request(opts);
     if (r && typeof r.then === "function") {
+      const onFail = (e) => {
+        // 脚本 reject 说明这个接口没实现或出错，落盘后宿主能立刻判定，而不是一直等到超时
+        const action = opts && opts.action;
+        const message = String((e && e.message) ? e.message : e);
+        globalThis.__lx_lastResults = globalThis.__lx_lastResults || {};
+        if (action) globalThis.__lx_lastResults[action] = { error: message };
+        if (action === "musicUrl") globalThis.__lx_lastMusicUrl = { error: message };
+        else if (action === "search") globalThis.__lx_search_result = { error: message };
+        throw e;
+      };
       return r.then((v) => {
         const action = opts && opts.action;
         if (action === "musicUrl") globalThis.__lx_lastMusicUrl = v;
         else if (action === "search") globalThis.__lx_search_result = v;
+        // 通用结果槽：接口自检要按 action 取 lyric/pic 等接口的结果
+        // 未实现的接口会返回 undefined，这里归一成 null，宿主才能立刻判定"没实现"
+        globalThis.__lx_lastResults = globalThis.__lx_lastResults || {};
+        if (action) globalThis.__lx_lastResults[action] = v === undefined ? null : v;
         return v;
-      });
+      }, onFail);
     }
     return r;
   };
