@@ -42,6 +42,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -69,6 +70,8 @@ internal data class PlatformBrowseState(
     val cards: List<PlatformBrowseCard> = emptyList(),
     val loading: Boolean = false,
     val error: String? = null,
+    val categories: List<String> = emptyList(),
+    val selectedCategory: String = "",
     val trackTitle: String = "",
     val tracks: List<PlatformSearchResult> = emptyList(),
     val tracksLoading: Boolean = false
@@ -84,6 +87,7 @@ internal data class PlatformBrowseState(
 internal fun PlatformBrowseContent(
     browse: PlatformBrowseState,
     onCardClick: (PlatformBrowseCard) -> Unit,
+    onCategoryClick: (String) -> Unit,
     onTrackClick: (PlatformSearchResult) -> Unit,
     onCloseTracks: () -> Unit,
     onPlayTrackNow: (PlatformSearchResult) -> Unit,
@@ -101,6 +105,7 @@ internal fun PlatformBrowseContent(
     PlatformBrowseCardGrid(
         browse = browse,
         onCardClick = onCardClick,
+        onCategoryClick = onCategoryClick,
         isTabletLayout = isTabletLayout
     )
 }
@@ -109,6 +114,7 @@ internal fun PlatformBrowseContent(
 private fun PlatformBrowseCardGrid(
     browse: PlatformBrowseState,
     onCardClick: (PlatformBrowseCard) -> Unit,
+    onCategoryClick: (String) -> Unit,
     isTabletLayout: Boolean
 ) {
     val miniPlayerHeight = LocalMiniPlayerHeight.current
@@ -127,6 +133,38 @@ private fun PlatformBrowseCardGrid(
         ),
         modifier = Modifier.exploreCenteredMaxWidth(ExploreBrowseContentMaxWidth)
     ) {
+        if (browse.categories.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    browse.categories.forEach { category ->
+                        val selected = category == browse.selectedCategory
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHighest
+                            },
+                            onClick = { onCategoryClick(category) }
+                        ) {
+                            Text(
+                                text = category,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
         when {
             browse.loading -> item(span = { GridItemSpan(maxLineSpan) }) {
                 Box(

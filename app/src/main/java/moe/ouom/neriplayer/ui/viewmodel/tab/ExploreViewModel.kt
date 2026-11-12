@@ -232,6 +232,7 @@ data class ExploreUiState(
     val platformBrowseCards: List<PlatformBrowseCard> = emptyList(),
     val platformBrowseLoading: Boolean = false,
     val platformBrowseError: UiText? = null,
+    val platformBrowseCategory: String = "",
     /** 展开中的榜单及其曲目 */
     val platformBrowseTracks: List<PlatformSearchResult> = emptyList(),
     val platformBrowseTracksLoading: Boolean = false,
@@ -870,19 +871,21 @@ private var platformBrowseJob: Job? = null
      * 网易云走精品歌单，其它平台走各自的榜单，
      * 语义上都是"一组可浏览的集合"，界面才能共用同一套渲染。
      */
-    fun loadPlatformBrowse(source: SearchSource) {
+    fun loadPlatformBrowse(source: SearchSource, category: String? = null) {
         val api = platformBrowseApiFor(source) ?: return
-        if (platformBrowseJob?.isActive == true) return
+        val realCategory = category ?: _uiState.value.platformBrowseCategory
+        if (platformBrowseJob?.isActive == true && realCategory == _uiState.value.platformBrowseCategory) return
         _uiState.value = _uiState.value.copy(
             platformBrowseLoading = true,
             platformBrowseError = null,
+            platformBrowseCategory = realCategory,
             platformBrowseCards = emptyList(),
             platformBrowseTracks = emptyList(),
             platformBrowseTrackTitle = ""
         )
         platformBrowseJob = viewModelScope.launch {
             try {
-                val cards = api.browse(api.categories.firstOrNull().orEmpty())
+                val cards = api.browse(realCategory)
                 _uiState.value = _uiState.value.copy(
                     platformBrowseLoading = false,
                     platformBrowseError = null,
@@ -944,8 +947,13 @@ private var platformBrowseJob: Job? = null
     private fun platformBrowseApiFor(source: SearchSource): PlatformBrowseApi? = when (source) {
         SearchSource.KUGOU -> AppContainer.kugouBrowseApi
         SearchSource.QQ_MUSIC -> AppContainer.qqBrowseApi
+        SearchSource.QISHUI -> AppContainer.qishuiBrowseApi
         else -> null
     }
+
+    /** 平台浏览页的分类标签 */
+    fun platformBrowseCategories(source: SearchSource): List<String> =
+        platformBrowseApiFor(source)?.categories.orEmpty()
 
     /**
      * 搜索网易云歌曲。

@@ -1,15 +1,30 @@
-// example-source.js — 仅为跑通链路的占位脚本，不含真实音源
-// 导入后应该能：inited -> sources kw/kg/tx/wy/mg。musicUrl 返回 example.com 的可打开地址
+// example-source.js — 洛雪自定义源协议参考实现（不含真实音源）
+//
+// 官方协议：脚本收到 { source, action, info }
+//   action = "musicUrl" 时 info = { type: <音质>, musicInfo: <音乐信息对象> }
+//   action = "lyric" / "pic" 时 info = { musicInfo: <音乐信息对象> }
+//
+// musicInfo 里必须有歌曲的 id、名字、歌手等信息；
+// 平台特有字段（酷狗 hash、咪咕 copyrightId、QQ strMediaMid 等）没有值时
+// 整个 key 都要省略，社区脚本常用 `hash ?? songmid` 判空，空串会把有效值遮住。
+//
+// 这个占位脚本不请求任何真实接口，只返回一个公有示例音频地址，
+// 用来验证宿主到脚本的管道是否打通。
 var appInfo = { version: "0.1.0" };
 
 globalThis.lx.on("request", (payload) => {
   const { action, source, info } = payload;
   if (action === "musicUrl") {
+    const musicInfo = (info && info.musicInfo) || {};
+    const quality = (info && info.type) || "128k";
     // 占位：返回一个公有示例音频 URL，验证端到端管道即可
     return Promise.resolve({
       url: "https://www.w3schools.com/html/mov_bbb.mp4",
-      quality: info.type,
+      quality: quality,
       headers: {},
+      // 便于在日志里确认宿主确实把 musicInfo 传下来了
+      source: source,
+      songmid: musicInfo.songmid || "",
     });
   }
   if (action === "lyric") {
@@ -21,23 +36,17 @@ globalThis.lx.on("request", (payload) => {
   return Promise.reject(new Error("unsupported action: " + action));
 });
 
-globalThis.lx.on("inited", (data) => {
-  // preload 骨架里直接把 data 交给 __lx_setInited（原型融合点），真实项目走自己的 bridge
-  globalThis.__lx_setInited && globalThis.__lx_setInited(data);
-});
-
-// 按 LX 文档约定，inited 需要 status + sources + actions + qualitys
+// 按 LX 文档约定，inited 需要 status + sources，sources[平台] 里声明
+// 该平台支持的 actions 与 qualitys
 globalThis.lx.send("inited", {
   status: true,
   openDevTools: false,
   sources: {
-    kw: { actions: ["musicUrl", "lyric", "pic"], qualitys: ["128k", "320k", "flac"] },
-    kg: { actions: ["musicUrl", "lyric", "pic"], qualitys: ["128k", "320k", "flac"] },
-    tx: { actions: ["musicUrl", "lyric", "pic"], qualitys: ["128k", "320k", "flac"] },
-    wy: { actions: ["musicUrl", "lyric", "pic"], qualitys: ["128k", "320k", "flac"] },
-    mg: { actions: ["musicUrl", "lyric", "pic"], qualitys: ["128k", "320k", "flac"] },
-    local: { actions: ["musicUrl"], qualitys: ["128k"] }
+    kw: { name: "酷我音乐", type: "music", actions: ["musicUrl"], qualitys: ["128k", "320k", "flac"] },
+    kg: { name: "酷狗音乐", type: "music", actions: ["musicUrl"], qualitys: ["128k", "320k", "flac"] },
+    tx: { name: "QQ音乐", type: "music", actions: ["musicUrl"], qualitys: ["128k", "320k", "flac"] },
+    wy: { name: "网易音乐", type: "music", actions: ["musicUrl"], qualitys: ["128k", "320k", "flac"] },
+    mg: { name: "咪咕音乐", type: "music", actions: ["musicUrl"], qualitys: ["128k", "320k"] },
+    local: { name: "本地音乐", type: "music", actions: ["musicUrl", "lyric", "pic"], qualitys: [] },
   },
-  actions: ["musicUrl", "lyric", "pic"],
-  qualitys: ["128k", "320k", "flac"],
 });

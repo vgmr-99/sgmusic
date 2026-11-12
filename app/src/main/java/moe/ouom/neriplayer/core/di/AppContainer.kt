@@ -74,6 +74,7 @@ import moe.ouom.neriplayer.platform.search.api.client.QishuiSearchApi
 import moe.ouom.neriplayer.platform.search.api.client.KugouChartApi
 import moe.ouom.neriplayer.platform.search.api.client.KugouBrowseApi
 import moe.ouom.neriplayer.platform.search.api.client.QqBrowseApi
+import moe.ouom.neriplayer.platform.search.api.client.QishuiBrowseApi
 import moe.ouom.neriplayer.platform.lyrics.search.SearchManager
 import moe.ouom.neriplayer.platform.youtube.api.client.YouTubeMusicClient
 import moe.ouom.neriplayer.platform.youtube.api.client.YouTubeAccountProfileClient
@@ -559,6 +560,7 @@ object AppContainer {
                 ?.id
         }
     }
+    val qishuiBrowseApi by lazy { QishuiBrowseApi(sharedOkHttpClient) }
     val lrcLibClient by lazy { LrcLibLyricsRepository(LrcLibClient(sharedOkHttpClient)) }
     val amllTtmlClient by lazy { AmllLyricsRepository(AmllTtmlClient(sharedOkHttpClient)) }
     val kugouLyricsClient by lazy { KugouLyricsRepository(KugouLyricsClient(sharedOkHttpClient)) }

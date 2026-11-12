@@ -40,6 +40,8 @@ data class PlatformBrowseCard(
     val coverUrl: String? = null,
     val trackCount: Int = 0,
     val playCount: Long = 0L,
+    /** 有值表示该集合没有公开的曲目接口，点击时改为打开平台官方页面 */
+    val webUrl: String? = null,
     val provider: PlatformSearchProvider
 )
 

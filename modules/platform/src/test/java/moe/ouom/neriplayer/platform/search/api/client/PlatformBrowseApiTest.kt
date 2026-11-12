@@ -102,6 +102,34 @@ class PlatformBrowseApiTest {
     }
 
     @Test
+    fun `qishui browse lists the scene playlists`() = runTest {
+        responseBody = """
+            {"result_groups":[{"id":"playlists","data":[{"entity":{"playlist":{
+              "id":"7429294603956600867","title":"伤感emo歌曲合集","count_tracks":75,
+              "owner":{"nickname":"艾君子EK"},
+              "url_cover":{"uri":"tos-cn-i-b829550vbb/9dafb8",
+                "urls":["https://p3-luna.douyinpic.com/img/"],"template_prefix":"tplv-b829550vbb"}
+            }}}]}]}
+        """.trimIndent()
+
+        val api = QishuiBrowseApi(client)
+        val cards = api.browse("伤感")
+
+        assertEquals(1, cards.size)
+        assertEquals("7429294603956600867", cards[0].id)
+        assertEquals("伤感emo歌曲合集", cards[0].title)
+        assertEquals("艾君子EK", cards[0].subtitle)
+        assertEquals(75, cards[0].trackCount)
+        assertEquals(
+            "https://p3-luna.douyinpic.com/img/tos-cn-i-b829550vbb/9dafb8~tplv-b829550vbb-image.image",
+            cards[0].coverUrl
+        )
+        // 汽水没有公开的曲目接口，卡片要带上官方页面地址
+        assertEquals("https://www.qishui.com/playlist/7429294603956600867", cards[0].webUrl)
+        assertTrue(api.categories.contains("伤感"))
+    }
+
+    @Test
     fun `qq browse resolves the song mid through search`() = runTest {
         responseBody = """
             {"code":0,"data":{"topList":[

@@ -479,6 +479,10 @@ fun ExploreScreen(
     val platformSearchTypes = remember(ui.selectedSearchSource) {
         vm.supportedSearchTypes(ui.selectedSearchSource)
     }
+    // 浏览页的分类标签（汽水有场景歌单，酷狗/QQ 的榜单没有分类）
+    val platformBrowseCategories = remember(ui.selectedSearchSource) {
+        vm.platformBrowseCategories(ui.selectedSearchSource)
+    }
 
     val shouldLoadMoreSearch by remember(
         searchListState,
@@ -1191,11 +1195,24 @@ fun ExploreScreen(
                                     cards = ui.platformBrowseCards,
                                     loading = ui.platformBrowseLoading,
                                     error = ui.platformBrowseError?.asString(),
+                                    categories = platformBrowseCategories,
+                                    selectedCategory = ui.platformBrowseCategory,
                                     trackTitle = ui.platformBrowseTrackTitle,
                                     tracks = ui.platformBrowseTracks,
                                     tracksLoading = ui.platformBrowseTracksLoading
                                 ),
-                                onCardClick = { card -> vm.loadPlatformBrowseTracks(card) },
+                                onCardClick = { card ->
+                                    val webUrl = card.webUrl
+                                    if (webUrl != null) {
+                                        // 该集合没有公开的曲目接口，直接跳平台官方页
+                                        openPlatformWebPage(context, webUrl)
+                                    } else {
+                                        vm.loadPlatformBrowseTracks(card)
+                                    }
+                                },
+                                onCategoryClick = { category ->
+                                    vm.loadPlatformBrowse(currentSource, category)
+                                },
                                 onTrackClick = { track ->
                                     onSongClick(
                                         ui.platformBrowseTracks.map { it.toSongItem() },
