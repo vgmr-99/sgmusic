@@ -63,9 +63,15 @@ import moe.ouom.neriplayer.platform.lyrics.api.client.KugouLyricsClient
 import moe.ouom.neriplayer.platform.lyrics.api.client.LrcLibClient
 import moe.ouom.neriplayer.platform.netease.api.client.NeteaseClient
 import moe.ouom.neriplayer.BuildConfig
+import moe.ouom.neriplayer.platform.search.api.client.CloudMusicChartApi
 import moe.ouom.neriplayer.platform.search.api.client.CloudMusicSearchApi
 import moe.ouom.neriplayer.data.model.music.MusicPlatform
+import moe.ouom.neriplayer.platform.search.api.client.QQMusicChartApi
 import moe.ouom.neriplayer.platform.search.api.client.QQMusicSearchApi
+import moe.ouom.neriplayer.platform.search.api.client.QQPlatformSearchApi
+import moe.ouom.neriplayer.platform.search.api.client.KugouSearchApi
+import moe.ouom.neriplayer.platform.search.api.client.QishuiSearchApi
+import moe.ouom.neriplayer.platform.search.api.client.KugouChartApi
 import moe.ouom.neriplayer.platform.lyrics.search.SearchManager
 import moe.ouom.neriplayer.platform.youtube.api.client.YouTubeMusicClient
 import moe.ouom.neriplayer.platform.youtube.api.client.YouTubeAccountProfileClient
@@ -533,6 +539,14 @@ object AppContainer {
             }
         }
     }
+    // 热搜榜：各家榜单字段不同，平台层已经统一成 HotSearchEntry
+    val cloudMusicChartApi by lazy { CloudMusicChartApi(sharedOkHttpClient) }
+    val qqMusicChartApi by lazy { QQMusicChartApi(sharedOkHttpClient) }
+    val kugouChartApi by lazy { KugouChartApi(sharedOkHttpClient) }
+    // 多平台免登录搜索：QQ音乐/酷狗/汽水，结果只用于浏览与检索，播放走 LX 自定义源兜底
+    val qqPlatformSearchApi by lazy { QQPlatformSearchApi(sharedOkHttpClient) }
+    val kugouSearchApi by lazy { KugouSearchApi(sharedOkHttpClient) }
+    val qishuiSearchApi by lazy { QishuiSearchApi(sharedOkHttpClient) }
     val lrcLibClient by lazy { LrcLibLyricsRepository(LrcLibClient(sharedOkHttpClient)) }
     val amllTtmlClient by lazy { AmllLyricsRepository(AmllTtmlClient(sharedOkHttpClient)) }
     val kugouLyricsClient by lazy { KugouLyricsRepository(KugouLyricsClient(sharedOkHttpClient)) }
@@ -542,6 +556,26 @@ object AppContainer {
             http = moe.ouom.neriplayer.platform.lxsource.LxHttpClient(sharedOkHttpClient),
             preloadJs = moe.ouom.neriplayer.platform.lxsource.LxPreload.load(applicationContext),
             store = moe.ouom.neriplayer.platform.lxsource.FileLxSourceStore(applicationContext),
+        )
+    }
+    // 音源音质检测：用独立 QuickJS 实例探测，不影响播放链路
+    val lxSourceTester by lazy {
+        moe.ouom.neriplayer.platform.lxsource.LxSourceTester(
+            http = moe.ouom.neriplayer.platform.lxsource.LxHttpClient(sharedOkHttpClient),
+            preloadJs = moe.ouom.neriplayer.platform.lxsource.LxPreload.load(applicationContext),
+            locator = moe.ouom.neriplayer.platform.lxsource.LxTestSongLocator(
+                client = sharedOkHttpClient,
+                // 网易云走 eapi 匿名搜索，不需要账号 Cookie
+                neteaseSearch = { keyword ->
+                    neteaseClient.searchSongsEapiCancellable(
+                        keyword = keyword,
+                        limit = 10,
+                        offset = 0,
+                        type = 1
+                    )
+                }
+            ),
+            probeClient = sharedOkHttpClient
         )
     }
     val editableLyricsMatcher by lazy {

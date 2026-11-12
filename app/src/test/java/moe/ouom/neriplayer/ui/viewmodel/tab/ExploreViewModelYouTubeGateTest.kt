@@ -27,12 +27,18 @@ class ExploreViewModelYouTubeGateTest {
     }
 
     @Test
-    fun `missing Netease auth blocks search`() {
-        assertFalse(isNeteaseExploreSearchAvailable(SavedCookieAuthState.Missing))
+    fun `missing Netease auth still allows anonymous search`() {
+        assertTrue(isNeteaseExploreSearchAvailable(SavedCookieAuthState.Missing))
     }
 
     @Test
-    fun `missing Netease auth clears stale paginated results`() {
+    fun `signed in state is tracked separately from search availability`() {
+        assertTrue(isNeteaseAccountSignedIn(SavedCookieAuthState.Valid))
+        assertFalse(isNeteaseAccountSignedIn(SavedCookieAuthState.Missing))
+    }
+
+    @Test
+    fun `search error clears stale paginated results`() {
         val state = ExploreUiState(
             selectedSearchSource = SearchSource.NETEASE,
             searching = false,
@@ -46,7 +52,7 @@ class ExploreViewModelYouTubeGateTest {
             searchDisplayQuery = "song"
         )
 
-        val blocked = state.withNeteaseAuthRequired(UiText.Literal("login required"))
+        val blocked = state.withNeteaseSearchError(UiText.Literal("login required"))
 
         assertFalse(blocked.searching)
         assertEquals(UiText.Literal("login required"), blocked.searchError)

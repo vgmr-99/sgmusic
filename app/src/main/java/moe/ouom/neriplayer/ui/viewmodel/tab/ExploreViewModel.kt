@@ -58,6 +58,11 @@ import moe.ouom.neriplayer.data.model.auth.SavedCookieAuthState
 import moe.ouom.neriplayer.data.model.NeteaseArtistSummary
 import moe.ouom.neriplayer.data.model.SongItem
 import moe.ouom.neriplayer.platform.netease.mapping.parseNeteaseSongDetail
+import moe.ouom.neriplayer.platform.search.api.HotSearchEntry
+import moe.ouom.neriplayer.platform.search.api.PlatformSearchApi
+import moe.ouom.neriplayer.platform.search.api.PlatformSearchResult
+import moe.ouom.neriplayer.platform.search.api.PlatformSearchType
+import moe.ouom.neriplayer.platform.search.api.stablePlatformSongId
 import moe.ouom.neriplayer.platform.youtube.config.YouTubeFeatureGate
 import moe.ouom.neriplayer.platform.youtube.api.transport.buildYouTubeMusicMediaUri
 import moe.ouom.neriplayer.platform.youtube.api.transport.stableYouTubeMusicId
@@ -68,6 +73,7 @@ import org.json.JSONObject
 
 private const val TAG = "NERI-ExploreVM"
 private const val NETEASE_SEARCH_PAGE_SIZE = 30
+private const val PLATFORM_SEARCH_PAGE_SIZE = 20
 private const val YOUTUBE_MUSIC_SEARCH_LIMIT = 30
 private const val BILI_RESOURCE_TYPE_COLLECTION = 21
 
@@ -107,15 +113,26 @@ val TAG_TO_API_CATEGORY = mapOf(
 enum class SearchSource {
     YOUTUBE_MUSIC,
     NETEASE,
+    QQ_MUSIC,
+    KUGOU,
+    QISHUI,
     BILIBILI,
     LINK_RECOGNITION
 }
 
-enum class NeteaseExploreSearchType(val apiType: Int) {
+/**
+ * 搜索分类
+ *
+ * 网易云用 apiType 区分三类；其它平台按同名分类映射到各自接口。
+ */
+enum class ExploreSearchType(val apiType: Int) {
     SONG(apiType = 1),
     PLAYLIST(apiType = 1000),
     ARTIST(apiType = 100)
 }
+
+/** 旧名保留别名，避免大面积改动既有引用 */
+typealias NeteaseExploreSearchType = ExploreSearchType
 
 enum class YouTubeExploreSearchType(
     val filter: YouTubeMusicSearchFilter?
@@ -146,8 +163,13 @@ sealed class ExploreSearchResult {
         ).joinToString("|")
     }
 
-    data class Playlist(val playlist: PlaylistSummary) : ExploreSearchResult() {
-        override val stableKey: String = "netease|playlist|${playlist.id}"
+    data class Playlist(
+        val playlist: PlaylistSummary,
+        val sourceTag: String = "netease",
+        val webUrl: String? = null,
+        val owner: String = ""
+    ) : ExploreSearchResult() {
+        override val stableKey: String = "$sourceTag|playlist|${playlist.id}"
     }
 
     data class YouTubePlaylist(val playlist: YouTubeMusicPlaylist) : ExploreSearchResult() {
@@ -159,8 +181,12 @@ sealed class ExploreSearchResult {
             "bilibili|playlist|${playlist.kind}|${playlist.mediaId}|${playlist.mid}"
     }
 
-    data class Artist(val result: NeteaseSearchArtistResult) : ExploreSearchResult() {
-        override val stableKey: String = "netease|artist|${result.artist.id}"
+    data class Artist(
+        val result: NeteaseSearchArtistResult,
+        val sourceTag: String = "netease",
+        val webUrl: String? = null
+    ) : ExploreSearchResult() {
+        override val stableKey: String = "$sourceTag|artist|${result.artist.id}"
     }
 
     data class YouTubeCreator(val creator: YouTubeMusicCreatorSummary) : ExploreSearchResult() {
@@ -192,18 +218,30 @@ data class ExploreUiState(
     val searchDisplayQuery: String = "",
     val selectedSearchSource: SearchSource = SearchSource.NETEASE,
     val selectedNeteaseSearchType: NeteaseExploreSearchType = NeteaseExploreSearchType.SONG,
+    val selectedPlatformSearchType: PlatformSearchType = PlatformSearchType.SONG,
     val selectedYouTubeMusicSearchType: YouTubeExploreSearchType = YouTubeExploreSearchType.SONG,
     val isNeteaseLoggedIn: Boolean = false,
     val ytMusicPlaylists: List<YouTubeMusicPlaylist> = emptyList(),
     val ytMusicPlaylistsLoading: Boolean = false,
-    val ytMusicPlaylistsError: UiText? = null
+    val ytMusicPlaylistsError: UiText? = null,
+    val hotSearchEntries: List<HotSearchEntry> = emptyList(),
+    val hotSearchLoading: Boolean = false
 )
 
-internal fun isNeteaseExploreSearchAvailable(authState: SavedCookieAuthState): Boolean {
+/**
+ * 网易云搜索不再要求登录。
+ *
+ * 未登录时走匿名会话（本地生成 csrf），登录后自动改用账号态，
+ * 因此这里对任何登录状态都放行。
+ */
+internal fun isNeteaseExploreSearchAvailable(authState: SavedCookieAuthState): Boolean = true
+
+/** 是否已登录网易云，仅用于界面提示，不影响搜索能否发起 */
+internal fun isNeteaseAccountSignedIn(authState: SavedCookieAuthState): Boolean {
     return authState != SavedCookieAuthState.Missing
 }
 
-internal fun ExploreUiState.withNeteaseAuthRequired(error: UiText): ExploreUiState = copy(
+internal fun ExploreUiState.withNeteaseSearchError(error: UiText): ExploreUiState = copy(
     searching = false,
     searchError = error,
     searchResults = emptyList(),
@@ -342,6 +380,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private var highQualityLoadCookies: Map<String, String>? = null
     private var searchJob: Job? = null
     private var searchMoreJob: Job? = null
+    private var hotSearchJob: Job? = null
     private var ytMusicPlaylistsJob: Job? = null
     private var ytMusicPlaylistsPending = false
     private var searchRequestVersion = 0L
@@ -353,16 +392,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     init {
         viewModelScope.launch {
             neteaseRepo.authHealthFlow.collect { health ->
-                val isLoggedIn = isNeteaseExploreSearchAvailable(health.state)
-                val currentState = _uiState.value
-                if (
-                    !isLoggedIn &&
-                    currentState.selectedSearchSource == SearchSource.NETEASE &&
-                    currentState.searchKeyword.isNotBlank()
-                ) {
-                    clearNeteaseSearchForAuthRequired()
-                }
-                _uiState.value = _uiState.value.copy(isNeteaseLoggedIn = isLoggedIn)
+                // 搜索本身不再依赖登录，这里只跟踪登录态用于界面提示
+                _uiState.value = _uiState.value.copy(
+                    isNeteaseLoggedIn = isNeteaseAccountSignedIn(health.state)
+                )
             }
         }
         viewModelScope.launch {
@@ -379,6 +412,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
         }
+        loadHotSearch()
     }
 
     /** 设置当前搜索源 */
@@ -391,6 +425,11 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         invalidateSearchRequest()
         _uiState.value = _uiState.value.copy(
             selectedSearchSource = source,
+            // 各平台开放的分类不一样，切源时把分类落到该平台支持的第一项
+            selectedPlatformSearchType = supportedSearchTypes(source)
+                .firstOrNull { it == _uiState.value.selectedPlatformSearchType }
+                ?: supportedSearchTypes(source).firstOrNull()
+                ?: PlatformSearchType.SONG,
             searching = false,
             searchResults = emptyList(), // 切换源时清空结果
             searchItems = emptyList(),
@@ -402,6 +441,38 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             searchDisplayQuery = "",
             searchError = null
         )
+        loadHotSearch()
+    }
+
+    /**
+     * 加载当前来源的热搜榜。
+     *
+     * 网易云、QQ 音乐、酷狗提供榜单；其它来源直接清空，不影响原有搜索。
+     */
+    fun loadHotSearch() {
+        val source = _uiState.value.selectedSearchSource
+        val chartApi = when (source) {
+            SearchSource.NETEASE -> AppContainer.cloudMusicChartApi
+            SearchSource.QQ_MUSIC -> AppContainer.qqMusicChartApi
+            SearchSource.KUGOU -> AppContainer.kugouChartApi
+            else -> null
+        }
+        if (chartApi == null) {
+            _uiState.value = _uiState.value.copy(hotSearchEntries = emptyList(), hotSearchLoading = false)
+            return
+        }
+        hotSearchJob?.cancel()
+        _uiState.value = _uiState.value.copy(hotSearchLoading = true)
+        hotSearchJob = viewModelScope.launch {
+            val entries = runCatching { chartApi.hotSearch() }.getOrElse { error ->
+                NPLogger.w(TAG, "加载热搜榜失败: ${error.message.orEmpty()}")
+                emptyList()
+            }
+            _uiState.value = _uiState.value.copy(
+                hotSearchEntries = entries,
+                hotSearchLoading = false
+            )
+        }
     }
 
     fun setNeteaseSearchType(type: NeteaseExploreSearchType) {
@@ -423,6 +494,43 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             searchKeyword = "",
             searchDisplayQuery = ""
         )
+    }
+
+    /**
+     * 设置新平台（QQ/酷狗/汽水）的搜索分类。
+     *
+     * 切换分类会清空当前结果，与网易云的分类切换行为一致。
+     */
+    fun setPlatformSearchType(type: PlatformSearchType) {
+        if (type == _uiState.value.selectedPlatformSearchType) return
+        NPLogger.d(
+            TAG,
+            "setPlatformSearchType: ${_uiState.value.selectedPlatformSearchType} -> $type"
+        )
+        searchJob?.cancel()
+        searchMoreJob?.cancel()
+        invalidateSearchRequest()
+        _uiState.value = _uiState.value.copy(
+            selectedPlatformSearchType = type,
+            searching = false,
+            searchError = null,
+            searchResults = emptyList(),
+            searchItems = emptyList(),
+            searchHasMore = false,
+            searchLoadingMore = false,
+            searchLoadMoreError = null,
+            searchPage = 0,
+            searchKeyword = "",
+            searchDisplayQuery = ""
+        )
+    }
+
+    /** 当前来源支持哪些搜索分类 */
+    fun supportedSearchTypes(source: SearchSource): List<PlatformSearchType> = when (source) {
+        SearchSource.QQ_MUSIC -> AppContainer.qqPlatformSearchApi.supportedTypes.toList()
+        SearchSource.KUGOU -> AppContainer.kugouSearchApi.supportedTypes.toList()
+        SearchSource.QISHUI -> AppContainer.qishuiSearchApi.supportedTypes.toList()
+        else -> emptyList()
     }
 
     fun setYouTubeMusicSearchType(type: YouTubeExploreSearchType) {
@@ -480,6 +588,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         )
         when (source) {
             SearchSource.NETEASE -> searchNetease(apiKeyword, matchQuery, requestVersion)
+            SearchSource.QQ_MUSIC,
+            SearchSource.KUGOU,
+            SearchSource.QISHUI -> searchPlatformSource(apiKeyword, matchQuery, requestVersion)
             SearchSource.BILIBILI -> searchBilibili(apiKeyword, matchQuery, requestVersion)
             SearchSource.YOUTUBE_MUSIC -> searchYouTubeMusic(apiKeyword, matchQuery, requestVersion)
             SearchSource.LINK_RECOGNITION -> searchRecognizedLink(apiKeyword, requestVersion)
@@ -489,10 +600,6 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     fun loadMoreSearchResults() {
         val state = _uiState.value
         val source = state.selectedSearchSource
-        if (source == SearchSource.NETEASE && !isNeteaseSearchAllowed()) {
-            clearNeteaseSearchForAuthRequired()
-            return
-        }
         if (
             state.searchKeyword.isBlank() ||
             !state.searchHasMore ||
@@ -515,16 +622,21 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         )
         searchMoreJob = viewModelScope.launch {
             try {
-                if (source == SearchSource.NETEASE && !isNeteaseSearchAllowed()) {
-                    clearNeteaseSearchForAuthRequired()
-                    return@launch
-                }
                 val result = when (source) {
                     SearchSource.NETEASE -> fetchNeteaseSearchPage(
                         keyword = keyword,
                         matchQuery = matchQuery,
                         page = nextPage,
                         type = neteaseType
+                    )
+                    SearchSource.QQ_MUSIC,
+                    SearchSource.KUGOU,
+                    SearchSource.QISHUI -> fetchPlatformSearchPage(
+                        source = source,
+                        keyword = keyword,
+                        matchQuery = matchQuery,
+                        page = nextPage,
+                        type = state.selectedPlatformSearchType
                     )
                     SearchSource.BILIBILI -> fetchBilibiliSearchPage(
                         keyword = keyword,
@@ -533,10 +645,6 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                     )
                     SearchSource.YOUTUBE_MUSIC,
                     SearchSource.LINK_RECOGNITION -> return@launch
-                }
-                if (source == SearchSource.NETEASE && !isNeteaseSearchAllowed()) {
-                    clearNeteaseSearchForAuthRequired()
-                    return@launch
                 }
                 updateSearchStateIfCurrent(requestVersion, source) {
                     val merged = mergeExploreSearchResults(it.searchItems, result.items)
@@ -745,32 +853,17 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** 搜索网易云歌曲 */
+    /**
+     * 搜索网易云歌曲。
+     *
+     * 未登录时用匿名会话直接搜；匿名搜索失败再退回 LX 自定义源，
+     * 两者都不可用时才把错误显示出来。
+     */
     private fun searchNetease(keyword: String, matchQuery: String, requestVersion: Long) {
-        if (!isNeteaseSearchAllowed()) {
-            // 未登录时，老行为是直接提示登录；现在先尝试 LX 自定义源搜索作为替代，
-            // LX 也不可用时才回退到登录提示。
-            searchJob = viewModelScope.launch {
-                if (isLxSearchAvailable()) {
-                    searchLx(keyword, matchQuery, requestVersion)
-                } else {
-                    clearNeteaseSearchForAuthRequired()
-                }
-            }
-            return
-        }
         val type = _uiState.value.selectedNeteaseSearchType
         searchJob = viewModelScope.launch {
             try {
-                if (!isNeteaseSearchAllowed()) {
-                    clearNeteaseSearchForAuthRequired()
-                    return@launch
-                }
                 val result = fetchNeteaseSearchPage(keyword, matchQuery, page = 1, type = type)
-                if (!isNeteaseSearchAllowed()) {
-                    clearNeteaseSearchForAuthRequired()
-                    return@launch
-                }
                 NPLogger.d(
                     TAG,
                     "search Netease success: request=$requestVersion, keyword=$keyword, type=$type, count=${result.items.size}, hasMore=${result.hasMore}"
@@ -794,27 +887,75 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                     "search Netease failed: request=$requestVersion, keyword=$keyword",
                     e
                 )
+                // 匿名搜索失败时再试 LX 自定义源，两者都不可用才提示错误
+                if (isLxSearchAvailable()) {
+                    searchLx(keyword, matchQuery, requestVersion)
+                    return@launch
+                }
                 updateSearchStateIfCurrent(requestVersion, SearchSource.NETEASE) {
-                    it.copy(
-                        searching = false,
-                        searchError = feedbackText(
+                    it.withNeteaseSearchError(
+                        feedbackText(
                             CoreCommonR.string.error_netease_search,
                             e.message ?: feedbackText(CoreCommonR.string.github_sync_failed_message)
-                        ),
-                        searchResults = emptyList(),
-                        searchItems = emptyList(),
-                        searchHasMore = false,
-                        searchLoadingMore = false,
-                        searchLoadMoreError = null,
-                        searchPage = 0
+                        )
                     )
                 }
             }
         }
     }
 
-    private fun isNeteaseSearchAllowed(): Boolean {
-        return isNeteaseExploreSearchAvailable(neteaseRepo.getAuthHealthOnce().state)
+    /**
+     * 多平台搜索（QQ音乐 / 酷狗 / 汽水）。
+     *
+     * 这些平台都不需要登录账号就能搜，分类与网易云保持一致（歌曲 / 歌单 / 歌手）；
+     * 平台本身没开放的分类不会出现在类型栏里。
+     */
+    private fun searchPlatformSource(keyword: String, matchQuery: String, requestVersion: Long) {
+        val source = _uiState.value.selectedSearchSource
+        val type = _uiState.value.selectedPlatformSearchType
+        searchJob = viewModelScope.launch {
+            try {
+                val result = fetchPlatformSearchPage(
+                    source = source,
+                    keyword = keyword,
+                    matchQuery = matchQuery,
+                    page = 1,
+                    type = type
+                )
+                NPLogger.d(
+                    TAG,
+                    "search platform success: source=$source, request=$requestVersion, " +
+                        "keyword=$keyword, type=$type, count=${result.items.size}, hasMore=${result.hasMore}"
+                )
+                updateSearchStateIfCurrent(requestVersion, source) {
+                    it.copy(
+                        searching = false,
+                        searchError = null,
+                        searchLoadMoreError = null,
+                        searchResults = result.songs,
+                        searchItems = result.items,
+                        searchPage = result.page,
+                        searchHasMore = result.hasMore
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                NPLogger.e(
+                    TAG,
+                    "search platform failed: source=$source, request=$requestVersion, keyword=$keyword",
+                    e
+                )
+                updateSearchStateIfCurrent(requestVersion, source) {
+                    it.withNeteaseSearchError(
+                        feedbackText(
+                            CoreCommonR.string.error_platform_search,
+                            e.message ?: feedbackText(CoreCommonR.string.github_sync_failed_message)
+                        )
+                    )
+                }
+            }
+        }
     }
 
     /**
@@ -872,15 +1013,6 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
         }
-    }
-
-    private fun clearNeteaseSearchForAuthRequired() {
-        searchJob?.cancel()
-        searchMoreJob?.cancel()
-        invalidateSearchRequest()
-        _uiState.value = _uiState.value.withNeteaseAuthRequired(
-            error = feedbackText(CoreCommonR.string.netease_login_required_search)
-        )
     }
 
     private fun searchRecognizedLink(input: String, requestVersion: Long) {
@@ -1265,15 +1397,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         type: NeteaseExploreSearchType
     ): ExploreSearchFetchResult {
         val offset = (page - 1).coerceAtLeast(0) * NETEASE_SEARCH_PAGE_SIZE
-        val raw = withContext(Dispatchers.IO) {
-            neteaseClient.searchSongs(
-                keyword = keyword,
-                limit = NETEASE_SEARCH_PAGE_SIZE,
-                offset = offset,
-                type = type.apiType,
-                usePersistedCookies = true
-            )
-        }
+        val raw = requestNeteaseSearch(keyword = keyword, offset = offset, type = type.apiType)
         val parsed = parseNeteaseSearchResults(raw, type)
         val items = if (type == NeteaseExploreSearchType.SONG) {
             rankExploreSongSearchResults(matchQuery, parsed.items.mapNotNull {
@@ -1294,9 +1418,130 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
+    /**
+     * 拉取多平台搜索的一页结果。
+     *
+     * 各平台的返回字段已经由平台层统一成 PlatformSearchResult，
+     * 这里只负责映射成界面上能渲染的 ExploreSearchResult。
+     */
+    private suspend fun fetchPlatformSearchPage(
+        source: SearchSource,
+        keyword: String,
+        matchQuery: String,
+        page: Int,
+        type: PlatformSearchType
+    ): ExploreSearchFetchResult {
+        val api = platformSearchApiFor(source)
+            ?: return ExploreSearchFetchResult(items = emptyList(), page = page, hasMore = false)
+        val results = api.search(keyword = keyword, type = type, page = page.coerceAtLeast(1))
+        val items = if (type == PlatformSearchType.SONG) {
+            rankExploreSongSearchResults(matchQuery, results.map { it.toSongItem() })
+                .map { ExploreSearchResult.Song(it) }
+        } else {
+            results.map { it.toExploreResult() }
+        }
+        return ExploreSearchFetchResult(
+            items = items,
+            page = page,
+            // 各平台搜索接口都不返回总数，拿到满页就认为还有下一页
+            hasMore = results.size >= PLATFORM_SEARCH_PAGE_SIZE
+        )
+    }
+
+    private fun platformSearchApiFor(source: SearchSource): PlatformSearchApi? = when (source) {
+        SearchSource.QQ_MUSIC -> AppContainer.qqPlatformSearchApi
+        SearchSource.KUGOU -> AppContainer.kugouSearchApi
+        SearchSource.QISHUI -> AppContainer.qishuiSearchApi
+        else -> null
+    }
+
+    /** 平台搜索结果 -> 歌曲 */
+    private fun PlatformSearchResult.toSongItem(): SongItem {
+        val providerCode = provider.code
+        return SongItem(
+            id = stablePlatformSongId(provider, id),
+            name = name,
+            artist = subtitle,
+            album = album,
+            albumId = 0L,
+            durationMs = durationMs,
+            coverUrl = coverUrl,
+            channelId = providerCode,
+            audioId = id
+        )
+    }
+
+    /** 平台搜索结果 -> 通用搜索结果（歌单 / 歌手复用网易云的展示模型） */
+    private fun PlatformSearchResult.toExploreResult(): ExploreSearchResult {
+        val providerCode = provider.code
+        return when (type) {
+            PlatformSearchType.PLAYLIST -> ExploreSearchResult.Playlist(
+                playlist = PlaylistSummary(
+                    id = stablePlatformSongId(provider, id),
+                    name = name,
+                    picUrl = coverUrl.orEmpty(),
+                    playCount = 0L,
+                    trackCount = extraCount.toInt()
+                ),
+                sourceTag = providerCode,
+                webUrl = webUrl,
+                owner = subtitle
+            )
+            PlatformSearchType.ARTIST -> ExploreSearchResult.Artist(
+                result = NeteaseSearchArtistResult(
+                    artist = NeteaseArtistSummary(
+                        id = stablePlatformSongId(provider, id),
+                        name = name
+                    ),
+                    picUrl = coverUrl,
+                    musicSize = 0,
+                    albumSize = 0
+                ),
+                sourceTag = providerCode,
+                webUrl = webUrl
+            )
+            PlatformSearchType.SONG -> ExploreSearchResult.Song(toSongItem())
+        }
+    }
+
     suspend fun getVideoInfoByAvid(avid: Long): VideoBasicInfo {
         return withContext(Dispatchers.IO) {
             biliClient.getVideoBasicInfoByAvid(avid)
+        }
+    }
+
+    /**
+     * 网易云搜索请求体。
+     *
+     * 登录态优先走 WEAPI（保留账号相关结果）；未登录、或 WEAPI 被服务端拒收
+     * （code 50000005）时改走 eapi：eapi 只用固定盐做签名，不需要账号 Cookie，
+     * 因此**没登录也能搜**。两条通道返回的字段结构一致。
+     */
+    private suspend fun requestNeteaseSearch(keyword: String, offset: Int, type: Int): String {
+        if (neteaseClient.hasLogin()) {
+            val weapi = runCatching {
+                withContext(Dispatchers.IO) {
+                    neteaseClient.searchSongs(
+                        keyword = keyword,
+                        limit = NETEASE_SEARCH_PAGE_SIZE,
+                        offset = offset,
+                        type = type,
+                        usePersistedCookies = true
+                    )
+                }
+            }.getOrNull()
+            if (weapi != null && !weapi.contains("\"code\":50000005")) {
+                return weapi
+            }
+            NPLogger.d(TAG, "网易云 WEAPI 搜索被拒，改走 eapi 匿名通道")
+        }
+        return withContext(Dispatchers.IO) {
+            neteaseClient.searchSongsEapiCancellable(
+                keyword = keyword,
+                limit = NETEASE_SEARCH_PAGE_SIZE,
+                offset = offset,
+                type = type
+            )
         }
     }
 
@@ -1454,6 +1699,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             SearchSource.BILIBILI -> feedbackText(CoreCommonR.string.error_bilibili_search, fallback)
             SearchSource.YOUTUBE_MUSIC -> feedbackText(CoreCommonR.string.error_youtube_search, fallback)
             SearchSource.LINK_RECOGNITION -> feedbackText(CoreCommonR.string.error_link_recognition, fallback)
+            SearchSource.QQ_MUSIC,
+            SearchSource.KUGOU,
+            SearchSource.QISHUI -> feedbackText(CoreCommonR.string.error_platform_search, fallback)
         }
     }
 }

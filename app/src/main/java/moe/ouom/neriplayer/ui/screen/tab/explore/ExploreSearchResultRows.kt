@@ -201,9 +201,73 @@ internal fun NeteaseArtistSearchRow(
     )
 }
 
+/**
+ * 免登录平台的歌单行。
+ *
+ * 这些平台不返回播放量，只给出歌曲数与创建者，
+ * 单独渲染一行，免得把歌曲数显示成"播放次数"。
+ */
 @Composable
-internal fun YouTubeCreatorSearchRow(
-    creator: YouTubeMusicCreatorSummary,
+internal fun PlatformPlaylistSearchRow(
+    playlist: PlaylistSummary,
+    owner: String,
+    offlineMode: Boolean,
+    onClick: () -> Unit
+) {
+    val trackCount = stringResource(
+        CoreCommonR.string.collection_track_count_format,
+        playlist.trackCount
+    )
+    LinkedCollectionRow(
+        title = playlist.name,
+        subtitle = listOf(owner, trackCount)
+            .filter { it.isNotBlank() }
+            .joinToString(" · "),
+        coverUrl = playlist.picUrl,
+        offlineMode = offlineMode,
+        fallbackIcon = {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(30.dp)
+            )
+        },
+        onClick = onClick
+    )
+}
+
+/**
+ * 免登录平台的歌手行。
+ *
+ * 平台的歌手搜索结果没有歌曲数/专辑数，只标注来源平台。
+ */
+@Composable
+internal fun PlatformArtistSearchRow(
+    result: NeteaseSearchArtistResult,
+    platformLabel: String,
+    offlineMode: Boolean,
+    onClick: () -> Unit
+) {
+    LinkedCollectionRow(
+        title = result.artist.name,
+        subtitle = platformLabel,
+        coverUrl = result.picUrl,
+        offlineMode = offlineMode,
+        fallbackIcon = {
+            Icon(
+                imageVector = Icons.Filled.AccountCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(34.dp)
+            )
+        },
+        onClick = onClick
+    )
+}
+
+@Composable
+internal fun YouTubeCreatorSearchRow(    creator: YouTubeMusicCreatorSummary,
     offlineMode: Boolean,
     onClick: () -> Unit
 ) {

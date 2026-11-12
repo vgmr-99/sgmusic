@@ -161,6 +161,15 @@ internal class NeteaseRequestSession(
         "_ntes_nuid" to newNeteaseSessionCookieValue(),
         "NMTID" to newNeteaseSessionCookieValue()
     )
+
+    /**
+     * 匿名会话的 csrf 占位值。
+     *
+     * WEAPI 要求 csrf_token 与 Cookie 里的 __csrf 一致，未登录时服务端没有下发 __csrf，
+     * 这里用本地随机值兜底，让匿名也能直接调用 WEAPI 接口。
+     * 它只在构造请求时使用，不进入会话 Cookie 集合，因此不影响登录态的预热判定。
+     */
+    internal val anonymousCsrf = newNeteaseSessionCookieValue()
     internal val personalizedSessionLock = Any()
     private var preheatedAuthCookieFingerprint: String? = null
 
@@ -170,7 +179,15 @@ internal class NeteaseRequestSession(
         }
 
         override fun loadForRequest(url: HttpUrl): List<Cookie> {
-            return requestCookiesForUrl(url)
+            val cookies = requestCookiesForUrl(url)
+            // 服务端没下发 __csrf 时补一个匿名占位值，
+            // 让 Cookie 头与 WEAPI 的 csrf_token 始终一致
+            val effective = if (cookies["__csrf"].isNullOrBlank()) {
+                cookies + ("__csrf" to anonymousCsrf)
+            } else {
+                cookies
+            }
+            return effective
                 .map { (name, value) ->
                     Cookie.Builder()
                         .name(name)
@@ -488,7 +505,6 @@ class NeteaseClient(
             params = params,
             mode = mode,
             method = method,
-            usePersistedCookies = usePersistedCookies,
             session = session
         )
         return try {
@@ -522,7 +538,6 @@ class NeteaseClient(
             params = params,
             mode = mode,
             method = method,
-            usePersistedCookies = usePersistedCookies,
             session = session
         )
         return try {
@@ -566,20 +581,36 @@ class NeteaseClient(
         params: Map<String, Any>,
         mode: CryptoMode,
         method: String,
-        usePersistedCookies: Boolean,
         session: NeteaseRequestSession
     ): Request {
         val requestUrl = url.toHttpUrl()
 
         NPLogger.d("NERI-NeteaseClient", "call $url, $method, $mode")
+
+        var reqUrl = requestUrl
+        // WEAPI 的 csrf_token 必须与 Cookie 里的 __csrf 完全一致：
+        // 登录态用服务端下发的真实值，未登录时用会话本地生成的占位值，
+        // 这样匿名也能直接调用 WEAPI 接口而不必先登录
+        val weapiCsrf = if (mode == CryptoMode.WEAPI) {
+            val serverCsrf = session.requestCookiesForUrl(requestUrl)["__csrf"]
+                ?.takeIf { it.isNotBlank() }
+            // CookieJar 也会补上同一个占位值，两边始终一致
+            val csrf = serverCsrf ?: session.anonymousCsrf
+            reqUrl = requestUrl.newBuilder()
+                .setQueryParameter("csrf_token", csrf)
+                .build()
+            csrf
+        } else {
+            ""
+        }
+
         val bodyParams: Map<String, String> = when (mode) {
-            CryptoMode.WEAPI -> NeteaseCrypto.weApiEncrypt(params)
+            CryptoMode.WEAPI -> NeteaseCrypto.weApiEncrypt(params + ("csrf" to weapiCsrf))
             CryptoMode.EAPI  -> NeteaseCrypto.eApiEncrypt(requestUrl.encodedPath, params)
             CryptoMode.LINUX -> NeteaseCrypto.linuxApiEncrypt(params)
             CryptoMode.API   -> params.mapValues { it.value.toString() }
         }
 
-        var reqUrl = requestUrl
         val builder = Request.Builder()
             .header("Accept", "*/*")
             .header("Accept-Language", "zh-CN,zh-Hans;q=0.9")
@@ -587,18 +618,6 @@ class NeteaseClient(
             .header("Referer", "https://music.163.com")
             .header("Host", requestUrl.host)
             .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; NeriPlayer) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
-
-        // WEAPI 的 csrf_token 优先用持久化 Cookie, 再回退本地 CookieJar
-        if (mode == CryptoMode.WEAPI) {
-            val csrf = if (usePersistedCookies) {
-                session.requestCookiesForUrl(requestUrl)["__csrf"].orEmpty()
-            } else {
-                ""
-            }
-            reqUrl = requestUrl.newBuilder()
-                .setQueryParameter("csrf_token", csrf)
-                .build()
-        }
 
         builder.url(reqUrl)
 
@@ -780,6 +799,38 @@ class NeteaseClient(
             "total" to "true"
         )
         return callWeApi("/playlist/list", params, usePersistedCookies = usePersistedCookies)
+    }
+
+    /**
+     * eapi 搜索接口：签名只依赖固定盐，不依赖账号 Cookie，因此**未登录也能搜**。
+     *
+     * WEAPI 的 cloudsearch 现在强制登录态（返回 50000005），匿名搜索必须走这条通道。
+     * 响应仍是明文 JSON，字段与 WEAPI 一致（id/name/dt/ar/al）。
+     */
+    suspend fun searchSongsEapiCancellable(
+        keyword: String,
+        limit: Int = 30,
+        offset: Int = 0,
+        type: Int = 1
+    ): String {
+        val path = "/eapi/cloudsearch/pc"
+        val payload = mapOf(
+            "s" to keyword,
+            "type" to type,
+            "limit" to limit,
+            "offset" to offset,
+            "total" to true,
+            "hlpretag" to "",
+            "hlposttag" to ""
+        )
+        val encrypted = NeteaseCrypto.eApiEncrypt(path, payload)["params"].orEmpty()
+        return requestCancellable(
+            url = "https://interface3.music.163.com$path",
+            params = mapOf("params" to encrypted),
+            mode = CryptoMode.API,
+            method = "POST",
+            usePersistedCookies = false
+        )
     }
 
     @Throws(IOException::class)
@@ -1541,7 +1592,7 @@ class NeteaseClient(
         replyToId?.let { params["commentId"] = it }
         val request = buildRequest(
             "https://music.163.com/weapi/$path",
-            params, CryptoMode.WEAPI, "POST", true, session
+            params, CryptoMode.WEAPI, "POST", session
         ).let { it.newBuilder().post(requireNotNull(it.body).nonReplayable()).build() }
         // 发评没有幂等键，连接失败时交给用户核对，不能自动重发
         val client = session.okHttpClient.newBuilder()

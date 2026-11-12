@@ -58,12 +58,7 @@ class CloudMusicSearchApi(
     override suspend fun search(keyword: String, page: Int): List<SongSearchInfo> {
         return withContext(Dispatchers.IO) {
             val offset = (page - 1).coerceAtLeast(0) * 20
-            val responseJson = neteaseClient.searchSongsCancellable(
-                keyword = keyword,
-                limit = 20,
-                offset = offset,
-                usePersistedCookies = false
-            )
+            val responseJson = searchWithAnonymousFallback(keyword = keyword, offset = offset)
             logResponseSummary(label = "netease-search", json = responseJson)
 
             val searchResponse = json.decodeFromString<CloudMusicSearchResponse>(responseJson)
@@ -80,6 +75,34 @@ class CloudMusicSearchApi(
                 )
             } ?: emptyList()
         }
+    }
+
+    /**
+     * 未登录也能搜。
+     *
+     * 登录态沿用 WEAPI（保留账号相关结果），匿名或 WEAPI 失败时改走 eapi：
+     * eapi 只用固定盐做签名，不需要账号 Cookie，服务端直接返回明文 JSON。
+     */
+    private suspend fun searchWithAnonymousFallback(keyword: String, offset: Int): String {
+        if (neteaseClient.hasLogin()) {
+            val weapi = runCatching {
+                neteaseClient.searchSongsCancellable(
+                    keyword = keyword,
+                    limit = 20,
+                    offset = offset,
+                    usePersistedCookies = false
+                )
+            }.getOrNull()
+            if (weapi != null && !weapi.contains("\"code\":50000005")) {
+                return weapi
+            }
+        }
+        NPLogger.d(TAG, "使用 eapi 匿名搜索通道")
+        return neteaseClient.searchSongsEapiCancellable(
+            keyword = keyword,
+            limit = 20,
+            offset = offset
+        )
     }
 
     override suspend fun getSongInfo(id: String): SongDetails {

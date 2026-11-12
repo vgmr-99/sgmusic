@@ -261,21 +261,6 @@ class NowPlayingViewModel : ViewModel() {
             cancelSearchRequest()
             return
         }
-        if (
-            state.selectedPlatform == MusicPlatform.CLOUD_MUSIC &&
-            AppContainer.neteaseCookieRepo.getAuthHealthOnce().state == SavedCookieAuthState.Missing
-        ) {
-            cancelSearchRequest()
-            _manualSearchState.update {
-                it.copy(
-                    isLoading = false,
-                    searchResults = emptyList(),
-                    error = feedbackText(CoreCommonR.string.netease_login_required_search)
-                )
-            }
-            return
-        }
-
         val request = ManualSearchRequest(
             keyword = keyword,
             platform = state.selectedPlatform

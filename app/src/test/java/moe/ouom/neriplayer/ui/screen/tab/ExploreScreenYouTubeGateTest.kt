@@ -28,7 +28,31 @@ class ExploreScreenYouTubeGateTest {
         assertEquals(
             listOf(
                 SearchSource.NETEASE,
+                SearchSource.QQ_MUSIC,
+                SearchSource.KUGOU,
+                SearchSource.QISHUI,
                 SearchSource.BILIBILI,
+                SearchSource.LINK_RECOGNITION
+            ),
+            sources
+        )
+    }
+
+    @Test
+    fun `anonymous platforms sit right after NetEase`() {
+        val sources = exploreSearchSourceDisplayOrder(
+            isInternational = false,
+            youtubeEnabled = true
+        )
+
+        assertEquals(
+            listOf(
+                SearchSource.NETEASE,
+                SearchSource.QQ_MUSIC,
+                SearchSource.KUGOU,
+                SearchSource.QISHUI,
+                SearchSource.BILIBILI,
+                SearchSource.YOUTUBE_MUSIC,
                 SearchSource.LINK_RECOGNITION
             ),
             sources

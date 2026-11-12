@@ -27,6 +27,7 @@ import moe.ouom.neriplayer.ui.i18n.UiText
 import moe.ouom.neriplayer.ui.i18n.asString
 import moe.ouom.neriplayer.ui.component.common.NeriSearchFieldGlass
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.shape.CircleShape
@@ -35,20 +36,13 @@ import moe.ouom.neriplayer.ui.theme.NeriDesign
 import moe.ouom.neriplayer.ui.screen.playlist.FavoriteSongLookup
 import moe.ouom.neriplayer.data.identity.stableKey
 import moe.ouom.neriplayer.data.sync.mapping.toSongItem
+import moe.ouom.neriplayer.util.platform.tryStartActivity
 import android.app.Application
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -82,16 +76,13 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
-import androidx.compose.material.icons.automirrored.outlined.QueueMusic
-import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.MusicNote
+import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -137,7 +128,6 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -156,6 +146,7 @@ import kotlinx.coroutines.launch
 import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.data.model.bilibili.video.VideoBasicInfo
 import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicCreatorSummary
+import moe.ouom.neriplayer.platform.search.api.HotSearchEntry
 import moe.ouom.neriplayer.core.di.AppContainer
 import moe.ouom.neriplayer.core.download.GlobalDownloadManager
 import moe.ouom.neriplayer.platform.youtube.config.YouTubeFeatureGate
@@ -191,6 +182,7 @@ import moe.ouom.neriplayer.ui.viewmodel.tab.SearchSource
 import moe.ouom.neriplayer.ui.viewmodel.tab.YouTubeExploreSearchType
 import moe.ouom.neriplayer.ui.viewmodel.tab.YouTubeMusicPlaylist
 import moe.ouom.neriplayer.ui.viewmodel.tab.shouldLoadExploreSearchMore
+import moe.ouom.neriplayer.platform.search.api.PlatformSearchType
 import moe.ouom.neriplayer.ui.util.currentWindowWidthDp
 import moe.ouom.neriplayer.ui.util.copyPlainTextSafely
 import moe.ouom.neriplayer.ui.haptic.HapticIconButton
@@ -208,17 +200,30 @@ internal fun exploreSearchSourceDisplayOrder(
     youtubeEnabled: Boolean
 ): List<SearchSource> {
     return if (!youtubeEnabled) {
-        listOf(SearchSource.NETEASE, SearchSource.BILIBILI, SearchSource.LINK_RECOGNITION)
+        listOf(
+            SearchSource.NETEASE,
+            SearchSource.QQ_MUSIC,
+            SearchSource.KUGOU,
+            SearchSource.QISHUI,
+            SearchSource.BILIBILI,
+            SearchSource.LINK_RECOGNITION
+        )
     } else if (isInternational) {
         listOf(
             SearchSource.YOUTUBE_MUSIC,
             SearchSource.NETEASE,
+            SearchSource.QQ_MUSIC,
+            SearchSource.KUGOU,
+            SearchSource.QISHUI,
             SearchSource.BILIBILI,
             SearchSource.LINK_RECOGNITION
         )
     } else {
         listOf(
             SearchSource.NETEASE,
+            SearchSource.QQ_MUSIC,
+            SearchSource.KUGOU,
+            SearchSource.QISHUI,
             SearchSource.BILIBILI,
             SearchSource.YOUTUBE_MUSIC,
             SearchSource.LINK_RECOGNITION
@@ -240,13 +245,17 @@ internal fun exploreSearchScrollContextKey(
     keyword: String,
     source: SearchSource,
     neteaseSearchType: NeteaseExploreSearchType,
-    youtubeSearchType: YouTubeExploreSearchType = YouTubeExploreSearchType.SONG
+    youtubeSearchType: YouTubeExploreSearchType = YouTubeExploreSearchType.SONG,
+    platformSearchType: PlatformSearchType = PlatformSearchType.SONG
 ): String? {
     val normalizedKeyword = keyword.trim()
     if (normalizedKeyword.isBlank()) return null
     val sourceType = when (source) {
         SearchSource.NETEASE -> neteaseSearchType.name
         SearchSource.YOUTUBE_MUSIC -> youtubeSearchType.name
+        SearchSource.QQ_MUSIC,
+        SearchSource.KUGOU,
+        SearchSource.QISHUI -> platformSearchType.name
         else -> "-"
     }
     return "${source.name}|$sourceType|$normalizedKeyword"
@@ -321,6 +330,13 @@ internal fun shouldShowBiliPartsPicker(song: SongItem): Boolean {
         song.album.startsWith("${PlayerManager.BILI_SOURCE_TAG}|")
 }
 
+/** 在浏览器里打开平台页面（免登录平台的歌单/歌手没有取流接口，只能跳官网） */
+private fun openPlatformWebPage(context: Context, url: String) {
+    if (url.isBlank()) return
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+    context.tryStartActivity(intent)
+}
+
 @Composable
 private fun searchSourceLabel(source: SearchSource): String {
     return when (source) {
@@ -328,40 +344,9 @@ private fun searchSourceLabel(source: SearchSource): String {
         SearchSource.NETEASE -> stringResource(AppR.string.platform_netease_short)
         SearchSource.BILIBILI -> stringResource(AppR.string.platform_bilibili)
         SearchSource.LINK_RECOGNITION -> stringResource(CoreCommonR.string.explore_tab_links)
-    }
-}
-
-@Composable
-private fun neteaseSearchTypeLabel(type: NeteaseExploreSearchType): String {
-    return when (type) {
-        NeteaseExploreSearchType.SONG -> stringResource(CoreCommonR.string.explore_search_type_song)
-        NeteaseExploreSearchType.PLAYLIST -> stringResource(CoreCommonR.string.explore_search_type_playlist)
-        NeteaseExploreSearchType.ARTIST -> stringResource(CoreCommonR.string.explore_search_type_artist)
-    }
-}
-
-private fun neteaseSearchTypeIcon(type: NeteaseExploreSearchType): ImageVector {
-    return when (type) {
-        NeteaseExploreSearchType.SONG -> Icons.Outlined.MusicNote
-        NeteaseExploreSearchType.PLAYLIST -> Icons.AutoMirrored.Outlined.QueueMusic
-        NeteaseExploreSearchType.ARTIST -> Icons.Filled.AccountCircle
-    }
-}
-
-@Composable
-private fun youtubeSearchTypeLabel(type: YouTubeExploreSearchType): String {
-    return when (type) {
-        YouTubeExploreSearchType.SONG -> stringResource(CoreCommonR.string.explore_search_type_song)
-        YouTubeExploreSearchType.VIDEO -> stringResource(CoreCommonR.string.explore_search_type_video)
-        YouTubeExploreSearchType.CREATOR -> stringResource(CoreCommonR.string.explore_search_type_creator)
-    }
-}
-
-private fun youtubeSearchTypeIcon(type: YouTubeExploreSearchType): ImageVector {
-    return when (type) {
-        YouTubeExploreSearchType.SONG -> Icons.Outlined.MusicNote
-        YouTubeExploreSearchType.VIDEO -> Icons.Filled.PlayCircle
-        YouTubeExploreSearchType.CREATOR -> Icons.Filled.AccountCircle
+        SearchSource.QQ_MUSIC -> stringResource(CoreCommonR.string.explore_search_source_qq_music)
+        SearchSource.KUGOU -> stringResource(CoreCommonR.string.explore_search_source_kugou)
+        SearchSource.QISHUI -> stringResource(CoreCommonR.string.explore_search_source_qishui)
     }
 }
 
@@ -490,6 +475,10 @@ fun ExploreScreen(
         selectedSearchSource = ui.selectedSearchSource,
         contentScrolled = false
     )
+    // 各平台开放的搜索分类不一样（QQ 只有歌曲），类型栏按平台实际支持情况显示
+    val platformSearchTypes = remember(ui.selectedSearchSource) {
+        vm.supportedSearchTypes(ui.selectedSearchSource)
+    }
 
     val shouldLoadMoreSearch by remember(
         searchListState,
@@ -634,7 +623,8 @@ fun ExploreScreen(
             keyword = effectiveSearchKeyword,
             source = ui.selectedSearchSource,
             neteaseSearchType = ui.selectedNeteaseSearchType,
-            youtubeSearchType = ui.selectedYouTubeMusicSearchType
+            youtubeSearchType = ui.selectedYouTubeMusicSearchType,
+            platformSearchType = ui.selectedPlatformSearchType
         )
     }
 
@@ -780,9 +770,6 @@ fun ExploreScreen(
                                 ui.selectedSearchSource == SearchSource.LINK_RECOGNITION -> {
                                     Text(stringResource(CoreCommonR.string.explore_link_input_placeholder))
                                 }
-                                ui.selectedSearchSource == SearchSource.NETEASE && !ui.isNeteaseLoggedIn -> {
-                                    Text(stringResource(CoreCommonR.string.netease_login_required_search_placeholder))
-                                }
                                 cleanSearchField -> Text(searchFieldLabel)
                             }
                         },
@@ -832,11 +819,16 @@ fun ExploreScreen(
                             }
                         }
                     )
+                    ExploreHotSearchRow(
+                        entries = ui.hotSearchEntries,
+                        visible = ui.searchKeyword.isBlank(),
+                        onEntryClick = { entry -> submitExploreSearch(entry.title) }
+                    )
                     if (ui.selectedSearchSource == SearchSource.NETEASE && !ui.isNeteaseLoggedIn) {
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            text = stringResource(CoreCommonR.string.netease_login_required_search),
-                            color = MaterialTheme.colorScheme.error,
+                            text = stringResource(CoreCommonR.string.netease_anonymous_search_hint),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -897,6 +889,9 @@ fun ExploreScreen(
                         selectedYouTubeSearchType = ui.selectedYouTubeMusicSearchType,
                         onNeteaseSearchTypeClick = vm::setNeteaseSearchType,
                         onYouTubeSearchTypeClick = vm::setYouTubeMusicSearchType,
+                        selectedPlatformSearchType = ui.selectedPlatformSearchType,
+                        platformSearchTypes = platformSearchTypes,
+                        onPlatformSearchTypeClick = vm::setPlatformSearchType,
                         selectedAlpha = tagChipSelectedAlpha,
                         unselectedAlpha = tagChipUnselectedAlpha,
                         borderAlpha = tagChipBorderAlpha
@@ -1060,11 +1055,26 @@ fun ExploreScreen(
                                             )
                                         }
                                         is ExploreSearchResult.Playlist -> {
-                                            NeteasePlaylistSearchRow(
-                                                playlist = item.playlist,
-                                                offlineMode = offlineMode,
-                                                onClick = { onPlay(item.playlist) }
-                                            )
+                                            if (item.sourceTag != "netease") {
+                                                PlatformPlaylistSearchRow(
+                                                    playlist = item.playlist,
+                                                    owner = item.owner,
+                                                    offlineMode = offlineMode,
+                                                    onClick = {
+                                                        // 免登录平台的歌单没有取流接口，改成打开官方页面
+                                                        val webUrl = item.webUrl
+                                                        if (webUrl != null) {
+                                                            openPlatformWebPage(context, webUrl)
+                                                        }
+                                                    }
+                                                )
+                                            } else {
+                                                NeteasePlaylistSearchRow(
+                                                    playlist = item.playlist,
+                                                    offlineMode = offlineMode,
+                                                    onClick = { onPlay(item.playlist) }
+                                                )
+                                            }
                                         }
                                         is ExploreSearchResult.YouTubePlaylist -> {
                                             YouTubePlaylistSearchRow(
@@ -1081,11 +1091,26 @@ fun ExploreScreen(
                                             )
                                         }
                                         is ExploreSearchResult.Artist -> {
-                                            NeteaseArtistSearchRow(
-                                                result = item.result,
-                                                offlineMode = offlineMode,
-                                                onClick = { onNeteaseArtistClick(item.result.artist) }
-                                            )
+                                            if (item.sourceTag != "netease") {
+                                                PlatformArtistSearchRow(
+                                                    result = item.result,
+                                                    platformLabel = searchSourceLabel(currentSource),
+                                                    offlineMode = offlineMode,
+                                                    onClick = {
+                                                        // 免登录平台的歌手没有取流接口，改成打开官方页面
+                                                        val webUrl = item.webUrl
+                                                        if (webUrl != null) {
+                                                            openPlatformWebPage(context, webUrl)
+                                                        }
+                                                    }
+                                                )
+                                            } else {
+                                                NeteaseArtistSearchRow(
+                                                    result = item.result,
+                                                    offlineMode = offlineMode,
+                                                    onClick = { onNeteaseArtistClick(item.result.artist) }
+                                                )
+                                            }
                                         }
                                         is ExploreSearchResult.YouTubeCreator -> {
                                             YouTubeCreatorSearchRow(
@@ -1144,6 +1169,16 @@ fun ExploreScreen(
                         SearchSource.BILIBILI -> {
                             Box(Modifier.fillMaxSize(), Alignment.Center) {
                                 Text(stringResource(AppR.string.explore_bili_desc), style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                        SearchSource.QQ_MUSIC,
+                        SearchSource.KUGOU,
+                        SearchSource.QISHUI -> {
+                            Box(Modifier.fillMaxSize(), Alignment.Center) {
+                                Text(
+                                    text = stringResource(CoreCommonR.string.explore_platform_search_desc),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
                             }
                         }
                         SearchSource.YOUTUBE_MUSIC -> {
@@ -1433,6 +1468,100 @@ private fun ExploreOfflineContent(topAppBarState: TopAppBarState) {
     }
 }
 
+/**
+ * 热搜榜：未输入关键词时展示当前来源的热门歌曲，点一下直接用它搜。
+ */
+@Composable
+private fun ExploreHotSearchRow(
+    entries: List<HotSearchEntry>,
+    visible: Boolean,
+    onEntryClick: (HotSearchEntry) -> Unit
+) {
+    AnimatedVisibility(visible = visible && entries.isNotEmpty()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.LocalFireDepartment,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = stringResource(CoreCommonR.string.explore_hot_search),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            val listState = rememberLazyListState()
+            val showStartFade by remember(listState) {
+                derivedStateOf { listState.canScrollBackward }
+            }
+            val showEndFade by remember(listState) {
+                derivedStateOf { listState.canScrollForward }
+            }
+            LazyRow(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .exploreHorizontalEdgeFade(
+                        showStartFade = showStartFade,
+                        showEndFade = showEndFade
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(entries, key = { _, entry -> "${entry.source.name}-${entry.title}" }) { index, entry ->
+                    ExploreHotSearchChip(
+                        rank = index + 1,
+                        entry = entry,
+                        onClick = { onEntryClick(entry) },
+                        modifier = Modifier.animateItem()
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExploreHotSearchChip(
+    rank: Int,
+    entry: HotSearchEntry,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = rank.toString().padStart(2, '0'),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = entry.title,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 140.dp)
+        )
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ExploreSearchHistoryRow(
@@ -1615,185 +1744,4 @@ internal fun shouldShowExploreYouTubeSearchTypeBar(
         SearchSource.YOUTUBE_MUSIC
 }
 
-internal fun exploreSearchTypeBarSource(
-    selectedSearchSource: SearchSource,
-    contentScrolled: Boolean
-): SearchSource? {
-    if (contentScrolled) return null
-    return selectedSearchSource.takeIf {
-        it == SearchSource.NETEASE || it == SearchSource.YOUTUBE_MUSIC
-    }
-}
-
-internal fun isExploreSearchTypeBarSourceSwap(
-    initialSource: SearchSource?,
-    targetSource: SearchSource?
-): Boolean {
-    return initialSource != targetSource &&
-        initialSource in EXPLORE_SEARCH_TYPE_BAR_SOURCES &&
-        targetSource in EXPLORE_SEARCH_TYPE_BAR_SOURCES
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-internal fun ExploreSearchTypeBar(
-    source: SearchSource?,
-    selectedNeteaseSearchType: NeteaseExploreSearchType,
-    selectedYouTubeSearchType: YouTubeExploreSearchType,
-    onNeteaseSearchTypeClick: (NeteaseExploreSearchType) -> Unit,
-    onYouTubeSearchTypeClick: (YouTubeExploreSearchType) -> Unit,
-    selectedAlpha: Float,
-    unselectedAlpha: Float,
-    borderAlpha: Float
-) {
-    AnimatedContent(
-        targetState = source,
-        modifier = Modifier.testTag(EXPLORE_SEARCH_TYPE_BAR_CONTAINER_TAG),
-        transitionSpec = {
-            val sourceSwap = isExploreSearchTypeBarSourceSwap(initialState, targetState)
-            val enter = if (sourceSwap) {
-                fadeIn(
-                    animationSpec = tween(
-                        durationMillis = EXPLORE_SEARCH_TYPE_BAR_ENTER_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                ) + slideInVertically(
-                    initialOffsetY = { height ->
-                        if (targetState == SearchSource.YOUTUBE_MUSIC) {
-                            height / EXPLORE_SEARCH_TYPE_BAR_SLIDE_DIVISOR
-                        } else {
-                            -height / EXPLORE_SEARCH_TYPE_BAR_SLIDE_DIVISOR
-                        }
-                    },
-                    animationSpec = tween(
-                        durationMillis = EXPLORE_SEARCH_TYPE_BAR_ENTER_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                )
-            } else {
-                fadeIn(
-                    animationSpec = tween(
-                        durationMillis = EXPLORE_SEARCH_TYPE_BAR_ENTER_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                ) + expandVertically(
-                    animationSpec = tween(
-                        durationMillis = EXPLORE_SEARCH_TYPE_BAR_SIZE_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                )
-            }
-            val exit = if (sourceSwap) {
-                fadeOut(
-                    animationSpec = tween(
-                        durationMillis = EXPLORE_SEARCH_TYPE_BAR_EXIT_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                ) + slideOutVertically(
-                    targetOffsetY = { height ->
-                        if (targetState == SearchSource.YOUTUBE_MUSIC) {
-                            -height / EXPLORE_SEARCH_TYPE_BAR_SLIDE_DIVISOR
-                        } else {
-                            height / EXPLORE_SEARCH_TYPE_BAR_SLIDE_DIVISOR
-                        }
-                    },
-                    animationSpec = tween(
-                        durationMillis = EXPLORE_SEARCH_TYPE_BAR_EXIT_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                )
-            } else {
-                fadeOut(
-                    animationSpec = tween(
-                        durationMillis = EXPLORE_SEARCH_TYPE_BAR_EXIT_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                ) + shrinkVertically(
-                    animationSpec = tween(
-                        durationMillis = EXPLORE_SEARCH_TYPE_BAR_SIZE_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                )
-            }
-            enter togetherWith exit using SizeTransform(
-                clip = true,
-                sizeAnimationSpec = { _, _ ->
-                    tween(
-                        durationMillis = EXPLORE_SEARCH_TYPE_BAR_SIZE_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                }
-            )
-        },
-        label = "explore_search_type_bar"
-    ) { displayedSource ->
-        when (displayedSource) {
-            SearchSource.NETEASE -> {
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                        .testTag(EXPLORE_NETEASE_SEARCH_TYPE_BAR_TAG),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    itemsIndexed(NeteaseExploreSearchType.entries) { _, type ->
-                        ExploreTagChip(
-                            label = neteaseSearchTypeLabel(type),
-                            icon = neteaseSearchTypeIcon(type),
-                            selected = selectedNeteaseSearchType == type,
-                            onClick = {
-                                if (source == displayedSource) {
-                                    onNeteaseSearchTypeClick(type)
-                                }
-                            },
-                            selectedAlpha = selectedAlpha,
-                            unselectedAlpha = unselectedAlpha,
-                            borderAlpha = borderAlpha
-                        )
-                    }
-                }
-            }
-
-            SearchSource.YOUTUBE_MUSIC -> {
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                        .testTag(EXPLORE_YOUTUBE_SEARCH_TYPE_BAR_TAG),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    itemsIndexed(YouTubeExploreSearchType.entries) { _, type ->
-                        ExploreTagChip(
-                            label = youtubeSearchTypeLabel(type),
-                            icon = youtubeSearchTypeIcon(type),
-                            selected = selectedYouTubeSearchType == type,
-                            onClick = {
-                                if (source == displayedSource) {
-                                    onYouTubeSearchTypeClick(type)
-                                }
-                            },
-                            selectedAlpha = selectedAlpha,
-                            unselectedAlpha = unselectedAlpha,
-                            borderAlpha = borderAlpha
-                        )
-                    }
-                }
-            }
-
-            else -> Unit
-        }
-    }
-}
-
 private const val EXPLORE_HISTORY_DISPLAY_LIMIT = 15
-private val EXPLORE_SEARCH_TYPE_BAR_SOURCES = setOf(
-    SearchSource.NETEASE,
-    SearchSource.YOUTUBE_MUSIC
-)
-private const val EXPLORE_SEARCH_TYPE_BAR_ENTER_DURATION_MS = 180
-private const val EXPLORE_SEARCH_TYPE_BAR_EXIT_DURATION_MS = 140
-private const val EXPLORE_SEARCH_TYPE_BAR_SIZE_DURATION_MS = 220
-private const val EXPLORE_SEARCH_TYPE_BAR_SLIDE_DIVISOR = 5
-internal const val EXPLORE_SEARCH_TYPE_BAR_CONTAINER_TAG = "explore_search_type_bar"
-internal const val EXPLORE_NETEASE_SEARCH_TYPE_BAR_TAG = "explore_netease_search_type_bar"
-internal const val EXPLORE_YOUTUBE_SEARCH_TYPE_BAR_TAG = "explore_youtube_search_type_bar"
