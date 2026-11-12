@@ -41,9 +41,7 @@ class LxSourceResolver(
         if (!enabledProvider()) return null
         return when (
             val r = repository.resolveMusicUrlForSong(
-                songName = song.name,
-                artist = song.artist,
-                durationMs = song.durationMs,
+                song = song,
                 platform = platform,
                 quality = quality,
             )
@@ -51,7 +49,7 @@ class LxSourceResolver(
             is LxResult.Ok -> {
                 NPLogger.w("LxSource", "resolved song=${song.name} via LX platform=${platform.code} quality=${quality.code}")
                 SongUrlResult.Success(
-                    url = r.value,
+                    url = r.value.url,
                     durationMs = song.durationMs.takeIf { it > 0 },
                     mimeType = when (quality) {
                         LxQuality.FLAC, LxQuality.FLAC24 -> "audio/flac"

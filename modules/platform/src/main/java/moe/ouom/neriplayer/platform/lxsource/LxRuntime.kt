@@ -129,25 +129,28 @@ class LxRuntime(
             }
         }
 
+    /**
+     * 请求播放地址。
+     *
+     * 洛雪协议：info = { type: <音质>, musicInfo: <音乐信息对象> }。
+     * 脚本读的是 info.musicInfo，只传 songmid 的话脚本会直接报「缺少musicInfo」。
+     */
     suspend fun requestMusicUrl(
-        songMid: String,
+        musicInfo: LxMusicInfo,
         platform: LxPlatform,
         quality: LxQuality,
         timeoutMs: Long = 20_000,
-        hash: String = "",
-    ): LxResult<String> = withContext(jsDispatcher) {
+    ): LxResult<LxMusicUrl> = withContext(jsDispatcher) {
         val ctx = ctxRef.get() ?: return@withContext LxResult.Err("no_ctx", "runtime not inited")
         try {
-            val payload = JSONObject(mapOf(
-                "action" to "musicUrl",
-                "source" to platform.code,
-                "info" to mapOf(
-                    "songmid" to songMid,
-                    // 酷狗等平台的取流接口认 hash，两个字段都带上，兼容不同脚本的取值习惯
-                    "hash" to hash,
-                    "type" to quality.code
-                )
-            )).toString()
+            val info = JSONObject()
+                .put("type", quality.code)
+                .put("musicInfo", musicInfo.toJson())
+            val payload = JSONObject()
+                .put("action", "musicUrl")
+                .put("source", platform.code)
+                .put("info", info)
+                .toString()
             val escaped = payload.replace("\\", "\\\\").replace("\"", "\\\"")
             ctx.evaluate("globalThis.__lx_req = JSON.parse(\"$escaped\");")
             // 真正触发脚本的 request 处理器；结果由 preload 的 __lx_dispatch 桥接到 __lx_lastMusicUrl
@@ -159,18 +162,33 @@ class LxRuntime(
                 ctx.evaluate(pump)
                 val v = ctx.evaluate("JSON.stringify(globalThis.__lx_lastMusicUrl || {})")
                 if (v is String) last = v
-                if (last.contains("url")) break
+                // 拿到地址或错误就收工，别白等满超时（脚本拒绝时是 {"error":...}）
+                if (last.contains("url") || last.contains("error")) break
                 pumpSleep(80)
             }
             if (last.isEmpty() || last == "{}") {
                 return@withContext LxResult.Err("timeout", "musicUrl timeout or empty")
+            }
+            // 社区脚本有两种返回形态：桌面版的 {url, quality, headers} 对象，
+            // 移动版的纯 URL 字符串，两种都要接住。
+            if (!last.trimStart().startsWith("{")) {
+                val raw = last.trim().trim('"')
+                return@withContext if (raw.isEmpty()) {
+                    LxResult.Err("empty", last)
+                } else {
+                    LxResult.Ok(LxMusicUrl(raw))
+                }
             }
             val payloadJson = JSONObject(last)
             payloadJson.optString("error").takeIf { it.isNotBlank() }?.let {
                 return@withContext LxResult.Err("script_error", it)
             }
             val url = payloadJson.optString("url", "")
-            if (url.isEmpty()) LxResult.Err("empty", last) else LxResult.Ok(url)
+            if (url.isEmpty()) {
+                LxResult.Err("empty", last)
+            } else {
+                LxResult.Ok(LxMusicUrl(url = url, headers = payloadJson.readHeaders()))
+            }
         } catch (e: Exception) {
             LxResult.Err("request_fail", (e.message ?: e.toString()))
         }
@@ -323,8 +341,20 @@ class LxRuntime(
         return out
     }
 
-    private fun parseInInited(text: String): LxSourceInfo {
-        val obj = JSONObject(text)
+    /** 读取脚本返回的 headers 对象（部分音源的地址需要 Referer 才能拉流） */
+    private fun JSONObject.readHeaders(): Map<String, String> {
+        val obj = optJSONObject("headers") ?: return emptyMap()
+        val out = LinkedHashMap<String, String>()
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val value = obj.optString(key, "").trim()
+            if (value.isNotEmpty()) out[key] = value
+        }
+        return out
+    }
+
+    private fun parseInInited(text: String): LxSourceInfo {        val obj = JSONObject(text)
         val sources = mutableMapOf<String, List<String>>()
         val srcObj = obj.optJSONObject("sources")
         if (srcObj != null) {

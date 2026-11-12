@@ -60,6 +60,8 @@ import moe.ouom.neriplayer.data.model.SongItem
 import moe.ouom.neriplayer.platform.netease.mapping.parseNeteaseSongDetail
 import moe.ouom.neriplayer.platform.search.api.HotSearchEntry
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchApi
+import moe.ouom.neriplayer.platform.search.api.PlatformBrowseApi
+import moe.ouom.neriplayer.platform.search.api.PlatformBrowseCard
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchResult
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchType
 import moe.ouom.neriplayer.platform.search.api.stablePlatformSongId
@@ -225,7 +227,15 @@ data class ExploreUiState(
     val ytMusicPlaylistsLoading: Boolean = false,
     val ytMusicPlaylistsError: UiText? = null,
     val hotSearchEntries: List<HotSearchEntry> = emptyList(),
-    val hotSearchLoading: Boolean = false
+    val hotSearchLoading: Boolean = false,
+    /** 平台浏览页（默认页）的歌单 / 榜单卡片 */
+    val platformBrowseCards: List<PlatformBrowseCard> = emptyList(),
+    val platformBrowseLoading: Boolean = false,
+    val platformBrowseError: UiText? = null,
+    /** 展开中的榜单及其曲目 */
+    val platformBrowseTracks: List<PlatformSearchResult> = emptyList(),
+    val platformBrowseTracksLoading: Boolean = false,
+    val platformBrowseTrackTitle: String = ""
 )
 
 /**
@@ -377,6 +387,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val app: Context get() = LanguageManager.applyLanguage(baseApplication)
     private val neteaseRepo = AppContainer.neteaseCookieRepo
     private var highQualityLoadJob: Job? = null
+private var platformBrowseJob: Job? = null
     private var highQualityLoadCookies: Map<String, String>? = null
     private var searchJob: Job? = null
     private var searchMoreJob: Job? = null
@@ -851,6 +862,89 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 )
             }
         }
+    }
+
+    /**
+     * 加载平台浏览页（默认页）的歌单 / 榜单。
+     *
+     * 网易云走精品歌单，其它平台走各自的榜单，
+     * 语义上都是"一组可浏览的集合"，界面才能共用同一套渲染。
+     */
+    fun loadPlatformBrowse(source: SearchSource) {
+        val api = platformBrowseApiFor(source) ?: return
+        if (platformBrowseJob?.isActive == true) return
+        _uiState.value = _uiState.value.copy(
+            platformBrowseLoading = true,
+            platformBrowseError = null,
+            platformBrowseCards = emptyList(),
+            platformBrowseTracks = emptyList(),
+            platformBrowseTrackTitle = ""
+        )
+        platformBrowseJob = viewModelScope.launch {
+            try {
+                val cards = api.browse(api.categories.firstOrNull().orEmpty())
+                _uiState.value = _uiState.value.copy(
+                    platformBrowseLoading = false,
+                    platformBrowseError = null,
+                    platformBrowseCards = cards
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    platformBrowseLoading = false,
+                    platformBrowseError = feedbackText(
+                        CoreCommonR.string.error_load_playlist,
+                        e.message ?: feedbackText(CoreCommonR.string.github_sync_failed_message)
+                    )
+                )
+            }
+        }
+    }
+
+    /** 展开某个榜单的曲目 */
+    fun loadPlatformBrowseTracks(card: PlatformBrowseCard) {
+        val api = platformBrowseApiFor(_uiState.value.selectedSearchSource) ?: return
+        if (_uiState.value.platformBrowseTracksLoading) return
+        _uiState.value = _uiState.value.copy(
+            platformBrowseTracksLoading = true,
+            platformBrowseTracks = emptyList(),
+            platformBrowseTrackTitle = card.title
+        )
+        viewModelScope.launch {
+            try {
+                val tracks = api.tracks(card)
+                _uiState.value = _uiState.value.copy(
+                    platformBrowseTracksLoading = false,
+                    platformBrowseTracks = tracks
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    platformBrowseTracksLoading = false,
+                    platformBrowseError = feedbackText(
+                        CoreCommonR.string.error_load_playlist,
+                        e.message ?: feedbackText(CoreCommonR.string.github_sync_failed_message)
+                    )
+                )
+            }
+        }
+    }
+
+    /** 收起展开中的榜单 */
+    fun closePlatformBrowseTracks() {
+        _uiState.value = _uiState.value.copy(
+            platformBrowseTracks = emptyList(),
+            platformBrowseTrackTitle = "",
+            platformBrowseTracksLoading = false
+        )
+    }
+
+    private fun platformBrowseApiFor(source: SearchSource): PlatformBrowseApi? = when (source) {
+        SearchSource.KUGOU -> AppContainer.kugouBrowseApi
+        SearchSource.QQ_MUSIC -> AppContainer.qqBrowseApi
+        else -> null
     }
 
     /**

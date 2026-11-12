@@ -19,7 +19,7 @@ package moe.ouom.neriplayer.platform.lxsource
  * along with this software.
  * If not, see <https://www.gnu.org/licenses/>.
  *
- * File: moe.ouom.neriplayer.platform.lxsource/LxTestSongLocator
+ * File: moe.ouom.neriplayer.platform.lxsource/LxMusicInfoLocator
  * Created: 2026/11/12
  */
 
@@ -31,49 +31,40 @@ import okhttp3.Request
 import org.json.JSONObject
 
 /**
- * 音质检测用的测试歌曲引用。
+ * 按平台定位一首真实存在的歌曲，产出洛雪协议需要的 musicInfo。
  *
- * @param songmid 平台内的歌曲 id（洛雪协议里 musicUrl 的 info.songmid）
- * @param hash 平台内的文件 hash（酷狗取流认这个字段）
- */
-data class LxTestSongRef(
-    val songmid: String,
-    val hash: String = "",
-    val title: String = "",
-    val artist: String = ""
-)
-
-/**
- * 为音质检测定位一首测试歌曲。
- *
- * 洛雪自定义源只负责"拿 songmid 换播放地址"，不负责搜索；
- * 想验证某个平台的某档音质能不能出流，必须先有一个该平台真实存在的 songmid。
+ * 洛雪自定义源只负责"拿 musicInfo 换播放地址"，不负责搜索；
+ * 要让脚本能取流，就得先给它一个该平台真实存在的 musicInfo。
  *
  * 这里用各平台公开的搜索接口按"歌名 歌手"定位同一首歌，
  * 这样各平台的检测结果指向同一首曲子，结果才有可比性。
  * 定位不到的平台（例如咪咕没有可用的匿名搜索）会返回 null，由调用方标记为不可测。
  */
-class LxTestSongLocator(
+class LxMusicInfoLocator(
     private val client: OkHttpClient,
     /** 网易云匿名搜索（eapi）：由宿主注入，避免这里耦合 NeteaseClient */
     private val neteaseSearch: suspend (keyword: String) -> String? = { null }
 ) {
 
-    suspend fun locate(platform: LxPlatform, keyword: String): LxTestSongRef? =
-        withContext(Dispatchers.IO) {
-            if (keyword.isBlank()) return@withContext null
-            when (platform) {
-                LxPlatform.WY -> locateNetease(keyword)
-                LxPlatform.TX -> locateQq(keyword)
-                LxPlatform.KG -> locateKugou(keyword)
-                LxPlatform.KW -> locateKuwo(keyword)
-                LxPlatform.QS -> locateQishui(keyword)
-                LxPlatform.MG, LxPlatform.LOCAL -> null
-            }
+    suspend fun locate(
+        platform: LxPlatform,
+        keyword: String,
+        types: List<LxQuality> = defaultTypes(platform),
+        quality: LxQuality? = null
+    ): LxMusicInfo? = withContext(Dispatchers.IO) {
+        if (keyword.isBlank()) return@withContext null
+        when (platform) {
+            LxPlatform.WY -> locateNetease(keyword, types)
+            LxPlatform.TX -> locateQq(keyword, types)
+            LxPlatform.KG -> locateKugou(keyword, types, quality)
+            LxPlatform.KW -> locateKuwo(keyword, types)
+            LxPlatform.QS -> locateQishui(keyword, types)
+            LxPlatform.MG, LxPlatform.LOCAL -> null
         }
+    }
 
     /** 网易云：eapi 匿名搜索，返回歌曲 id */
-    private suspend fun locateNetease(keyword: String): LxTestSongRef? {
+    private suspend fun locateNetease(keyword: String, types: List<LxQuality>): LxMusicInfo? {
         val raw = runCatching { neteaseSearch(keyword) }.getOrNull() ?: return null
         val root = runCatching { JSONObject(raw) }.getOrNull() ?: return null
         if (root.optInt("code", -1) != 200) return null
@@ -88,15 +79,21 @@ class LxTestSongLocator(
                     ?.takeIf { it.isNotEmpty() }?.let { add(it) }
             }
         }
-        return LxTestSongRef(
+        val album = song.optJSONObject("al")
+        return LxMusicInfo(
+            source = LxPlatform.WY.code,
             songmid = id.toString(),
-            title = song.optString("name", ""),
-            artist = artistNames.joinToString("/")
+            name = song.optString("name", ""),
+            singer = artistNames.joinToString("/"),
+            albumName = album?.optString("name", "").orEmpty(),
+            durationMs = song.optLong("dt", 0L),
+            types = types,
+            coverUrl = album?.optString("picUrl", "")?.takeIf { it.isNotBlank() }
         )
     }
 
     /** QQ音乐：client_search_cp，返回 songmid */
-    private suspend fun locateQq(keyword: String): LxTestSongRef? {
+    private suspend fun locateQq(keyword: String, types: List<LxQuality>): LxMusicInfo? {
         val url = "https://c.y.qq.com/soso/fcgi-bin/client_search_cp".toQueryUrl(
             "format" to "json",
             "n" to "10",
@@ -118,15 +115,31 @@ class LxTestSongLocator(
                     ?.takeIf { it.isNotEmpty() }?.let { add(it) }
             }
         }
-        return LxTestSongRef(
+        val albumMid = song.optString("albummid", "").trim()
+        return LxMusicInfo(
+            source = LxPlatform.TX.code,
             songmid = mid,
-            title = song.optString("songname", ""),
-            artist = artistNames.joinToString("/")
+            name = song.optString("songname", ""),
+            singer = artistNames.joinToString("/"),
+            albumName = song.optString("albumname", ""),
+            durationMs = song.optInt("interval") * 1000L,
+            types = types,
+            coverUrl = song.optString("albumid", "").takeIf { it.isNotBlank() }
+                ?.let { "https://y.qq.com/music/photo_new/T002R300x300M000$it.jpg" },
+            extras = buildMap {
+                // QQ 源脚本认 strMediaMid（歌曲 mid）与 albumMid（专辑 mid）
+                put("strMediaMid", mid)
+                if (albumMid.isNotBlank()) put("albumMid", albumMid)
+            }
         )
     }
 
-    /** 酷狗：song_search_v2，取 FileHash（洛雪协议里酷狗认 hash） */
-    private suspend fun locateKugou(keyword: String): LxTestSongRef? {
+    /** 酷狗：song_search_v2，取各音质的文件 hash */
+    private suspend fun locateKugou(
+        keyword: String,
+        types: List<LxQuality>,
+        quality: LxQuality?
+    ): LxMusicInfo? {
         val url = "https://songsearch.kugou.com/song_search_v2".toQueryUrl(
             "keyword" to keyword,
             "page" to "1",
@@ -136,20 +149,43 @@ class LxTestSongLocator(
         val root = requestJson(url, referer = "https://www.kugou.com/") ?: return null
         val list = root.optJSONObject("data")?.optJSONArray("lists") ?: return null
         val song = list.optJSONObject(0) ?: return null
-        val hash = song.optString("FileHash", "").trim()
+        // 酷狗按音质取流要对应的 hash：128k=FileHash、320k=SQFileHash、无损=HQFileHash、母带=SuperFileHash
+        val hashes = mapOf(
+            LxQuality.Q128 to song.optString("FileHash", "").trim(),
+            LxQuality.Q320 to song.optString("SQFileHash", "").trim(),
+            LxQuality.FLAC to song.optString("HQFileHash", "").trim(),
+            LxQuality.FLAC24 to song.optString("SuperFileHash", "").trim()
+        ).filterValues { it.isNotBlank() }
+        // 请求哪档音质就给哪档的 hash，否则脚本会拿 128k 的 hash 去要高音质
+        val primary = (quality?.let { hashes[it] } ?: hashes[LxQuality.Q128])
+            ?: song.optString("FileHash", "").trim()
+        if (primary.isEmpty()) return null
+        val albumId = song.optString("AlbumID", "").trim()
         val audioId = song.optString("Audioid", "").trim()
-        val songmid = hash.ifEmpty { audioId }
-        if (songmid.isEmpty()) return null
-        return LxTestSongRef(
-            songmid = songmid,
-            hash = hash,
-            title = song.optString("SongName", ""),
-            artist = song.optString("SingerName", "")
+        return LxMusicInfo(
+            source = LxPlatform.KG.code,
+            songmid = primary,
+            name = song.optString("SongName", ""),
+            singer = song.optString("SingerName", ""),
+            albumName = song.optString("AlbumName", ""),
+            durationMs = song.optInt("Duration") * 1000L,
+            types = types,
+            qualityHashes = hashes,
+            coverUrl = song.optString("Image", "").takeIf { it.isNotBlank() },
+            extras = buildMap {
+                put("hash", primary)
+                if (albumId.isNotBlank()) put("albumId", albumId)
+                if (audioId.isNotBlank()) put("Audioid", audioId)
+                hashes[LxQuality.Q128]?.let { put("FileHash", it) }
+                hashes[LxQuality.Q320]?.let { put("SQFileHash", it) }
+                hashes[LxQuality.FLAC]?.let { put("HQFileHash", it) }
+                hashes[LxQuality.FLAC24]?.let { put("SuperFileHash", it) }
+            }
         )
     }
 
     /** 酷我：search.kuwo.cn，取 DC_TARGETID（即 MUSICRID） */
-    private suspend fun locateKuwo(keyword: String): LxTestSongRef? {
+    private suspend fun locateKuwo(keyword: String, types: List<LxQuality>): LxMusicInfo? {
         val url = "https://search.kuwo.cn/r.s".toQueryUrl(
             "all" to keyword,
             "ft" to "music",
@@ -167,15 +203,21 @@ class LxTestSongLocator(
         val name = Regex("'NAME':'([^']*)'").find(raw)?.groupValues?.get(1)
             ?.replace("&nbsp;", " ")?.trim().orEmpty()
         val artist = Regex("'ARTIST':'([^']*)'").find(raw)?.groupValues?.get(1)?.trim().orEmpty()
-        return LxTestSongRef(
+        val durationSec = Regex("'DURATION':'([^']*)'").find(raw)?.groupValues?.get(1)
+            ?.trim()?.toLongOrNull() ?: 0L
+        return LxMusicInfo(
+            source = LxPlatform.KW.code,
             songmid = targetId,
-            title = name,
-            artist = artist
+            name = name,
+            singer = artist,
+            durationMs = durationSec * 1000L,
+            types = types,
+            extras = mapOf("rid" to targetId)
         )
     }
 
     /** 汽水音乐：luna/search/track，取 track id */
-    private suspend fun locateQishui(keyword: String): LxTestSongRef? {
+    private suspend fun locateQishui(keyword: String, types: List<LxQuality>): LxMusicInfo? {
         val url = "https://api.qishui.com/luna/search/track".toQueryUrl(
             "device_platform" to "android",
             "os" to "android",
@@ -218,10 +260,15 @@ class LxTestSongLocator(
                     ?.takeIf { it.isNotEmpty() }?.let { add(it) }
             }
         }
-        return LxTestSongRef(
+        val album = track.optJSONObject("album")
+        return LxMusicInfo(
+            source = LxPlatform.QS.code,
             songmid = id,
-            title = track.optString("name", ""),
-            artist = artistNames.joinToString("/")
+            name = track.optString("name", ""),
+            singer = artistNames.joinToString("/"),
+            albumName = album?.optString("name", "").orEmpty(),
+            durationMs = track.optLong("duration", 0L),
+            types = types
         )
     }
 
@@ -256,11 +303,18 @@ class LxTestSongLocator(
     private fun randomDeviceId(): String =
         UUID.randomUUID().toString().replace("-", "").take(16)
 
-    private companion object {
-        const val WEB_USER_AGENT =
+    companion object {
+        /** 各平台常见的可用音质（脚本声明的为准，这里只是兜底） */
+        fun defaultTypes(platform: LxPlatform): List<LxQuality> = when (platform) {
+            LxPlatform.TX, LxPlatform.WY -> listOf(LxQuality.Q128, LxQuality.Q320, LxQuality.FLAC)
+            LxPlatform.MG -> listOf(LxQuality.Q128, LxQuality.Q320)
+            else -> LxQuality.STANDARD_ORDER
+        }
+
+        private const val WEB_USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                 "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        const val LUNA_USER_AGENT =
+        private const val LUNA_USER_AGENT =
             "com.luna.music/100198030 (Linux; U; Android 15; zh_CN_#Hans; ABR-AL80; " +
                 "Build/V417IR;tt-ok/3.12.13.19)"
     }

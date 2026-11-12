@@ -22,8 +22,8 @@
     <string name="explore_search_type_video">Videos</string>
     <string name="explore_search_type_creator">Creators</string>
     <string name="explore_tab_youtube">YouTube</string>
-    <string name="explore_platform_search_desc">Search songs, playlists and artists, no third-party login required</string>
     <string name="explore_tab_links">Links</string>
+    <string name="explore_platform_browse_empty">This platform has no public playlist or chart recommendations yet. Search for songs, playlists and artists above.</string>
     <string name="explore_search_source_qq_music">QQ Music</string>
     <string name="explore_search_source_kugou">KuGou</string>
     <string name="explore_search_source_qishui">Qishui</string>

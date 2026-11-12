@@ -22,8 +22,8 @@
     <string name="explore_search_type_video">视频</string>
     <string name="explore_search_type_creator">创作者</string>
     <string name="explore_tab_youtube">YouTube</string>
-    <string name="explore_platform_search_desc">搜索歌曲、歌单与歌手，无需登录第三方账号</string>
     <string name="explore_tab_links">链接</string>
+    <string name="explore_platform_browse_empty">该平台暂未开放歌单与排行榜推荐，可以直接在上方搜索歌曲、歌单与歌手。</string>
     <string name="explore_search_source_qq_music">QQ音乐</string>
     <string name="explore_search_source_kugou">酷狗</string>
     <string name="explore_search_source_qishui">汽水</string>

@@ -529,6 +529,15 @@ fun ExploreScreen(
         if (currentSource == SearchSource.YOUTUBE_MUSIC && ui.ytMusicPlaylists.isEmpty()) {
             vm.loadYtMusicPlaylists()
         }
+        // 平台源切到默认页时加载浏览内容（歌单 / 榜单），和网易云保持一致
+        if (currentSource == SearchSource.QQ_MUSIC ||
+            currentSource == SearchSource.KUGOU ||
+            currentSource == SearchSource.QISHUI
+        ) {
+            if (ui.platformBrowseCards.isEmpty() && !ui.platformBrowseLoading) {
+                vm.loadPlatformBrowse(currentSource)
+            }
+        }
     }
 
     // 国际化模式默认跳到 YouTube Music 标签
@@ -883,19 +892,22 @@ fun ExploreScreen(
                             }
                         }
                     }
-                    ExploreSearchTypeBar(
-                        source = searchTypeBarSource,
-                        selectedNeteaseSearchType = ui.selectedNeteaseSearchType,
-                        selectedYouTubeSearchType = ui.selectedYouTubeMusicSearchType,
-                        onNeteaseSearchTypeClick = vm::setNeteaseSearchType,
-                        onYouTubeSearchTypeClick = vm::setYouTubeMusicSearchType,
-                        selectedPlatformSearchType = ui.selectedPlatformSearchType,
-                        platformSearchTypes = platformSearchTypes,
-                        onPlatformSearchTypeClick = vm::setPlatformSearchType,
-                        selectedAlpha = tagChipSelectedAlpha,
-                        unselectedAlpha = tagChipUnselectedAlpha,
-                        borderAlpha = tagChipBorderAlpha
-                    )
+                    // 搜索分类只影响搜索结果；没有搜索词时展示它会让人以为能切换浏览内容
+                    if (searchQuery.isNotBlank()) {
+                        ExploreSearchTypeBar(
+                            source = searchTypeBarSource,
+                            selectedNeteaseSearchType = ui.selectedNeteaseSearchType,
+                            selectedYouTubeSearchType = ui.selectedYouTubeMusicSearchType,
+                            onNeteaseSearchTypeClick = vm::setNeteaseSearchType,
+                            onYouTubeSearchTypeClick = vm::setYouTubeMusicSearchType,
+                            selectedPlatformSearchType = ui.selectedPlatformSearchType,
+                            platformSearchTypes = platformSearchTypes,
+                            onPlatformSearchTypeClick = vm::setPlatformSearchType,
+                            selectedAlpha = tagChipSelectedAlpha,
+                            unselectedAlpha = tagChipUnselectedAlpha,
+                            borderAlpha = tagChipBorderAlpha
+                        )
+                    }
                     }
                 }
 
@@ -1174,12 +1186,28 @@ fun ExploreScreen(
                         SearchSource.QQ_MUSIC,
                         SearchSource.KUGOU,
                         SearchSource.QISHUI -> {
-                            Box(Modifier.fillMaxSize(), Alignment.Center) {
-                                Text(
-                                    text = stringResource(CoreCommonR.string.explore_platform_search_desc),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            }
+                            PlatformBrowseContent(
+                                browse = PlatformBrowseState(
+                                    cards = ui.platformBrowseCards,
+                                    loading = ui.platformBrowseLoading,
+                                    error = ui.platformBrowseError?.asString(),
+                                    trackTitle = ui.platformBrowseTrackTitle,
+                                    tracks = ui.platformBrowseTracks,
+                                    tracksLoading = ui.platformBrowseTracksLoading
+                                ),
+                                onCardClick = { card -> vm.loadPlatformBrowseTracks(card) },
+                                onTrackClick = { track ->
+                                    onSongClick(
+                                        ui.platformBrowseTracks.map { it.toSongItem() },
+                                        ui.platformBrowseTracks.indexOf(track)
+                                    )
+                                },
+                                onPlayTrackNow = { track ->
+                                    onSongPlayPreservingQueue(track.toSongItem())
+                                },
+                                onCloseTracks = { vm.closePlatformBrowseTracks() },
+                                isTabletLayout = isTabletLayout
+                            )
                         }
                         SearchSource.YOUTUBE_MUSIC -> {
                             YouTubeMusicExploreContent(

@@ -48,7 +48,11 @@
     <string name="settings_lx_source_quality">LX 自定义源默认音质</string>
     <string name="settings_lx_source_quality_desc">默认 320k；实际音质以脚本声明的 qualitys 为准，不支持则逐级降级</string>
     <string name="settings_lx_import_file">从文件导入脚本</string>
-    <string name="settings_lx_import_example">导入内置示例脚本</string>
+    <string name="settings_lx_import_url">导入链接脚本</string>
+    <string name="settings_lx_import_url_title">导入链接脚本</string>
+    <string name="settings_lx_import_url_desc">粘贴音源脚本的在线地址，下载后即可在下方启用。</string>
+    <string name="settings_lx_import_url_label">脚本链接</string>
+    <string name="settings_lx_import_url_confirm">下载并导入</string>
     <string name="settings_lx_imported">脚本已导入并初始化</string>
     <string name="settings_lx_import_replaced">已覆盖同名脚本：%1$s</string>
     <string name="settings_lx_import_failed">脚本导入失败</string>

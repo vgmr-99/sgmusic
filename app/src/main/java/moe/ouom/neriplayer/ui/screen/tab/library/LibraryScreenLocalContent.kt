@@ -51,7 +51,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -687,6 +686,7 @@ internal fun LocalPlaylistList(
                 }
 
                 var showMenu by remember { mutableStateOf(false) }
+                var showLongPressMenu by remember { mutableStateOf(false) }
                 var showRenameDialog by remember { mutableStateOf(false) }
                 var showDeleteDialog by remember { mutableStateOf(false) }
                 var renameText by remember { mutableStateOf(pl.name.take(maxNameLength)) }
@@ -715,9 +715,9 @@ internal fun LocalPlaylistList(
                                 }
                             },
                             onLongClick = {
+                                // 长按直接给操作菜单：删除/重命名不必再去找行尾的三个点
                                 if (!selectionMode && !isSystemPlaylist) {
-                                    selectionMode = true
-                                    selectedIds = setOf(pl.id)
+                                    showLongPressMenu = true
                                 }
                             }
                         )
@@ -821,6 +821,51 @@ internal fun LocalPlaylistList(
                                         )
                                     }
                                 }
+                            }
+                        }
+                    )
+                }
+
+                if (showLongPressMenu) {
+                    MiuixSettingsDialog(
+                        onDismissRequest = { showLongPressMenu = false },
+                        title = { Text(displayName) },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                MiuixSettingsTextButton(
+                                    onClick = {
+                                        showLongPressMenu = false
+                                        renameText = pl.name.take(maxNameLength)
+                                        showRenameDialog = true
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(stringResource(CoreCommonR.string.action_rename))
+                                }
+                                MiuixSettingsTextButton(
+                                    onClick = {
+                                        showLongPressMenu = false
+                                        showDeleteDialog = true
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(stringResource(CoreCommonR.string.action_delete))
+                                }
+                                MiuixSettingsTextButton(
+                                    onClick = {
+                                        showLongPressMenu = false
+                                        selectionMode = true
+                                        selectedIds = setOf(pl.id)
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(stringResource(CoreCommonR.string.action_multi_select))
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            MiuixSettingsTextButton(onClick = { showLongPressMenu = false }) {
+                                Text(stringResource(CoreCommonR.string.action_cancel))
                             }
                         }
                     )

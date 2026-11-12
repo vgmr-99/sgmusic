@@ -27,7 +27,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import moe.ouom.neriplayer.common.logging.NPLogger
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONObject
 
 /**
  * 检测模式
@@ -92,15 +91,15 @@ data class LxSourceTestReport(
  * 音源音质检测。
  *
  * 用一个独立的 QuickJS 实例跑脚本，对"脚本支持的每个平台 × 每档音质"逐项做取流检测：
- * - 先用各平台公开搜索接口定位同一首测试歌曲，拿到该平台真实的 songmid
- * - 再让脚本用这个 songmid 换取播放地址，并对地址做一次范围请求确认真的能拉到流
+ * - 先用各平台公开搜索接口定位同一首测试歌曲，拿到该平台真实的 musicInfo
+ * - 再让脚本用这个 musicInfo 换取播放地址，并对地址做一次范围请求确认真的能拉到流
  * - 实例与播放链路完全隔离，检测不会打断当前播放
  * - 每项都有超时；脚本卡死时中止剩余检测并丢弃该实例
  */
 class LxSourceTester(
     private val http: LxHttpClient,
     private val preloadJs: String,
-    private val locator: LxTestSongLocator? = null,
+    private val locator: LxMusicInfoLocator? = null,
     private val probeClient: OkHttpClient? = null
 ) {
 
@@ -159,7 +158,13 @@ class LxSourceTester(
                     )
                     LxTestMode.FULL -> LxQuality.STANDARD_ORDER
                 }
-                val song = locator?.locate(platform, keyword)
+                val song = locator?.locate(
+                    platform = platform,
+                    keyword = keyword,
+                    types = declared.mapNotNull { code ->
+                        LxQuality.entries.firstOrNull { it.code == code }
+                    }.ifEmpty { LxMusicInfoLocator.defaultTypes(platform) }
+                )
                 for (quality in targets) {
                     if (isCancelled()) {
                         cancelled = true
@@ -186,7 +191,7 @@ class LxSourceTester(
                             runtime = runtime,
                             platform = platform,
                             quality = quality,
-                            song = song,
+                            song = song.withQuality(quality),
                             timeoutMs = probeTimeoutMs
                         )
                         if (result == null) {
@@ -228,16 +233,12 @@ class LxSourceTester(
         runtime: LxRuntime,
         platform: LxPlatform,
         quality: LxQuality,
-        song: LxTestSongRef,
+        song: LxMusicInfo,
         timeoutMs: Long
     ): LxQualityProbe? {
-        val info = JSONObject()
-            .put("songmid", song.songmid)
-            .put("hash", song.hash)
-            .put("type", quality.code)
         val start = System.currentTimeMillis()
         val result = withTimeoutOrNull(timeoutMs + PROBE_GRACE_MS) {
-            runtime.request("musicUrl", platform, info, timeoutMs)
+            runtime.requestMusicUrl(song, platform, quality, timeoutMs)
         }
         val elapsed = System.currentTimeMillis() - start
         if (result == null) {
@@ -253,44 +254,25 @@ class LxSourceTester(
                 elapsedMs = elapsed
             )
             is LxResult.Ok -> {
-                val payload = runCatching { JSONObject(result.value) }.getOrNull()
-                if (payload == null) {
-                    return LxQualityProbe(
-                        platform = platform,
-                        quality = quality,
-                        ok = false,
-                        detail = "脚本返回的不是对象",
-                        elapsedMs = elapsed
-                    )
-                }
-                payload.optString("error").takeIf { it.isNotBlank() }?.let { error ->
-                    return LxQualityProbe(
-                        platform = platform,
-                        quality = quality,
-                        ok = false,
-                        detail = error,
-                        elapsedMs = elapsed
-                    )
-                }
-                val url = payload.optString("url", "").trim()
-                if (url.isEmpty()) {
-                    return LxQualityProbe(
+                val url = result.value.url
+                if (url.isBlank()) {
+                    LxQualityProbe(
                         platform = platform,
                         quality = quality,
                         ok = false,
                         detail = "脚本没有返回播放地址",
                         elapsedMs = elapsed
                     )
+                } else {
+                    val verify = verifyPlayableUrl(url, result.value.headers)
+                    LxQualityProbe(
+                        platform = platform,
+                        quality = quality,
+                        ok = verify.ok,
+                        detail = verify.detail,
+                        elapsedMs = elapsed + verify.elapsedMs
+                    )
                 }
-                val headers = payload.optJSONObject("headers")
-                val verify = verifyPlayableUrl(url, headers)
-                LxQualityProbe(
-                    platform = platform,
-                    quality = quality,
-                    ok = verify.ok,
-                    detail = verify.detail,
-                    elapsedMs = elapsed + verify.elapsedMs
-                )
             }
         }
     }
@@ -298,22 +280,14 @@ class LxSourceTester(
     /** 校验地址真的能拉到流；只取头两个字节，避免整首下载 */
     private suspend fun verifyPlayableUrl(
         url: String,
-        headers: JSONObject?
+        headers: Map<String, String>
     ): UrlVerification {
         val client = probeClient ?: return UrlVerification(true, "未启用地址校验", 0L)
         val start = System.currentTimeMillis()
         val request = Request.Builder()
             .url(url)
             .header("Range", "bytes=0-1")
-            .apply {
-                headers?.let { obj ->
-                    val keys = obj.keys()
-                    while (keys.hasNext()) {
-                        val key = keys.next()
-                        obj.optString(key).takeIf { it.isNotBlank() }?.let { header(key, it) }
-                    }
-                }
-            }
+            .apply { headers.forEach { (key, value) -> header(key, value) } }
             .build()
         return runCatching {
             val call = client.newCall(request)

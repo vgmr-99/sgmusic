@@ -573,18 +573,6 @@ fun LibraryHostScreen(
                                 LibraryScreen(
                             initialTab = selectedTab,
                             onTabChange = { selectedTab = it },
-                            onServerAlbumClick = { album ->
-                                skipDetailCloseAnimation = false
-                                openLibrarySelectedItem(LibrarySelectedItem.ServerAlbum(
-                                    album.profileId, album.id, album.name, album.artist, album.coverUrl, album.songCount
-                                ))
-                            },
-                            onServerArtistClick = { artist ->
-                                skipDetailCloseAnimation = false
-                                openLibrarySelectedItem(LibrarySelectedItem.ServerArtist(
-                                    artist.profileId, artist.id, artist.name, artist.coverUrl, artist.albumCount, artist.fallbackCoverUrl
-                                ))
-                            },
                             localListState = localListState,
                             favoriteListState = favoriteListState,
                             neteaseAlbumState = neteaseAlbumState,

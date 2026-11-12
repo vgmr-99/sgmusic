@@ -79,10 +79,12 @@ internal fun SettingsLxSourceSection(
     val scripts by lxRepository.items.collectAsStateWithLifecycle()
     var importing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var urlImportError by remember { mutableStateOf<String?>(null) }
     var testPhase by remember { mutableStateOf<LxTestPhase?>(null) }
     var testTarget by remember { mutableStateOf<LxSourceItem?>(null) }
     var testProbes by remember { mutableStateOf<List<LxQualityProbe>>(emptyList()) }
     var testReport by remember { mutableStateOf<LxSourceTestReport?>(null) }
+    var showUrlImport by remember { mutableStateOf(false) }
     val testCancelFlag = remember { AtomicBoolean(false) }
 
     val scriptPicker = rememberLauncherForActivityResult(
@@ -161,26 +163,11 @@ internal fun SettingsLxSourceSection(
                 )
             }
             MiuixSettingsTextButton(
-                onClick = {
-                    if (importing) return@MiuixSettingsTextButton
-                    importing = true
-                    AppContainer.launchBackgroundIo {
-                        val result = runCatching {
-                            val text = context.assets.open("script/example-source.js").bufferedReader().use { it.readText() }
-                            LxScriptImporter.import(lxRepository, "example-source.js", text)
-                        }
-                        importing = false
-                        errorMessage = result.exceptionOrNull()?.message
-                            ?: result.getOrNull()?.errorMessage
-                        if (result.isSuccess) {
-                            AppFeedback.showToast(context, context.getString(CoreCommonR.string.settings_lx_imported))
-                        }
-                    }
-                },
+                onClick = { showUrlImport = true },
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = stringResource(CoreCommonR.string.settings_lx_import_example),
+                    text = stringResource(CoreCommonR.string.settings_lx_import_url),
                     style = MaterialTheme.typography.labelLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -276,6 +263,46 @@ internal fun SettingsLxSourceSection(
                     onDismiss = { testPhase = null }
                 )
             }
+        }
+
+        if (showUrlImport) {
+            LxScriptUrlImportDialog(
+                loading = importing,
+                errorMessage = urlImportError,
+                onImport = { url ->
+                    if (importing) return@LxScriptUrlImportDialog
+                    importing = true
+                    urlImportError = null
+                    AppContainer.launchBackgroundIo {
+                        val result = runCatching {
+                            LxScriptImporter.importFromUrl(
+                                repository = lxRepository,
+                                url = url,
+                                http = AppContainer.lxScriptHttpClient
+                            )
+                        }
+                        importing = false
+                        result.exceptionOrNull()?.let { error ->
+                            urlImportError = error.message ?: error.toString()
+                            return@launchBackgroundIo
+                        }
+                        val imported = result.getOrNull() ?: return@launchBackgroundIo
+                        if (imported.succeeded) {
+                            showUrlImport = false
+                            AppFeedback.showToast(
+                                context,
+                                context.getString(CoreCommonR.string.settings_lx_imported)
+                            )
+                        } else {
+                            urlImportError = imported.errorMessage
+                        }
+                    }
+                },
+                onDismiss = {
+                    showUrlImport = false
+                    urlImportError = null
+                }
+            )
         }
     }
 }

@@ -70,6 +70,7 @@ import moe.ouom.neriplayer.platform.lxsource.LxTestMode
 import moe.ouom.neriplayer.ui.feedback.AppFeedback
 import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsDialog
 import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsTextButton
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsTextField
 import moe.ouom.neriplayer.ui.util.ClipboardCopyResult
 import moe.ouom.neriplayer.ui.util.copyPlainTextSafely
 
@@ -447,6 +448,63 @@ private fun lxProbeCellLabel(probe: LxQualityProbe?): String {
             CoreCommonR.string.settings_lx_test_cell_pass
         } else {
             CoreCommonR.string.settings_lx_test_cell_fail
+        }
+    )
+}
+
+/**
+ * 在线导入脚本对话框：粘贴脚本链接即可接上音源。
+ */
+@Composable
+internal fun LxScriptUrlImportDialog(
+    loading: Boolean,
+    errorMessage: String?,
+    onImport: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var url by remember { mutableStateOf("") }
+    MiuixSettingsDialog(
+        onDismissRequest = { if (!loading) onDismiss() },
+        title = { Text(stringResource(CoreCommonR.string.settings_lx_import_url_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = stringResource(CoreCommonR.string.settings_lx_import_url_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                MiuixSettingsTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text(stringResource(CoreCommonR.string.settings_lx_import_url_label)) },
+                    placeholder = { Text("https://.../source.js") },
+                    singleLine = true,
+                    enabled = !loading
+                )
+                if (loading) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                errorMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            MiuixSettingsTextButton(
+                onClick = { onImport(url) },
+                enabled = !loading && url.isNotBlank()
+            ) {
+                Text(stringResource(CoreCommonR.string.settings_lx_import_url_confirm))
+            }
+        },
+        dismissButton = {
+            MiuixSettingsTextButton(onClick = onDismiss, enabled = !loading) {
+                Text(stringResource(CoreCommonR.string.action_cancel))
+            }
         }
     )
 }

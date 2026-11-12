@@ -37,6 +37,8 @@ class LxSourceRepository(
     private val http: LxHttpClient,
     private val preloadJs: String,
     private val store: LxSourceStore,
+    /** 用我们自己的平台搜索为脚本定位 musicInfo（脚本常常不实现 search） */
+    private val locator: LxMusicInfoLocator? = null,
 ) {
     private val runtimes = ConcurrentHashMap<String, LxRuntime>()
     private val _items = MutableStateFlow<List<LxSourceItem>>(emptyList())
@@ -125,15 +127,15 @@ class LxSourceRepository(
     }
 
     suspend fun resolveMusicUrl(
-        songMid: String,
+        musicInfo: LxMusicInfo,
         platform: LxPlatform,
         quality: LxQuality,
-    ): LxResult<String> {
+    ): LxResult<LxMusicUrl> {
         for ((id, runtime) in runtimes) {
             val item = _items.value.firstOrNull { it.id == id } ?: continue
             if (!item.enabled || item.state != LxSourceState.OK) continue
             if (item.info?.supports(platform) != true) continue
-            when (val r = runtime.requestMusicUrl(songMid, platform, quality)) {
+            when (val r = runtime.requestMusicUrl(musicInfo, platform, quality)) {
                 is LxResult.Ok -> return r
                 is LxResult.Err -> continue
             }
@@ -142,34 +144,76 @@ class LxSourceRepository(
     }
 
     /**
-     * 按 Neri 的 SongItem 精确解析：先 search 候选 → LxIdMatcher 选最佳 songmid → musicUrl。
-     * search 失败/无匹配时回退到 guessSongmid（见 LxSourceResolver）。
+     * 按 Neri 的 SongItem 解析播放地址。
+     *
+     * 洛雪脚本只认自己平台的 songmid，所以这里先定位出该平台真实存在的 musicInfo：
+     * 1) 网易云歌曲直接用自己的 id（脚本的 wy 源认的就是它）
+     * 2) 脚本自带 search 时用它的候选（最准）
+     * 3) 都不行就用我们自己的平台搜索定位（社区脚本常常不实现 search）
      */
     suspend fun resolveMusicUrlForSong(
-        songName: String,
-        artist: String,
-        durationMs: Long,
+        song: SongItem,
         platform: LxPlatform,
         quality: LxQuality,
-    ): LxResult<String> {
+    ): LxResult<LxMusicUrl> {
         for ((id, runtime) in runtimes) {
             val item = _items.value.firstOrNull { it.id == id } ?: continue
             if (!item.enabled || item.state != LxSourceState.OK) continue
             if (item.info?.supports(platform) != true) continue
-            val keyword = songName.trim()
-            val songmid = if (keyword.isNotBlank()) {
-                val candidates = (runtime.search(platform, keyword) as? LxResult.Ok)?.value.orEmpty()
-                LxIdMatcher.best(songName, artist, durationMs, candidates)?.songmid
-            } else {
-                null
-            }
-            val attempt = songmid ?: "$songName|$artist".replace(" ", "").lowercase()
-            when (val r = runtime.requestMusicUrl(attempt, platform, quality)) {
+            val musicInfo = resolveMusicInfo(runtime, song, platform, quality) ?: continue
+            when (val r = runtime.requestMusicUrl(musicInfo, platform, quality)) {
                 is LxResult.Ok -> return r
                 is LxResult.Err -> continue
             }
         }
         return LxResult.Err("no_source", "no enabled LX source matched")
+    }
+
+    private suspend fun resolveMusicInfo(
+        runtime: LxRuntime,
+        song: SongItem,
+        platform: LxPlatform,
+        quality: LxQuality
+    ): LxMusicInfo? {
+        // 网易云歌曲本身就是 wy 源的 songmid，不用再搜
+        if (platform == LxPlatform.WY && song.channelId.equals("netease", ignoreCase = true)) {
+            val songmid = song.audioId?.takeIf { it.isNotBlank() } ?: song.id.toString()
+            if (songmid.isNotBlank() && songmid != "0") {
+                return LxMusicInfo(
+                    source = platform.code,
+                    songmid = songmid,
+                    name = song.name,
+                    singer = song.artist,
+                    albumName = song.album,
+                    durationMs = song.durationMs,
+                    types = listOf(quality),
+                    coverUrl = song.coverUrl
+                )
+            }
+        }
+        val keyword = song.name.trim()
+        if (keyword.isBlank()) return null
+        // 脚本自带 search 时优先用它的候选
+        val candidates = (runtime.search(platform, keyword) as? LxResult.Ok)?.value.orEmpty()
+        LxIdMatcher.best(song.name, song.artist, song.durationMs, candidates)?.let { best ->
+            return LxMusicInfo(
+                source = platform.code,
+                songmid = best.songmid,
+                name = best.title.ifBlank { song.name },
+                singer = best.artist.ifBlank { song.artist },
+                albumName = best.album,
+                durationMs = best.durationMs.takeIf { it > 0L } ?: song.durationMs,
+                types = listOf(quality),
+                coverUrl = best.picUrl
+            )
+        }
+        // 脚本不实现 search 时，用我们自己的平台搜索定位同一首歌
+        return locator?.locate(
+            platform = platform,
+            keyword = "$keyword ${song.artist}".trim(),
+            types = listOf(quality),
+            quality = quality
+        )
     }
 
     /**

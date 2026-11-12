@@ -48,7 +48,11 @@
     <string name="settings_lx_source_quality">LX Custom Source Default Quality</string>
     <string name="settings_lx_source_quality_desc">320k by default; actual quality follows the script qualitys list and degrades automatically</string>
     <string name="settings_lx_import_file">Import script from file</string>
-    <string name="settings_lx_import_example">Import bundled example script</string>
+    <string name="settings_lx_import_url">Import from URL</string>
+    <string name="settings_lx_import_url_title">Import script from URL</string>
+    <string name="settings_lx_import_url_desc">Paste the online address of a source script; it will be downloaded and can then be enabled below.</string>
+    <string name="settings_lx_import_url_label">Script URL</string>
+    <string name="settings_lx_import_url_confirm">Download and import</string>
     <string name="settings_lx_imported">Script imported and initialized</string>
     <string name="settings_lx_import_replaced">Replaced existing script: %1$s</string>
     <string name="settings_lx_import_failed">Script import failed</string>

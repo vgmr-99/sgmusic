@@ -26,6 +26,7 @@ package moe.ouom.neriplayer.ui.screen.tab.settings.component.playback
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import moe.ouom.neriplayer.platform.lxsource.LxHttpClient
 import moe.ouom.neriplayer.platform.lxsource.LxSourceItem
 import moe.ouom.neriplayer.platform.lxsource.LxSourceRepository
 import moe.ouom.neriplayer.platform.lxsource.LxSourceState
@@ -98,6 +99,50 @@ internal object LxScriptImporter {
         val replaced = repository.hasScriptNamed(name)
         val item = repository.importScriptReplacingSameName(name = name, scriptText = scriptText)
         return LxScriptImportResult(item = item, replaced = replaced)
+    }
+
+    /**
+     * 从在线地址拉取脚本再导入。
+     *
+     * 社区音源大多托管在 GitHub/jsDelivr 这类地址，粘贴链接就能接上，
+     * 比手动找文件再导入顺手得多。
+     */
+    suspend fun importFromUrl(
+        repository: LxSourceRepository,
+        url: String,
+        http: LxHttpClient,
+    ): LxScriptImportResult {
+        val normalized = url.trim()
+        if (normalized.isEmpty()) error("链接不能为空")
+        if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) {
+            error("链接必须以 http:// 或 https:// 开头")
+        }
+        val response = http.request(
+            method = "GET",
+            url = normalized,
+            headers = mapOf("Accept" to "text/javascript, application/javascript, */*")
+        )
+        if (response.statusCode !in 200..299) {
+            error("下载失败（HTTP ${response.statusCode}）")
+        }
+        val bytes = response.body?.toByteArray(Charsets.UTF_8) ?: error("下载内容为空")
+        if (bytes.isEmpty()) error("下载内容为空")
+        if (bytes.size > MAX_SCRIPT_TEXT) error("脚本过大")
+        val text = bytes.decodeToString().removePrefix("﻿")
+        if (text.isBlank()) error("下载内容为空")
+        return import(repository, name = scriptNameFromUrl(normalized), scriptText = text)
+    }
+
+    /** 从链接里猜脚本名：优先路径末段的 .js 文件名，退回域名 */
+    private fun scriptNameFromUrl(url: String): String {
+        val path = url.substringBefore('?').substringBefore('#')
+            .substringAfterLast('/')
+            .ifBlank { return "lx-source.js" }
+        return if (path.endsWith(".js", ignoreCase = true) && path.length <= 80) {
+            path
+        } else {
+            "lx-source.js"
+        }
     }
 
     private fun queryDisplayName(context: Context, uri: Uri): String? =
