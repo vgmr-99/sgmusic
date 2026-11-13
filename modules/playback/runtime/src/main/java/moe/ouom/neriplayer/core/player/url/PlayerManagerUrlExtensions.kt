@@ -65,6 +65,7 @@ import moe.ouom.neriplayer.platform.netease.api.playback.parser.NeteasePlaybackR
 import moe.ouom.neriplayer.core.player.resolver.netease.tryResolveNeteaseAutoBiliSource
 import moe.ouom.neriplayer.core.player.resolver.netease.tryResolveNeteaseMatchedLocalSource
 import moe.ouom.neriplayer.core.player.resolver.lxsource.tryResolveLxSource
+import moe.ouom.neriplayer.core.player.engine.datasource.PlatformStreamContext
 import moe.ouom.neriplayer.core.player.media.PlaybackMediaItemFactory
 import moe.ouom.neriplayer.core.player.watchdog.configureActivePlaybackCandidates
 import moe.ouom.neriplayer.core.player.watchdog.currentPlaybackCandidate
@@ -294,6 +295,28 @@ internal suspend fun PlayerManager.resolveSongUrl(
         RefreshResolverSideEffects(RefreshSideEffectGate { false })
     } else {
         sideEffects
+    }
+    // 除 YouTube 外一律先试 LX 音源脚本。
+    //
+    // 网易云 / 酷狗 / 酷我 / QQ音乐 / 咪咕这些平台的官方取流通道要么要登录、
+    // 要么要签名，脚本是唯一稳定的路。LX 失败时继续走下面的原有分支，
+    // 网易云直连与 B 站仍然保留为兜底，不至于因为脚本抽风就彻底播不了。
+    //
+    // 探测放在重试之外：脚本解析失败重试没有意义（同样的输入同样的结果），
+    // 只有网络抖动才值得重试，那由脚本自己处理。
+    if (!isYouTubeTrack) {
+        val lxResult = tryResolveLxSource(song)
+        if (lxResult != null) {
+            NPLogger.w(
+                "NERI-PlayerManager",
+                "LX source preferred: song=${song.name}, channel=${song.channelId}"
+            )
+            return mergeListenTogetherFallbackResult(
+                localResult = lxResult,
+                listenTogetherFallback = initialListenTogetherFallback,
+                preferredQualityKey = listenTogetherPreferredQualityKey(song)
+            )
+        }
     }
     val result = retrySongUrlResolution { retryAttempt ->
         val isFinalAttempt = retryAttempt == SONG_URL_RESOLUTION_RETRY_COUNT
@@ -1193,6 +1216,12 @@ private suspend fun PlayerManager.applyResolvedMediaItem(
     )
     val selectedCandidate = currentPlaybackCandidate()
     val selectedUrl = selectedCandidate?.url ?: result.url
+    // 拉流请求头只能在这一层落地：Media3 的 MediaItem 带不了 HTTP 头。
+    // 脚本返回的 Referer 不带上就会 403 或者只拿到试听提示音。
+    conditionalHttpFactory?.currentStreamContext = PlatformStreamContext(
+        url = selectedUrl,
+        headers = result.headers
+    )
     val selectedAudioInfo = resolvePlaybackAudioInfoForListenTogetherStreamCandidate(
         candidate = selectedCandidate,
         resolvedAudioInfo = audioInfo,

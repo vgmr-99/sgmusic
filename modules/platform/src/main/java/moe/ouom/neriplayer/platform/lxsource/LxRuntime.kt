@@ -80,6 +80,9 @@ class LxRuntime(
         private val NESTED_KEYS = listOf("data", "body", "result", "response")
         private val HEADER_KEYS = listOf("requestHeaders", "httpHeaders", "headers")
 
+        /** 脚本没声明音质时的缺省档位（洛雪约定） */
+        private val DEFAULT_QUALITIES = listOf("128k", "320k", "flac")
+
         /** JSCallFunction 的 args 在不同 wrapper 版本里可能是 Array 或 List，统一按 Any? 读取。 */
         private fun readArg(args: Any?, index: Int): String = when (args) {
             is Array<*> -> args.getOrNull(index)?.toString().orEmpty()
@@ -111,10 +114,16 @@ class LxRuntime(
             append('"')
         }
 
-        /** desktop/CeruMusic 脚本往往不发 inited；检测到 module.exports.musicUrl 时补一份声明。 */
+        /**
+         * 未包装的 desktop 脚本不发 inited：补一份能力声明。
+         *
+         * converter 包装过的脚本由 adapter 自己兜底（adapter 知道脚本有没有注册
+         * request handler），这里只在没有 adapter 时生效，避免与真实 inited 抢跑。
+         */
         private val ENSURE_INITED_JS = """
             (function () {
-              if (globalThis.__lx_inited || !globalThis.lx) return;
+              if (globalThis.__lxAdapter) return;
+              if (globalThis.__lx_inited) return;
               var ex = globalThis.module && globalThis.module.exports;
               if (!ex || typeof ex.musicUrl !== 'function') return;
               var q = ['128k', '320k', 'flac'];
@@ -127,8 +136,12 @@ class LxRuntime(
                   mg: mk('migu'), qs: mk('qishui')
                 }
               });
+              if (globalThis.__lx_inited) globalThis.__lx_inited.__lxFallback = true;
             })();
         """.trimIndent()
+
+        /** 等音源声明的最长时间：VM 混淆源自举偏慢，冷启动别误判 */
+        private const val INIT_TIMEOUT_MS = 60_000L
     }
 
     private fun createContext(): QuickJSContext {
@@ -173,32 +186,53 @@ class LxRuntime(
                     .put("homepage", scriptInfo.srcUrl ?: "")
                     .toString()
                 ctx.evaluate("globalThis.__lx_script_info = " + infoJson)
-                // 原始脚本（mobile / desktop / converter adapter 均可）单独求值
-                ctx.evaluate(scriptText)
-                // desktop 脚本没有 inited 声明，这里补一次；脚本异步注册时轮询里会再补
+                // 原始脚本（mobile / desktop / converter adapter 均可）单独求值。
+                // converter 包装过的 adapter 内部已经把原稿放进块级作用域，原样执行；
+                // 未包装的脚本整体套一层块作用域，顶层 const/let 不会与宿主冲突。
+                ctx.evaluate(scriptTextForEval(scriptText))
+                // 未包装的 desktop 脚本不发 inited，这里补一次
                 evalString(ctx, ENSURE_INITED_JS)
 
-                // VM 混淆源自举偏慢：inited 超时放宽到 60s，避免冷启动误判
-                val deadline = System.currentTimeMillis() + 60_000
-                var initedStr = "{}"
-                var loggedWaiting = false
+                // 轮询等待音源声明：sources 就绪即返回
+                val deadline = System.currentTimeMillis() + INIT_TIMEOUT_MS
+                var initedStr = ""
+                var adapterState: JSONObject? = null
                 val pump = "if (globalThis.__lx_tickTimers) globalThis.__lx_tickTimers();"
                 var tick = 0
                 while (System.currentTimeMillis() < deadline) {
                     evalString(ctx, pump)
-                    // 每 ~10 个 tick 再兜底一次，覆盖脚本在 setTimeout 里才导出 musicUrl 的情况
+                    // 每 ~10 个 tick 兜底一次，覆盖脚本在 setTimeout 里才导出 musicUrl 的情况
                     if (tick++ % 10 == 0) evalString(ctx, ENSURE_INITED_JS)
-                    val v = evalString(ctx, "JSON.stringify(globalThis.__lx_inited || {})")
-                    if (v != null) initedStr = v
-                    if (initedStr != "{}") break
-                    if (!loggedWaiting && System.currentTimeMillis() - (deadline - 60_000) > 5_000) {
-                        loggedWaiting = true
-                        NPLogger.d("LxRuntime", "waiting inited (5s+)")
+                    val v = evalString(ctx, "JSON.stringify(globalThis.__lx_inited || null)")
+                    if (!v.isNullOrBlank() && v != "null") initedStr = v
+                    val inited = parseJsonObject(initedStr)
+                    if (hasSources(inited)) {
+                        if (!isFallbackInited(inited)) break
+                        // 兜底声明只在脚本确实没注册 request handler 时才采用；
+                        // 注册了 handler 说明脚本可能稍后才发真正的 inited，继续等。
+                        adapterState = readAdapterState(ctx)
+                        if (adapterState?.optBoolean("hasHandler", false) != true) break
                     }
                     pumpSleep(120)
                 }
-                if (initedStr == "{}") {
-                    return@withContext LxResult.Err("timeout", "inited 60s timeout, check desktop-vs-mobile source mismatch")
+                val inited = parseJsonObject(initedStr)
+                if (!hasSources(inited)) {
+                    val state = adapterState ?: readAdapterState(ctx)
+                    val initError = state?.optString("initError", "")?.takeIf { it.isNotBlank() }
+                    if (initError != null) {
+                        return@withContext LxResult.Err("init_fail", "LX 音源初始化失败: $initError")
+                    }
+                    // 把「为什么脚本没被识别」写进错误里，用户在设置页就能看到，
+                    // 不必抓 logcat 才知道是少了 inited 还是少了 request handler。
+                    val handlerHint = if (state?.optBoolean("hasHandler", false) == true) {
+                        "；脚本已注册 lx.on('request')，但没收到 lx.send('inited')"
+                    } else {
+                        "；脚本也没有注册 lx.on('request') 事件"
+                    }
+                    return@withContext LxResult.Err(
+                        "no_sources",
+                        "脚本未声明任何可用音源（未收到 lx.send('inited') 或 sources 为空）$handlerHint",
+                    )
                 }
                 isInited = true
                 NPLogger.d("LxRuntime", "inited received: ${initedStr.take(200)}")
@@ -208,6 +242,43 @@ class LxRuntime(
                 LxResult.Err("init_fail", (e.message ?: e.toString()))
             }
         }
+
+    /**
+     * 求值用的脚本文本。
+     *
+     * adapter 包装过的脚本自带块级作用域（原稿已在 adapter 内部被包住），
+     * 原样执行；未包装的脚本整体套一层 `{ ... }`，顶层 const/let 不会撞到宿主全局。
+     */
+    private fun scriptTextForEval(scriptText: String): String {
+        val text = scriptText.removePrefix("\uFEFF")
+        if (text.trimStart().startsWith(LxScriptConverter.ADAPTER_MARKER)) return text
+        return "{\n$text\n}\n;void 0;"
+    }
+
+    /** 读取 adapter 暴露给宿主的运行期状态（无 adapter 时返回 null） */
+    private fun readAdapterState(ctx: QuickJSContext): JSONObject? {
+        val raw = evalString(
+            ctx,
+            "JSON.stringify(globalThis.__lxAdapterState ? globalThis.__lxAdapterState() : null)",
+        )
+        if (raw.isNullOrBlank() || raw == "null") return null
+        return parseJsonObject(raw)
+    }
+
+    private fun parseJsonObject(text: String?): JSONObject? {
+        if (text.isNullOrBlank()) return null
+        return runCatching { JSONObject(text) }.getOrNull()
+    }
+
+    /** inited 声明里是否已经有可用音源（sources 至少一个 key） */
+    private fun hasSources(inited: JSONObject?): Boolean {
+        val sources = inited?.optJSONObject("sources") ?: return false
+        return sources.length() > 0
+    }
+
+    /** 该 inited 是否只是宿主补的兜底声明（脚本自己没发 inited） */
+    private fun isFallbackInited(inited: JSONObject?): Boolean =
+        inited?.optBoolean("__lxFallback", false) == true
 
     /**
      * 请求播放地址：统一走 module.exports.musicUrl(source, musicInfo, quality)。
@@ -229,6 +300,11 @@ class LxRuntime(
     ): LxResult<LxMusicUrl> = withContext(jsDispatcher) {
         val ctx = ctxRef.get() ?: return@withContext LxResult.Err("no_ctx", "runtime not inited")
         try {
+            // 既没注册 request handler、脚本自己也没导出 musicUrl：直接报出来，
+            // 不然用户只看到一句「超时」，根本不知道脚本压根没接上取流
+            if (!hasUsableHandler(ctx)) {
+                return@withContext LxResult.Err("no_handler", "LX 音源未注册 request 事件")
+            }
             val info = JSONObject()
                 .put("type", quality.code)
                 .put("musicInfo", musicInfo.toJson())
@@ -257,7 +333,11 @@ class LxRuntime(
                     try {
                       globalThis.__lx_lastMusicUrl = globalThis.__lxNormalizeMusicUrlResult(v, globalThis.__lx_req);
                     } catch (e) {
-                      globalThis.__lx_lastMusicUrl = { error: String((e && e.message) || e) };
+                      // 归一化失败不直接判死：原始返回值交给 Kotlin 侧的宽松解析兜底
+                      globalThis.__lx_lastMusicUrl = {
+                        __lxRaw: v,
+                        __lxError: String((e && e.message) || e)
+                      };
                     }
                     globalThis.__lx_musicUrlDone = true;
                   }, function (e) {
@@ -287,6 +367,29 @@ class LxRuntime(
         }
     }
 
+    /**
+     * 脚本是否具备取流能力：
+     * - 注册了 lx.on('request') 的 handler，或
+     * - 脚本自己导出了 module.exports.musicUrl（desktop/CeruMusic 风格）
+     *
+     * adapter 自己装的兜底 musicUrl 不算（那是桥，不是脚本的实现）。
+     */
+    private fun hasUsableHandler(ctx: QuickJSContext): Boolean {
+        val hasHandler = evalString(
+            ctx,
+            "globalThis.__lx_hasRequestHandler && globalThis.__lx_hasRequestHandler() ? '1' : '0'",
+        ) == "1"
+        if (hasHandler) return true
+        val state = readAdapterState(ctx)
+        if (state != null) return state.optBoolean("scriptMusicUrl", false)
+        // 没有 adapter（未包装的脚本）：看脚本自己有没有导出 musicUrl
+        return evalString(
+            ctx,
+            "(globalThis.module && globalThis.module.exports && " +
+                "typeof globalThis.module.exports.musicUrl === 'function') ? '1' : '0'",
+        ) == "1"
+    }
+
     /** 宽松解析归一化结果：url / headers 都按嵌套 + 数组递归提取。 */
     private fun parseMusicUrlResult(raw: String): LxResult<LxMusicUrl> {
         if (raw.isBlank() || raw == "{}" || raw == "null") {
@@ -304,7 +407,18 @@ class LxRuntime(
         }
         return try {
             val decoded = parseLoose(trimmed)
-            val err = (decoded as? JSONObject)?.optString("error", "").orEmpty()
+            val obj = decoded as? JSONObject
+            // JS 侧归一化失败时会把原始返回值塞进 __lxRaw，交给这里的宽松解析兜底
+            if (obj != null && obj.has("__lxRaw")) {
+                val rawValue = obj.opt("__lxRaw")
+                val url = findUrl(rawValue, 0)
+                if (url.isBlank()) {
+                    val reason = obj.optString("__lxError", "").ifBlank { "脚本没有返回播放地址" }
+                    return LxResult.Err("script_error", reason)
+                }
+                return LxResult.Ok(LxMusicUrl(url = url, headers = findHeaders(rawValue, 0)))
+            }
+            val err = obj?.optString("error", "").orEmpty()
             if (err.isNotBlank()) return LxResult.Err("script_error", err)
             // 归一化结果里的 data.type / quality / type / format / level 只用于找 url 时跳过，
             // LxMusicUrl 本身不携带音质（音质由调用方 LxQuality 决定）。
@@ -374,6 +488,20 @@ class LxRuntime(
             for (i in 0 until value.length()) out.putAll(findHeaders(value.opt(i), depth + 1))
         }
         return out
+    }
+
+    /**
+     * 脚本是否注册了 lx.on('request') 的 handler。
+     *
+     * 这是「能不能取流」的第一条件（另一个条件是发过 inited），
+     * 自检报告用它帮用户定位「脚本没被识别 / 脚本没接上取流」。
+     */
+    suspend fun hasRequestHandler(): Boolean = withContext(jsDispatcher) {
+        val ctx = ctxRef.get() ?: return@withContext false
+        evalString(
+            ctx,
+            "globalThis.__lx_hasRequestHandler && globalThis.__lx_hasRequestHandler() ? '1' : '0'",
+        ) == "1"
     }
 
     /**
@@ -571,13 +699,22 @@ class LxRuntime(
     }
 
     /**
-     * 解析 inited：兼容 sources 在顶层或 data.sources、数组音质、
-     * 对象里的 qualitys/qualities/types（数组或对象）、actions 在顶层或 data.actions。
+     * 解析 inited 声明（按洛雪插件契约）：
+     * - sources 的 key 原样保留（宿主按 key 匹配平台）
+     * - 音质取 qualitys -> qualities -> types，缺省 ['128k','320k','flac']
+     * - actions 取 source 自己的 actions -> 顶层 sourceActions -> 顶层 actions，
+     *   缺省 ['musicUrl']，一律转小写（比较时大小写不敏感）
+     * - 兼容旧形态 `"kw": ["128k", ...]`
      */
     private fun parseInited(text: String): LxSourceInfo {
         val obj = runCatching { JSONObject(text) }.getOrDefault(JSONObject())
         val root = obj.optJSONObject("data")?.takeIf { it.has("sources") } ?: obj
+        val globalActions = readStringList(root.optJSONArray("actions") ?: obj.optJSONArray("actions"))
+            ?.map { it.lowercase() }
+        val declaredActions = obj.optJSONObject("sourceActions") ?: root.optJSONObject("sourceActions")
         val sources = mutableMapOf<String, List<String>>()
+        val sourceNames = mutableMapOf<String, String>()
+        val sourceActions = mutableMapOf<String, List<String>>()
         val srcObj = root.optJSONObject("sources") ?: obj.optJSONObject("sources")
         if (srcObj != null) {
             val keys = srcObj.keys()
@@ -608,25 +745,35 @@ class LxRuntime(
                         }
                     }
                 }
-                if (list.isEmpty()) list.addAll(listOf("128k", "320k", "flac"))
+                if (list.isEmpty()) list.addAll(DEFAULT_QUALITIES)
                 sources[k] = list
-            }
-        }
-        val actions = mutableListOf<String>()
-        val actArr = root.optJSONArray("actions") ?: obj.optJSONArray("actions")
-        if (actArr != null) {
-            for (i in 0 until actArr.length()) {
-                val a = actArr.optString(i)
-                if (a.isNotBlank()) actions.add(a)
+                entry?.optString("name", "")?.trim()?.takeIf { it.isNotBlank() }?.let { sourceNames[k] = it }
+                val actions = readStringList(entry?.optJSONArray("actions"))
+                    ?: readStringList(declaredActions?.optJSONArray(k))
+                    ?: globalActions
+                    ?: listOf("musicUrl")
+                sourceActions[k] = actions.map { it.trim().lowercase() }
             }
         }
         return LxSourceInfo(
             status = obj.optBoolean("status", true),
             env = obj.optString("env", "mobile"),
             sources = sources,
-            actions = actions,
+            sourceActions = sourceActions,
+            sourceNames = sourceNames,
+            actions = globalActions ?: emptyList(),
             alert = if (obj.has("alert") && !obj.isNull("alert")) obj.optString("alert") else null,
         )
+    }
+
+    private fun readStringList(array: JSONArray?): List<String>? {
+        if (array == null) return null
+        val out = mutableListOf<String>()
+        for (i in 0 until array.length()) {
+            val value = array.optString(i)
+            if (value.isNotBlank()) out.add(value)
+        }
+        return out.ifEmpty { null }
     }
 
     private fun setupBridge(ctx: QuickJSContext) {

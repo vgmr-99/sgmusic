@@ -72,6 +72,26 @@ interface PlatformBrowseApi {
     /** 顶部分类标签；为空表示该平台没有分类，不显示标签栏 */
     val categories: List<String>
 
+    /**
+     * 分类 key 的展示名。
+     *
+     * [categories] 放的是稳定 key（数字 id 或「id-digest」组合串），不是中文名，
+     * 界面没法直接显示，所以由实现方把 key 翻译成展示名。
+     * 默认实现原样返回 key，既有实现（中文分类本身就是 key）不受影响。
+     */
+    fun categoryLabel(category: String): String = category
+
+    /**
+     * 拉取平台真实的分类标签。
+     *
+     * 有些平台的标签写在代码里（酷狗），有些要调线上接口才有（网易云 / 酷我 / QQ），
+     * 后者在首次展示前需要刷新一次；实现方内部负责缓存，重复调用不应重复请求。
+     *
+     * @return 刷新后的分类 key 列表，与 [categories] 一致；
+     *         无法刷新时返回当前已有的 [categories]
+     */
+    suspend fun refreshCategories(): List<String> = categories
+
     /** 某个分类下的歌单 / 榜单 */
     suspend fun browse(category: String): List<PlatformBrowseCard>
 

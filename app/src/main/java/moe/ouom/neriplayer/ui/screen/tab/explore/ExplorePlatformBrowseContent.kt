@@ -97,6 +97,13 @@ internal fun PlatformBrowseContent(
     onTrackClick: (PlatformSearchResult) -> Unit,
     onCloseTracks: () -> Unit,
     onPlayTrackNow: (PlatformSearchResult) -> Unit,
+    /**
+     * 分类 key 的展示名。
+     *
+     * 分类 key 是稳定 id（数字、组合串），没法直接显示，
+     * 由调用方把它翻译成中文名；选中判定仍然用 key。
+     */
+    categoryLabel: (String) -> String = { it },
     tagChipSelectedAlpha: Float = 1f,
     tagChipUnselectedAlpha: Float = 1f,
     tagChipBorderAlpha: Float = 1f,
@@ -115,6 +122,7 @@ internal fun PlatformBrowseContent(
         browse = browse,
         onCardClick = onCardClick,
         onCategoryClick = onCategoryClick,
+        categoryLabel = categoryLabel,
         tagChipSelectedAlpha = tagChipSelectedAlpha,
         tagChipUnselectedAlpha = tagChipUnselectedAlpha,
         tagChipBorderAlpha = tagChipBorderAlpha,
@@ -127,6 +135,7 @@ private fun PlatformBrowseCardGrid(
     browse: PlatformBrowseState,
     onCardClick: (PlatformBrowseCard) -> Unit,
     onCategoryClick: (String) -> Unit,
+    categoryLabel: (String) -> String,
     tagChipSelectedAlpha: Float,
     tagChipUnselectedAlpha: Float,
     tagChipBorderAlpha: Float,
@@ -173,7 +182,8 @@ private fun PlatformBrowseCardGrid(
                     items(browse.categories.size) { index ->
                         val category = browse.categories[index]
                         ExploreTagChip(
-                            label = category,
+                            // 展示中文名，选中判定仍然用原始 key
+                            label = categoryLabel(category),
                             selected = category == browse.selectedCategory,
                             onClick = { onCategoryClick(category) },
                             selectedAlpha = tagChipSelectedAlpha,

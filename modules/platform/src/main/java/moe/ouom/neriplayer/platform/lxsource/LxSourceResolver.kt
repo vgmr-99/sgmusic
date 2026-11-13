@@ -53,6 +53,8 @@ class LxSourceResolver(
                 NPLogger.w("LxSource", "resolved song=${song.name} via LX platform=${effectivePlatform.code} quality=${quality.code}")
                 SongUrlResult.Success(
                     url = r.value.url,
+                    // 脚本要求带的请求头（部分音源的地址要 Referer 才能拉流）
+                    headers = r.value.headers,
                     durationMs = song.durationMs.takeIf { it > 0 },
                     mimeType = when (quality) {
                         LxQuality.FLAC, LxQuality.FLAC24 -> "audio/flac"

@@ -177,9 +177,7 @@ class LxSourceRepository(
     ): LxMusicInfo? {
         // 歌曲本身就是这个平台的 id 时，直接用它，不必再搜一遍。
         // 网易云的 audioId 是歌曲 id；酷狗/QQ/酷我/咪咕的 audioId 是该平台的 id。
-        if (song.channelId.equals(platform.channelId(), ignoreCase = true) ||
-            (platform == LxPlatform.WY && song.channelId.equals("netease", ignoreCase = true))
-        ) {
+        if (LxPlatform.matchesChannelId(platform, song.channelId)) {
             val songmid = song.audioId?.takeIf { it.isNotBlank() } ?: song.id.toString()
             if (songmid.isNotBlank() && songmid != "0") {
                 return LxMusicInfo(
@@ -208,7 +206,8 @@ class LxSourceRepository(
                 albumName = best.album,
                 durationMs = best.durationMs.takeIf { it > 0L } ?: song.durationMs,
                 types = listOf(quality),
-                coverUrl = best.picUrl
+                coverUrl = best.picUrl,
+                extras = platformExtras(platform, best.songmid)
             )
         }
         // 脚本不实现 search 时，用我们自己的平台搜索定位同一首歌
@@ -223,17 +222,23 @@ class LxSourceRepository(
     }
 
     /**
-     * 平台特有字段。
+     * 平台特有字段（洛雪协议里各平台的 id 落位）。
      *
-     * 社区脚本按固定字段名取 id（酷狗 hash、咪咕 copyrightId、QQ strMediaMid），
-     * 字段名不对脚本就换不出地址；缺失的字段必须整个 key 省略，
-     * 否则 `hash ?? songmid` 会被空串遮住。
+     * 社区脚本按固定字段名取 id，字段名不对就换不出地址：
+     * - kg：FileHash → `hash`
+     * - kw：rid → `rid`（`hash` 兜底同值）
+     * - tx：mid → `strMediaMid`（数字 tid 落 `songId`，宿主拿不到就不写）
+     * - mg：copyrightId → `copyrightId`（`songId` 兜底同值，由 toJson 补）
+     * - wy：数字 songid → `songId`（`hash` 兜底同值）
+     *
+     * 缺失的字段必须整个 key 省略，否则 `hash ?? songmid` 会被空串遮住。
      */
     private fun platformExtras(platform: LxPlatform, songmid: String): Map<String, String> = when (platform) {
         LxPlatform.KG -> mapOf("hash" to songmid)
-        LxPlatform.MG -> mapOf("copyrightId" to songmid)
+        LxPlatform.KW -> mapOf("rid" to songmid, "hash" to songmid)
         LxPlatform.TX -> mapOf("strMediaMid" to songmid)
-        LxPlatform.KW -> mapOf("rid" to songmid)
+        LxPlatform.MG -> mapOf("copyrightId" to songmid)
+        LxPlatform.WY -> mapOf("songId" to songmid, "hash" to songmid)
         else -> emptyMap()
     }
 

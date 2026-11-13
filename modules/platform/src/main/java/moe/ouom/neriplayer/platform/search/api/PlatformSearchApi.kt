@@ -40,7 +40,16 @@ enum class PlatformSearchProvider(
     KUGOU("kugou", "kg"),
     QISHUI("qishui", "qs"),
     KUWO("kw", "kw"),
-    MIGU("mg", "mg");
+    MIGU("mg", "mg"),
+    /**
+     * 网易云音乐。
+     *
+     * 与其它平台不同，网易云在项目里本来就有独立的取流通道，
+     * 这里的枚举只用于「发现页浏览数据」这条线（复刻 Mint 的网易云发现页），
+     * 所以不能进 [ALL_CHANNELS]——那会让网易云的浏览结果被误判成
+     * 「只能靠 LX 兜底、没有直连通道」的搜索结果。
+     */
+    NETEASE("netease", "wy");
 
     companion object {
         /**
@@ -48,8 +57,13 @@ enum class PlatformSearchProvider(
          *
          * 播放链路用它识别"来自这些平台的搜索结果"，这类结果没有取流通道，
          * 需要走 LX 自定义源兜底，因此不能当成网易云歌曲处理。
+         *
+         * [NETEASE] 不在集合里：网易云有独立的直连取流通道，
+         * 它只借用这套枚举来承载发现页的浏览数据。
          */
-        val ALL_CHANNELS: Set<String> = entries.mapTo(LinkedHashSet()) { it.code }
+        val ALL_CHANNELS: Set<String> = entries
+            .filterNot { it == NETEASE }
+            .mapTo(LinkedHashSet()) { it.code }
 
         /** 按 channelId 反查平台 */
         fun fromChannel(channelId: String?): PlatformSearchProvider? =

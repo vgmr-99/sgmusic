@@ -54,7 +54,14 @@ sealed class SongUrlResult {
         val cacheKeyOverride: String? = null,
         val isNeteaseLocalFallback: Boolean = false,
         val isPreviewClip: Boolean = false,
-        val fallbackCandidates: List<PlaybackUrlCandidate> = emptyList()
+        val fallbackCandidates: List<PlaybackUrlCandidate> = emptyList(),
+        /**
+         * 拉流时必须带上的请求头。
+         *
+         * LX 音源脚本返回的地址大多要求带 Referer 才能拉流（酷狗/酷我/咪咕/QQ 都如此），
+         * 之前这些头在解析出来后就丢了，导致有地址却播不出声音。
+         */
+        val headers: Map<String, String> = emptyMap()
     ) : SongUrlResult() {
         fun playbackUrls(): List<String> = buildList {
             add(url)

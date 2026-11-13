@@ -891,7 +891,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     /**
      * 加载平台浏览页（默认页）的歌单 / 榜单。
      *
-     * 网易云走精品歌单，其它平台走各自的榜单，
+     * 五个平台（网易云 / 酷狗 / 酷我 / QQ音乐 / 咪咕）走同一套浏览接口，
      * 语义上都是"一组可浏览的集合"，界面才能共用同一套渲染。
      */
     fun loadPlatformBrowse(source: SearchSource, category: String? = null) {
@@ -927,14 +927,39 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         )
         platformBrowseJob = viewModelScope.launch {
             try {
-                val cards = api.browse(realCategory)
-                platformBrowseCache[cacheKey] = PlatformBrowseCacheEntry(
+                // Mint 的分类标签是异步缓存的：首次拿到 categories 时只有
+                // 「热门歌单 + 排行榜」，真实标签要调线上接口才有。
+                // 所以先刷新一次分类，再按刷新后的顺序取默认分类。
+                api.refreshCategories()
+                val effectiveCategory = if (requested.isBlank() && api.categories.isNotEmpty()) {
+                    api.categories.first()
+                } else {
+                    realCategory
+                }
+                val effectiveCacheKey = "${source.name}|$effectiveCategory"
+                val effectiveCached = platformBrowseCache[effectiveCacheKey]
+                if (effectiveCached != null &&
+                    System.currentTimeMillis() - effectiveCached.timestamp < PLATFORM_BROWSE_CACHE_TTL_MS
+                ) {
+                    _uiState.value = _uiState.value.copy(
+                        platformBrowseLoading = false,
+                        platformBrowseError = null,
+                        platformBrowseCategory = effectiveCategory,
+                        platformBrowseCards = effectiveCached.cards,
+                        platformBrowseTracks = emptyList(),
+                        platformBrowseTrackTitle = ""
+                    )
+                    return@launch
+                }
+                val cards = api.browse(effectiveCategory)
+                platformBrowseCache[effectiveCacheKey] = PlatformBrowseCacheEntry(
                     timestamp = System.currentTimeMillis(),
                     cards = cards
                 )
                 _uiState.value = _uiState.value.copy(
                     platformBrowseLoading = false,
                     platformBrowseError = null,
+                    platformBrowseCategory = effectiveCategory,
                     platformBrowseCards = cards
                 )
             } catch (e: CancellationException) {
@@ -991,17 +1016,27 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun platformBrowseApiFor(source: SearchSource): PlatformBrowseApi? = when (source) {
-        SearchSource.KUGOU -> AppContainer.kugouBrowseApi
-        SearchSource.QQ_MUSIC -> AppContainer.qqBrowseApi
+        SearchSource.NETEASE -> AppContainer.mintNeteaseBrowseApi
+        SearchSource.KUGOU -> AppContainer.mintKugouBrowseApi
+        SearchSource.QQ_MUSIC -> AppContainer.mintQqBrowseApi
         SearchSource.QISHUI -> AppContainer.qishuiBrowseApi
-        SearchSource.KUWO -> AppContainer.kuwoBrowseApi
-        SearchSource.MIGU -> AppContainer.miguBrowseApi
+        SearchSource.KUWO -> AppContainer.mintKuwoBrowseApi
+        SearchSource.MIGU -> AppContainer.mintMiguBrowseApi
         else -> null
     }
 
     /** 平台浏览页的分类标签 */
     fun platformBrowseCategories(source: SearchSource): List<String> =
         platformBrowseApiFor(source)?.categories.orEmpty()
+
+    /**
+     * 平台浏览页的分类标签展示名。
+     *
+     * 分类 key 是「id-digest」这类组合串，直接显示没法看，
+     * 由实现方把 key 翻译成中文名。
+     */
+    fun platformBrowseCategoryLabel(source: SearchSource, category: String): String =
+        platformBrowseApiFor(source)?.categoryLabel(category) ?: category
 
     /**
      * 搜索网易云歌曲。

@@ -1,6 +1,6 @@
-// user-api-preload.js — 按 LX 公开契约手写的最小 prelude 骨架（自研，GPL-3.0，不复制 lx-music-mobile 原文）
-// 合约要点（公开文档 lxmusic.toside.cn/desktop/custom-source 与 mobile/custom-source 的协议部分）：
-//   globalThis.lx = { EVENT_NAMES, on, send, request, utils, env, currentScriptInfo }
+// user-api-preload.js — LX 音源宿主的 preload 前置层（自研实现，GPL-3.0）
+// 合约要点（公开协议文档 lxmusic.toside.cn/desktop|mobile/custom-source 的协议部分）：
+//   globalThis.lx = { EVENT_NAMES, on, send, request, utils, env, version, apiVersion, currentScriptInfo }
 // 注意两个容易搞混的方法（脚本作者口径）:
 //   lx.on('request', cb)  —— 宿主把 {action, source, info} 派发给脚本（search/musicUrl/lyric/pic）
 //   lx.request(options)   —— 脚本直接发 HTTP（{method, url, headers, body, form, timeout}）
@@ -8,7 +8,23 @@
 // 本骨架把 send('inited') 落到全局 __lx_inited，把 HTTP 落到 Kotlin 侧的 __lx_native_http，
 // 把 dispatch 暴露为宿主专用的 __lx_dispatch（LxRuntime 只调它）。
 //
-// 兼容层说明（本轮新增）：
+// 本轮（对齐 Mint-Music 的插件宿主契约）补齐的内容：
+//   1) utf8Bytes 编码修 bug（影响所有非 ASCII 文本）：
+//      原实现把「三字节」分支的条件写成 c >= 0xe000，导致 BMP 内绝大多数字符
+//      （含全部中文 CJK）落到 else 分支被编码成 U+FFFD 替换字符；
+//      同时四点位增补平面字符（emoji）的字节掩码错用了首字节。
+//      结果：Buffer.from(中文, 'utf8') 与 crypto 桥的 base64 传输全是乱码，
+//      脚本的加密配置/加密响应解不开，表现为「音源跑不起来」。
+//   2) EVENT_NAMES 全量 + on('req') / send('initialized') / send('update') 别名。
+//   3) lx.on('request') 注册时同步写 globalThis.requestHandler（Mint 行为，
+//      社区脚本里有直接读全局 requestHandler 的）。
+//   4) lx.send('inited') 归一化 sources：保留 key，每个 source 归一化成
+//      {name, type, qualitys, qualities, types, actions}，actions 转小写。
+//   5) lx / window / self / globalThis 指向同一套全局（window === self === globalThis）。
+//   6) utils.buffer.bufToString / utils.crypto.randomBytes 补齐。
+//   7) utils.crypto.randomBytes / require('lx') 等桩函数保持可用。
+//
+// 兼容层说明：
 //   用户手里的 LX desktop / CeruMusic 风格音源依赖 Node/CommonJS：require、module.exports、
 //   process、完整 Buffer、lx.request(url, options, callback) 回调 (err, resp, body)、
 //   以及 module.exports.musicUrl(source, musicInfo, quality)。这里在保留 mobile 契约的同时
@@ -21,7 +37,14 @@ var module = (typeof globalThis.module !== 'undefined' && globalThis.module)
   ? globalThis.module : { exports: {} };
 var exports = module.exports;
 var require = (typeof globalThis.require === 'function')
-  ? globalThis.require : function () { return {}; };
+  ? globalThis.require
+  : function (id) {
+    // 少数 LX 桌面脚本用 require('lx') 取宿主契约。Mint 这里一律返回空对象，
+    // 脚本拿到空对象自然就注册不了 request handler（表现为「音源完全不被调用」）。
+    // 这里给真的 lx 对象，其余模块名仍按桩返回 {}。
+    if (id === 'lx' || id === 'lx-music') return globalThis.lx;
+    return {};
+  };
 var process = (typeof globalThis.process !== 'undefined' && globalThis.process)
   ? globalThis.process : { env: { NODE_ENV: 'production' } };
 globalThis.module = module;
@@ -35,11 +58,13 @@ globalThis.process = process;
   globalThis.__lx_search_result = null;
   globalThis.__lx_lastResults = {};
   globalThis.__lx_musicUrlDone = false;
+  globalThis.__lx_updateAlert = null;
   globalThis.__lx_original_source = globalThis.__lx_original_source || '';
 
-  var handlers = { inited: null, request: null, req: null, updateAlert: null };
+  var handlers = {};
 
   // ---- 字节/编码工具（纯 JS 实现，不依赖宿主 atob/btoa/TextEncoder）----
+  // 标准 base64 字母表（与 Mint lx_plugin_converter.dart 一致）。
   var B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   var B64_LOOKUP = (function () {
     var t = {};
@@ -56,8 +81,9 @@ globalThis.process = process;
         out.push(c);
       } else if (c < 0x800) {
         out.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
-      } else if (c >= 0xd800 && c <= 0xdbff && i + 1 < str.length) {
-        var c2 = str.charCodeAt(i + 1);
+      } else if (c >= 0xd800 && c <= 0xdbff) {
+        // 高代理项：必须跟一个低代理项配成四点位的增补平面字符
+        var c2 = i + 1 < str.length ? str.charCodeAt(i + 1) : 0;
         if (c2 >= 0xdc00 && c2 <= 0xdfff) {
           var cp = 0x10000 + ((c - 0xd800) << 10) + (c2 - 0xdc00);
           out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 0x3f), 0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f));
@@ -65,10 +91,12 @@ globalThis.process = process;
         } else {
           out.push(0xef, 0xbf, 0xbd);
         }
-      } else if (c >= 0xe000) {
-        out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
-      } else {
+      } else if (c >= 0xdc00 && c <= 0xdfff) {
+        // 落单的低代理项：非法，替换成 U+FFFD
         out.push(0xef, 0xbf, 0xbd);
+      } else {
+        // 三字节：BMP 内的其余字符（含全部中文 CJK）
+        out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
       }
     }
     return out;
@@ -89,7 +117,7 @@ globalThis.process = process;
         s += String.fromCharCode(((b & 0x0f) << 12) | ((arr[i + 1] & 0x3f) << 6) | (arr[i + 2] & 0x3f));
         i += 3;
       } else if (b >= 0xf0 && i + 3 < arr.length) {
-        var cp = ((b & 0x07) << 18) | ((arr[i + 1] & 0x3f) << 12) | ((arr[i + 2] & 0x3f) << 6) | (arr[i + 3] & 0x3f);
+        var cp = ((arr[i] & 0x07) << 18) | ((arr[i + 1] & 0x3f) << 12) | ((arr[i + 2] & 0x3f) << 6) | (arr[i + 3] & 0x3f);
         var u = cp - 0x10000;
         s += String.fromCharCode(0xd800 + (u >> 10), 0xdc00 + (u & 0x3ff));
         i += 4;
@@ -290,7 +318,8 @@ globalThis.process = process;
    */
   function lxRequest(a, b, c) {
     if (a && typeof a === 'object' && typeof a.action === 'string' && typeof a.url === 'undefined') {
-      return Promise.resolve(handlers.request ? handlers.request(a) : null);
+      var dispatched = handlers.request ? handlers.request(a) : null;
+      return Promise.resolve(dispatched);
     }
     var url, options, callback = null;
     if (typeof a === 'string') {
@@ -440,6 +469,71 @@ globalThis.process = process;
     return out;
   };
 
+  /**
+   * 音源声明归一化（对齐 Mint lx_plugin_converter.dart 的 __lxNormalizeSources）。
+   *
+   * 与 Mint 的两点差异（都是修正 Mint 的缺陷，不是偏离契约）：
+   *  - **保留 sources 的 key**：Mint 把 sources 拍平成 List<PluginSourceInfo>，key 丢了，
+   *    宿主只能靠 sourceActions 兜底；这里直接保留 key，宿主按 key 匹配平台。
+   *  - **actions 一律转小写**：Mint 只在 sourceActions 里转小写，sources 里保留原样；
+   *    这里两处都转小写，判断 action 时大小写不敏感。
+   *
+   * 归一化后每个 source 固定 6 个字段：name / type / qualitys / qualities / types / actions。
+   * qualitys 缺省 ['128k','320k','flac']，actions 缺省 ['musicUrl']。
+   */
+  globalThis.__lxNormalizeSources = function (data) {
+    var outSources = {};
+    var outActions = {};
+    var nextSources = (data && data.sources) ? data.sources : data;
+    if (!nextSources || typeof nextSources !== 'object') {
+      return { sources: outSources, sourceActions: outActions };
+    }
+    Object.keys(nextSources).forEach(function (sourceId) {
+      var item = nextSources[sourceId];
+      if (!item || typeof item !== 'object') item = {};
+      var qualities = toQualityList(item.qualitys)
+        || toQualityList(item.qualities)
+        || toQualityList(item.types)
+        || ['128k', '320k', 'flac'];
+      var rawActions = (Array.isArray(item.actions) && item.actions.length) ? item.actions : ['musicUrl'];
+      var actions = rawActions.map(function (action) { return String(action).toLowerCase(); });
+      outSources[sourceId] = {
+        name: item.name || sourceId,
+        type: item.type || 'music',
+        qualitys: qualities,
+        qualities: qualities,
+        types: qualities,
+        actions: actions,
+      };
+      outActions[sourceId] = actions;
+    });
+    return { sources: outSources, sourceActions: outActions };
+  };
+
+  function toQualityList(value) {
+    if (Array.isArray(value)) {
+      var list = value.map(function (v) { return String(v); }).filter(function (v) { return !!v; });
+      return list.length ? list : null;
+    }
+    if (typeof value === 'string' && value.trim()) return [value.trim()];
+    if (value && typeof value === 'object') {
+      var keys = Object.keys(value);
+      return keys.length ? keys : null;
+    }
+    return null;
+  }
+
+  /**
+   * 注册 request handler 的唯一入口。
+   * 宿主接口 __lx_dispatch / __lx_hasRequestHandler 与 adapter 的 mockLx.on 都走这里，
+   * 保证「preload 侧」与「adapter 侧」看到的是同一个 handler。
+   */
+  globalThis.__lx_registerRequestHandler = function (handler) {
+    handlers.request = handler;
+    globalThis.requestHandler = handler;
+    return handler;
+  };
+
   // ---- 宿主专用派发：保持原有 __lx_dispatch / __lx_lastMusicUrl / __lx_lastResults 时序 ----
   globalThis.__lx_dispatch = function (opts) {
     var r = handlers.request && handlers.request(opts);
@@ -498,12 +592,15 @@ globalThis.process = process;
 
   // ---- 安装 lx ----
   function install() {
-    globalThis.lx = {
+    var lxObject = {
       EVENT_NAMES: {
-        // 保留原有三项 + desktop/CeruMusic 常见别名（别名指向规范事件名）
-        inited: 'inited', initialized: 'inited',
-        request: 'request', req: 'request',
-        updateAlert: 'updateAlert', update: 'updateAlert',
+        // 规范事件名 + 社区脚本常见的别名（别名指向规范事件名）
+        request: 'request',
+        req: 'request',
+        inited: 'inited',
+        initialized: 'inited',
+        updateAlert: 'updateAlert',
+        update: 'updateAlert',
       },
       env: 'mobile',
       version: '2.0.0',
@@ -522,20 +619,36 @@ globalThis.process = process;
       },
       on: function (event, cb) {
         var name = normalizeEvent(event);
-        if (name === 'req') name = 'request';
+        if (name === 'request' || name === 'req') {
+          // Mint 行为：注册 request handler 时同步写全局 requestHandler
+          globalThis.__lx_registerRequestHandler(cb);
+          return Promise.resolve();
+        }
         handlers[name] = cb;
-        if (name === 'request') globalThis.requestHandler = cb;
         return Promise.resolve();
       },
       send: function (event, payload) {
         var name = normalizeEvent(event);
         // 兼容 inited / initialized
         if (name === 'inited' || name === 'initialized') {
-          globalThis.__lx_inited = payload;
+          globalThis.__lx_inited = buildInitedPayload(payload);
           return Promise.resolve();
         }
-        (handlers[name] || handlers[event]) && (handlers[name] || handlers[event])(payload);
-        return Promise.resolve();
+        // 兼容 updateAlert / update
+        if (name === 'updatealert' || name === 'update') {
+          globalThis.__lx_updateAlert = payload;
+          var alertHandler = handlers.updatealert || handlers.update;
+          if (typeof alertHandler === 'function') {
+            try { alertHandler(payload); } catch (_) {}
+          }
+          return Promise.resolve();
+        }
+        var h = handlers[name];
+        if (typeof h === 'function') {
+          h(payload);
+          return Promise.resolve();
+        }
+        return Promise.reject(new Error('The event is not supported: ' + event));
       },
       request: lxRequest,
       utils: {
@@ -601,6 +714,12 @@ globalThis.process = process;
       },
     };
 
+    // lx / window / self / globalThis 指向同一套全局：
+    // window === self === globalThis，且 window.lx === globalThis.lx === lxObject。
+    globalThis.lx = lxObject;
+    globalThis.window = globalThis;
+    globalThis.self = globalThis;
+
     // setTimeout 在 QuickJS 环境里可能不存在 —— 用 JS 侧自研队列实现，绝不能兜成空函数：
     // VM 状态机靠它们驱动推进。由 Kotlin 的 pump 循环每 ~120ms 调 __lx_tickTimers 触发。
     var timers = [];
@@ -633,7 +752,9 @@ globalThis.process = process;
         }
       }
     };
-    globalThis.__lx_hasRequestHandler = function () { return typeof handlers.request === 'function'; };
+    globalThis.__lx_hasRequestHandler = function () {
+      return typeof handlers.request === 'function' || typeof globalThis.requestHandler === 'function';
+    };
 
     // 默认 module.exports.musicUrl：mobile 风格脚本（只注册 lx.on('request')）也能被
     // 宿主以 desktop 的 module.exports.musicUrl(source, musicInfo, quality) 方式调用。
@@ -656,7 +777,30 @@ globalThis.process = process;
       module.exports.musicUrl = __lxDefaultMusicUrl;
     }
   }
+
+  /**
+   * lx.send('inited', payload) 的落库形态：
+   * 保留脚本原始 payload 的字段，同时把 sources 换成归一化后的版本（保留 key）。
+   *
+   * normalized 可选：adapter 已经算好归一化结果时直接传进来，避免重复计算。
+   */
+  function buildInitedPayload(payload, normalized) {
+    var out = {};
+    if (payload && typeof payload === 'object') {
+      Object.keys(payload).forEach(function (k) { out[k] = payload[k]; });
+    }
+    var norm = normalized || globalThis.__lxNormalizeSources(payload);
+    out.sources = norm.sources;
+    out.sourceActions = norm.sourceActions;
+    if (typeof out.status === 'undefined') out.status = true;
+    if (typeof out.env === 'undefined') out.env = 'mobile';
+    return out;
+  }
+  globalThis.__lxBuildInited = buildInitedPayload;
+
   install();
 
   globalThis.__lx_setInited = function (obj) { globalThis.__lx_inited = obj; };
 })();
+// 结束值强制为 undefined：避免 QuickJS 把整个 globalThis 转成字符串回传给宿主
+;void 0;

@@ -492,6 +492,11 @@ fun ExploreScreen(
     val platformBrowseCategories = remember(ui.selectedSearchSource) {
         vm.platformBrowseCategories(ui.selectedSearchSource)
     }
+    // 分类 key 是稳定 id（数字、组合串），界面上要显示中文名。
+    // 标签是异步拉取的，所以 key 列表变化时也要跟着重新取展示名。
+    val platformBrowseCategoryLabel: (String) -> String = remember(ui.selectedSearchSource, platformBrowseCategories) {
+        { category -> vm.platformBrowseCategoryLabel(ui.selectedSearchSource, category) }
+    }
 
     val shouldLoadMoreSearch by remember(
         searchListState,
@@ -1173,26 +1178,6 @@ fun ExploreScreen(
                     }
                 } else {
                     when (currentSource) {
-                        SearchSource.NETEASE -> {
-                            NeteaseDefaultContent(
-                                gridState = gridState,
-                                browse = NeteaseBrowseState(
-                                    selectedTag = ui.selectedTag,
-                                    playlists = ui.playlists,
-                                    loading = ui.loading,
-                                    error = ui.error?.asString()
-                                ),
-                                tagKeys = tagKeys,
-                                tagLabels = tagLabels,
-                                favoriteKeys = favoriteKeys,
-                                onTagSelected = vm::loadHighQuality,
-                                onPlay = onPlay,
-                                tagChipSelectedAlpha = tagChipSelectedAlpha,
-                                tagChipUnselectedAlpha = tagChipUnselectedAlpha,
-                                tagChipBorderAlpha = tagChipBorderAlpha,
-                                isTabletLayout = isTabletLayout
-                            )
-                        }
                         SearchSource.BILIBILI -> {
                             Box(Modifier.fillMaxSize(), Alignment.Center) {
                                 Text(stringResource(AppR.string.explore_bili_desc), style = MaterialTheme.typography.bodyLarge)
@@ -1202,7 +1187,8 @@ fun ExploreScreen(
                         SearchSource.KUGOU,
                         SearchSource.QISHUI,
                         SearchSource.KUWO,
-                        SearchSource.MIGU -> {
+                        SearchSource.MIGU,
+                        SearchSource.NETEASE -> {
                             PlatformBrowseContent(
                                 browse = PlatformBrowseState(
                                     cards = ui.platformBrowseCards,
@@ -1236,6 +1222,7 @@ fun ExploreScreen(
                                     onSongPlayPreservingQueue(track.toSongItem())
                                 },
                                 onCloseTracks = { vm.closePlatformBrowseTracks() },
+                                categoryLabel = platformBrowseCategoryLabel,
                                 tagChipSelectedAlpha = tagChipSelectedAlpha,
                                 tagChipUnselectedAlpha = tagChipUnselectedAlpha,
                                 tagChipBorderAlpha = tagChipBorderAlpha,
