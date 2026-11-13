@@ -1,0 +1,348 @@
+package moe.ouom.neriplayer.ui.screen.artist
+
+import moe.ouom.neriplayer.ui.i18n.asString
+import moe.ouom.neriplayer.ui.theme.neriRoundedShape
+import android.app.Application
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import moe.ouom.neriplayer.common.R as CoreCommonR
+import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicCreatorItem
+import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicCreatorSection
+import moe.ouom.neriplayer.data.model.SongItem
+import moe.ouom.neriplayer.ui.navigation.LocalMiniPlayerHeight
+import moe.ouom.neriplayer.ui.haptic.HapticIconButton
+import moe.ouom.neriplayer.ui.haptic.HapticTextButton
+import moe.ouom.neriplayer.ui.viewmodel.artist.YouTubeMusicCreatorItemsUiState
+import moe.ouom.neriplayer.ui.viewmodel.artist.YouTubeMusicCreatorItemsViewModel
+import moe.ouom.neriplayer.ui.viewmodel.artist.toCreatorSongItem
+
+internal fun resolveYouTubeMusicCreatorItemsTitle(
+    creatorName: String,
+    sectionTitle: String,
+    loadedTitle: String
+): String {
+    return listOfNotNull(
+        creatorName.trim().takeIf(String::isNotBlank),
+        loadedTitle.ifBlank { sectionTitle }.trim().takeIf(String::isNotBlank)
+    ).distinct().joinToString(" · ")
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun YouTubeMusicCreatorItemsScreen(
+    section: YouTubeMusicCreatorSection,
+    creatorName: String = "",
+    onBack: () -> Unit = {},
+    onSongClick: (List<SongItem>, Int) -> Unit = { _, _ -> },
+    offlineMode: Boolean = false
+) {
+    val context = LocalContext.current
+    val viewModel: YouTubeMusicCreatorItemsViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                YouTubeMusicCreatorItemsViewModel(context.applicationContext as Application)
+            }
+        }
+    )
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val endpoint = section.moreEndpoint
+    val listState = rememberSaveable(
+        endpoint?.browseId,
+        endpoint?.params,
+        saver = LazyListState.Saver
+    ) {
+        LazyListState(firstVisibleItemIndex = 0, firstVisibleItemScrollOffset = 0)
+    }
+
+    LaunchedEffect(endpoint?.browseId, endpoint?.params, section.title) {
+        viewModel.start(section)
+    }
+    LaunchedEffect(viewModel, onSongClick) {
+        viewModel.playbackRequests.collect { request ->
+            onSongClick(request.songs, request.startIndex)
+        }
+    }
+
+    Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = resolveYouTubeMusicCreatorItemsTitle(
+                            creatorName = creatorName,
+                            sectionTitle = section.title,
+                            loadedTitle = uiState.title
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                navigationIcon = {
+                    HapticIconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(CoreCommonR.string.cd_back)
+                        )
+                    }
+                },
+                windowInsets = WindowInsets.statusBars,
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+            )
+            YouTubeMusicCreatorItemsContent(
+                uiState = uiState,
+                listState = listState,
+                onRetry = viewModel::retry,
+                onLoadMore = viewModel::loadMore,
+                onSongClick = viewModel::playSong,
+                offlineMode = offlineMode,
+                isTabletLayout = LocalConfiguration.current.smallestScreenWidthDp >= 600
+            )
+        }
+    }
+}
+
+@Composable
+internal fun YouTubeMusicCreatorItemsContent(
+    uiState: YouTubeMusicCreatorItemsUiState,
+    listState: LazyListState,
+    onRetry: () -> Unit,
+    onLoadMore: () -> Unit,
+    onSongClick: (YouTubeMusicCreatorItem) -> Unit,
+    offlineMode: Boolean,
+    isTabletLayout: Boolean
+) {
+    val playableItems = uiState.items.mapNotNull { item ->
+        item.toCreatorSongItem()?.let { item to it }
+    }
+    val songs = playableItems.map { (_, song) -> song }
+    val miniPlayerHeight = LocalMiniPlayerHeight.current
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.navigationBars),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        val tabletLayout = useCreatorDetailSplitLayout(isTabletLayout, maxWidth.value, maxHeight.value)
+        Surface(
+            modifier = Modifier.widthIn(max = if (tabletLayout) 1000.dp else 1080.dp)
+                .fillMaxSize()
+                .padding(
+                    horizontal = if (tabletLayout) 24.dp else 0.dp,
+                    vertical = if (tabletLayout) 8.dp else 0.dp
+                )
+                .padding(bottom = if (tabletLayout) miniPlayerHeight else 0.dp)
+                .testTag("youtubeCreatorItemsPane"),
+            shape = neriRoundedShape(if (tabletLayout) 28.dp else 0.dp),
+            color = if (tabletLayout) MaterialTheme.colorScheme.surfaceContainerLow else Color.Transparent
+        ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .widthIn(max = 1080.dp)
+                    .fillMaxSize()
+                    .testTag("youtubeCreatorItemsList"),
+                contentPadding = PaddingValues(
+                    start = if (tabletLayout) 24.dp else 20.dp,
+                    end = if (tabletLayout) 24.dp else 20.dp,
+                    top = if (tabletLayout) 12.dp else 4.dp,
+                    bottom = if (tabletLayout) 20.dp else 40.dp + miniPlayerHeight
+                ),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if ((uiState.loading || uiState.playbackQueueLoading) && songs.isNotEmpty()) {
+                    item(key = "creator-items-loading") {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                }
+                if (uiState.loading && songs.isEmpty()) {
+                    item(key = "creator-items-first-loading") {
+                        CreatorItemsLoadingBlock()
+                    }
+                    return@LazyColumn
+                }
+                if (uiState.error != null && songs.isEmpty()) {
+                    item(key = "creator-items-error") {
+                        CreatorItemsErrorBlock(
+                            message = uiState.error.asString(),
+                            onRetry = onRetry
+                        )
+                    }
+                    return@LazyColumn
+                }
+                if (uiState.error != null) {
+                    item(key = "creator-items-stale-error") {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = uiState.error.asString(),
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            HapticTextButton(onClick = onRetry) {
+                                Text(stringResource(CoreCommonR.string.action_retry))
+                            }
+                        }
+                    }
+                }
+                if (uiState.playbackQueueError != null) {
+                    item(key = "creator-items-playback-error") {
+                        Text(
+                            text = uiState.playbackQueueError.asString(),
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+                if (songs.isEmpty()) {
+                    item(key = "creator-items-empty") {
+                        Text(
+                            text = stringResource(CoreCommonR.string.youtube_creator_items_empty),
+                            modifier = Modifier.padding(vertical = 28.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                } else {
+                    itemsIndexed(
+                        playableItems,
+                        key = { _, pair -> pair.second.id }
+                    ) { index, pair ->
+                        val (item, song) = pair
+                        CreatorPlayableRow(
+                            song = song,
+                            index = index + 1,
+                            offlineMode = offlineMode,
+                            enabled = !uiState.playbackQueueLoading && !uiState.loadingMore,
+                            onClick = { onSongClick(item) }
+                        )
+                    }
+                }
+                if (uiState.loadMoreError != null) {
+                    item(key = "creator-items-load-more-error") {
+                        Row(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = uiState.loadMoreError.asString(),
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            HapticTextButton(onClick = onLoadMore) {
+                                Text(stringResource(CoreCommonR.string.action_retry))
+                            }
+                        }
+                    }
+                }
+                if (uiState.continuation != null) {
+                    item(key = "creator-items-load-more") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            TextButton(
+                                onClick = onLoadMore,
+                                enabled = !uiState.loadingMore && !uiState.playbackQueueLoading
+                            ) {
+                                if (uiState.loadingMore) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                Text(stringResource(CoreCommonR.string.youtube_creator_load_more))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CreatorItemsLoadingBlock() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 36.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator()
+    }
+}
+
+@Composable
+private fun CreatorItemsErrorBlock(
+    message: String,
+    onRetry: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error
+        )
+        HapticTextButton(onClick = onRetry) {
+            Text(stringResource(CoreCommonR.string.action_retry))
+        }
+    }
+}

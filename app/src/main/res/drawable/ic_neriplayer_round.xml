@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 拾光音乐：小组件占位图改用新 LOGO（splash_logo.png）；上游原始 vector 已备份到 docs/assets/ic_neriplayer_round_upstream.bak.xml -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/splash_logo" />

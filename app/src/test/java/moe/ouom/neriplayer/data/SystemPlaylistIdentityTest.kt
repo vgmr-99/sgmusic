@@ -1,0 +1,302 @@
+package moe.ouom.neriplayer.data
+
+import moe.ouom.neriplayer.data.identity.stableKey
+
+import android.content.Context
+import android.content.SharedPreferences
+import android.content.res.Configuration
+import android.content.res.Resources
+import android.os.LocaleList
+import moe.ouom.neriplayer.common.R as CoreCommonR
+import moe.ouom.neriplayer.data.local.media.LocalSongSupport
+import moe.ouom.neriplayer.data.model.playlist.LocalPlaylist
+import moe.ouom.neriplayer.data.local.playlist.system.FavoritesPlaylist
+import moe.ouom.neriplayer.data.local.playlist.system.LocalFilesPlaylist
+import moe.ouom.neriplayer.data.local.playlist.system.SystemLocalPlaylists
+import moe.ouom.neriplayer.data.model.stableKey
+import moe.ouom.neriplayer.data.model.SongItem
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.mock
+import org.mockito.Mockito.`when`
+import java.util.Locale
+
+class SystemPlaylistIdentityTest {
+
+    private val inertContext = mockContext()
+
+    @Test
+    fun `positive id reserved names stay as custom playlists`() {
+        val customFavorites = LocalPlaylist(
+            id = 123L,
+            name = "My Favorite Music"
+        )
+        val customLocalFiles = LocalPlaylist(
+            id = 456L,
+            name = "Local Files"
+        )
+
+        assertNull(FavoritesPlaylist.firstOrNull(listOf(customFavorites), null))
+        assertNull(LocalFilesPlaylist.firstOrNull(listOf(customLocalFiles), null))
+        assertNull(SystemLocalPlaylists.resolve(customFavorites.id, customFavorites.name, inertContext))
+        assertNull(SystemLocalPlaylists.resolve(customLocalFiles.id, customLocalFiles.name, inertContext))
+    }
+
+    @Test
+    fun `negative id legacy reserved names still map as system playlists`() {
+        val legacyFavorites = LocalPlaylist(
+            id = -9L,
+            name = "My Favorite Music"
+        )
+        val legacyLocalFiles = LocalPlaylist(
+            id = -10L,
+            name = "Local Files"
+        )
+
+        assertNotNull(FavoritesPlaylist.firstOrNull(listOf(legacyFavorites), null))
+        assertNotNull(LocalFilesPlaylist.firstOrNull(listOf(legacyLocalFiles), null))
+    }
+
+    @Test
+    fun `negative id chinese reserved names map as system playlists`() {
+        val legacyFavorites = LocalPlaylist(
+            id = -11L,
+            name = "我喜欢的音乐"
+        )
+        val legacyLocalFiles = LocalPlaylist(
+            id = -12L,
+            name = "本地文件"
+        )
+
+        assertNotNull(FavoritesPlaylist.firstOrNull(listOf(legacyFavorites), inertContext))
+        assertNotNull(LocalFilesPlaylist.firstOrNull(listOf(legacyLocalFiles), inertContext))
+    }
+
+    @Test
+    fun `legacy local song fallback requires album id zero`() {
+        assertTrue(LocalSongSupport.isLocalSong("Local Files", null, 0L, null))
+        assertFalse(LocalSongSupport.isLocalSong("Local Files", null, 12L, null))
+        assertTrue(LocalSongSupport.isLocalSong("本地文件", null, 0L, inertContext))
+        assertTrue(LocalSongSupport.isLocalSong(LocalSongSupport.LOCAL_ALBUM_IDENTITY, null, 0L, null))
+    }
+
+    @Test
+    fun `favorites merge keeps first remote song when downloaded local copy appears later`() {
+        val remoteSong = remoteNeteaseSong()
+        val localCopy = downloadedLocalCopy(remoteSong)
+        val legacyFavorites = LocalPlaylist(
+            id = -11L,
+            name = "我喜欢的音乐",
+            songs = mutableListOf(remoteSong, localCopy)
+        )
+
+        val merged = FavoritesPlaylist.merge(listOf(legacyFavorites), inertContext)
+
+        assertEquals(1, merged.songs.size)
+        assertEquals(remoteSong, merged.songs.single())
+    }
+
+    @Test
+    fun `local files merge keeps first downloaded copy with same source identity`() {
+        val remoteSong = remoteNeteaseSong()
+        val firstCopy = downloadedLocalCopy(remoteSong)
+        val secondCopy = downloadedLocalCopy(remoteSong).copy(
+            id = 100L,
+            mediaUri = "/storage/emulated/0/Music/song-copy.mp3",
+            localFilePath = "/storage/emulated/0/Music/song-copy.mp3"
+        )
+        val legacyLocalFiles = LocalPlaylist(
+            id = -12L,
+            name = "本地文件",
+            songs = mutableListOf(firstCopy, secondCopy)
+        )
+
+        val merged = LocalFilesPlaylist.merge(listOf(legacyLocalFiles), inertContext)
+
+        assertEquals(1, merged.songs.size)
+        assertEquals(firstCopy, merged.songs.single())
+    }
+
+    @Test
+    fun `local files merge enriches the retained copy with a cover`() {
+        val remoteSong = remoteNeteaseSong()
+        val firstCopy = downloadedLocalCopy(remoteSong)
+        val secondCopy = downloadedLocalCopy(remoteSong).copy(
+            coverUrl = "content://downloads/Covers/song.jpg",
+            mediaUri = "/storage/emulated/0/Music/song-copy.mp3",
+            localFilePath = "/storage/emulated/0/Music/song-copy.mp3"
+        )
+        val legacyLocalFiles = LocalPlaylist(
+            id = -12L,
+            name = "本地文件",
+            songs = mutableListOf(firstCopy, secondCopy)
+        )
+
+        val merged = LocalFilesPlaylist.merge(listOf(legacyLocalFiles), inertContext)
+
+        assertEquals(1, merged.songs.size)
+        assertEquals(firstCopy.mediaUri, merged.songs.single().mediaUri)
+        assertEquals(secondCopy.coverUrl, merged.songs.single().coverUrl)
+    }
+
+    @Test
+    fun `local files merge keeps distinct source references`() {
+        val firstLocalSong = localFileSong(
+            id = 1L,
+            mediaUri = "content://media/external/audio/media/1"
+        )
+        val secondLocalSong = localFileSong(
+            id = 2L,
+            mediaUri = "content://media/external/audio/media/2"
+        )
+        val legacyLocalFiles = LocalPlaylist(
+            id = -12L,
+            name = "本地文件",
+            songs = mutableListOf(firstLocalSong, secondLocalSong)
+        )
+
+        val merged = LocalFilesPlaylist.merge(listOf(legacyLocalFiles), inertContext)
+
+        assertEquals(2, merged.songs.size)
+        assertEquals(
+            setOf(firstLocalSong.mediaUri, secondLocalSong.mediaUri),
+            merged.songs.map { it.mediaUri }.toSet()
+        )
+    }
+
+    @Test
+    fun `empty local files merge does not retain a stale custom cover`() {
+        val legacyLocalFiles = LocalPlaylist(
+            id = -12L,
+            name = "本地文件",
+            songs = mutableListOf(),
+            customCoverUrl = "file:///covers/stale-local.jpg"
+        )
+
+        val merged = LocalFilesPlaylist.merge(listOf(legacyLocalFiles), inertContext)
+
+        assertEquals(0, merged.songs.size)
+        assertEquals(null, merged.customCoverUrl)
+    }
+
+    @Test
+    fun `local files merge drops legacy playlist cover in favor of song covers`() {
+        val song = localFileSong(
+            id = 1L,
+            mediaUri = "content://media/external/audio/media/1"
+        )
+        val current = LocalPlaylist(
+            id = -12L,
+            name = "本地文件",
+            songs = mutableListOf(song),
+            customCoverUrl = "file:///covers/current.jpg"
+        )
+        val staleEmpty = LocalPlaylist(
+            id = -13L,
+            name = "Local Files",
+            songs = mutableListOf(),
+            customCoverUrl = "file:///covers/stale.jpg"
+        )
+
+        val merged = LocalFilesPlaylist.merge(listOf(current, staleEmpty), inertContext)
+
+        assertNull(merged.customCoverUrl)
+    }
+
+    @Test
+    fun `local files merge replaces blank duplicate cover metadata`() {
+        val remoteSong = remoteNeteaseSong()
+        val firstCopy = downloadedLocalCopy(remoteSong).copy(
+            customCoverUrl = "",
+            originalCoverUrl = ""
+        )
+        val secondCopy = firstCopy.copy(
+            customCoverUrl = "file:///covers/current.jpg",
+            originalCoverUrl = "https://example.com/original.jpg",
+            mediaUri = "/storage/emulated/0/Music/song-copy.mp3",
+            localFilePath = "/storage/emulated/0/Music/song-copy.mp3"
+        )
+        val legacyLocalFiles = LocalPlaylist(
+            id = -12L,
+            name = "本地文件",
+            songs = mutableListOf(firstCopy, secondCopy)
+        )
+
+        val merged = LocalFilesPlaylist.merge(listOf(legacyLocalFiles), inertContext)
+
+        assertEquals("file:///covers/current.jpg", merged.songs.single().customCoverUrl)
+        assertEquals("https://example.com/original.jpg", merged.songs.single().originalCoverUrl)
+    }
+
+    private fun remoteNeteaseSong(): SongItem {
+        return SongItem(
+            id = 42L,
+            name = "song",
+            artist = "artist",
+            album = "NeteaseAlbum",
+            albumId = 7L,
+            durationMs = 1_000L,
+            coverUrl = null,
+            channelId = "netease",
+            audioId = "42"
+        )
+    }
+
+    private fun downloadedLocalCopy(source: SongItem): SongItem {
+        return SongItem(
+            id = 99L,
+            name = source.name,
+            artist = source.artist,
+            album = LocalSongSupport.LOCAL_ALBUM_IDENTITY,
+            albumId = 0L,
+            durationMs = source.durationMs,
+            coverUrl = null,
+            mediaUri = "/storage/emulated/0/Music/song.mp3",
+            localFilePath = "/storage/emulated/0/Music/song.mp3",
+            channelId = "local",
+            audioId = "99",
+            sourceStableKey = source.stableKey()
+        )
+    }
+
+    private fun localFileSong(id: Long, mediaUri: String): SongItem {
+        return SongItem(
+            id = id,
+            name = "晴天",
+            artist = "周杰伦",
+            album = LocalSongSupport.LOCAL_ALBUM_IDENTITY,
+            albumId = 0L,
+            durationMs = 269_000L,
+            coverUrl = null,
+            mediaUri = mediaUri,
+            localFileName = "周杰伦 - 晴天.mp3",
+            channelId = "local",
+            audioId = id.toString()
+        )
+    }
+
+    private fun mockContext(): Context {
+        val context = mock(Context::class.java)
+        val preferences = mock(SharedPreferences::class.java)
+        val resources = mock(Resources::class.java)
+        val configuration = mock(Configuration::class.java)
+        val locales = mock(LocaleList::class.java)
+
+        `when`(context.getSharedPreferences("language_settings", Context.MODE_PRIVATE))
+            .thenReturn(preferences)
+        `when`(preferences.getString("selected_language", "")).thenReturn("")
+        `when`(context.resources).thenReturn(resources)
+        `when`(resources.configuration).thenReturn(configuration)
+        `when`(configuration.locales).thenReturn(locales)
+        `when`(locales[0]).thenReturn(Locale.getDefault())
+        `when`(context.createConfigurationContext(any(Configuration::class.java))).thenReturn(context)
+        `when`(context.getString(CoreCommonR.string.favorite_my_music)).thenReturn("我喜欢的音乐")
+        `when`(context.getString(CoreCommonR.string.local_files)).thenReturn("本地文件")
+        return context
+    }
+}

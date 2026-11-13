@@ -1,0 +1,1729 @@
+package moe.ouom.neriplayer.ui.onboarding
+
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.view.View
+import android.view.PixelCopy
+import android.view.ViewTreeObserver
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Palette
+import moe.ouom.neriplayer.ui.component.overlay.DensityScaledAlertDialog as AlertDialog
+import moe.ouom.neriplayer.ui.component.overlay.ApplyOverlayWindowNavigationBarPolicy
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import moe.ouom.neriplayer.ui.i18n.UiText
+import moe.ouom.neriplayer.ui.i18n.asString
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.key
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import moe.ouom.neriplayer.common.R as CoreCommonR
+import moe.ouom.neriplayer.core.di.AppContainer
+import moe.ouom.neriplayer.data.settings.appearance.UiDensityScalePreference
+import moe.ouom.neriplayer.data.model.auth.SavedCookieAuthState
+import moe.ouom.neriplayer.data.model.youtube.auth.YouTubeAuthState
+import moe.ouom.neriplayer.data.sync.host.SyncProtocolUpgradeRepository
+import moe.ouom.neriplayer.data.settings.background.BackgroundImageStorage
+import moe.ouom.neriplayer.data.settings.appearance.DEFAULT_ENHANCED_ADVANCED_BLUR_RADIUS_DP
+import moe.ouom.neriplayer.data.settings.appearance.AdvancedBlurQualityPreference
+import moe.ouom.neriplayer.data.model.settings.lyrics.LyricFontScaleTarget
+import moe.ouom.neriplayer.data.settings.appearance.isCurrentBuildDimensity
+import moe.ouom.neriplayer.ui.component.common.ThemeRevealOverlay
+import moe.ouom.neriplayer.ui.effect.glass.AdvancedGlassController
+import moe.ouom.neriplayer.ui.effect.glass.AdvancedGlassHost
+import moe.ouom.neriplayer.ui.effect.glass.AdvancedGlassNavigationHandoff
+import moe.ouom.neriplayer.ui.effect.glass.AdvancedGlassSceneLayer
+import moe.ouom.neriplayer.ui.effect.glass.LocalAdvancedGlassNavigationOwner
+import moe.ouom.neriplayer.ui.effect.glass.captureAdvancedGlassBackdrop
+import moe.ouom.neriplayer.ui.effect.glass.isAdvancedGlassBackendSupported
+import moe.ouom.neriplayer.ui.effect.glass.rememberAdvancedGlassBackdrop
+import moe.ouom.neriplayer.ui.screen.tab.settings.auth.LoginSuccessDialog
+import moe.ouom.neriplayer.ui.screen.tab.settings.auth.SettingsAccountPlatform
+import moe.ouom.neriplayer.ui.screen.tab.settings.auth.SettingsBiliAuthDialogs
+import moe.ouom.neriplayer.ui.screen.tab.settings.auth.SettingsNeteaseAuthDialogs
+import moe.ouom.neriplayer.ui.screen.tab.settings.auth.SettingsYouTubeAuthDialogs
+import moe.ouom.neriplayer.ui.screen.tab.settings.component.ThemeModeActionButton
+import moe.ouom.neriplayer.ui.screen.tab.settings.dialog.SettingsGitHubDialogs
+import moe.ouom.neriplayer.ui.screen.tab.settings.dialog.SettingsWebDavDialogs
+import moe.ouom.neriplayer.ui.sync.upgrade.StartupSyncUpgradePrompt
+import moe.ouom.neriplayer.ui.sync.upgrade.rememberSyncProtocolUpgradeViewModel
+import moe.ouom.neriplayer.ui.viewmodel.GitHubSyncViewModel
+import moe.ouom.neriplayer.ui.viewmodel.WebDavSyncViewModel
+import moe.ouom.neriplayer.ui.viewmodel.auth.BiliAuthEvent
+import moe.ouom.neriplayer.ui.viewmodel.auth.BiliAuthViewModel
+import moe.ouom.neriplayer.ui.viewmodel.auth.YouTubeAuthEvent
+import moe.ouom.neriplayer.ui.viewmodel.auth.YouTubeAuthViewModel
+import moe.ouom.neriplayer.ui.viewmodel.debug.NeteaseAuthEvent
+import moe.ouom.neriplayer.ui.viewmodel.debug.NeteaseAuthViewModel
+import moe.ouom.neriplayer.ui.haptic.HapticButton
+import moe.ouom.neriplayer.ui.haptic.HapticOutlinedButton
+import moe.ouom.neriplayer.ui.haptic.HapticTextButton
+import moe.ouom.neriplayer.common.locale.LanguageManager
+import moe.ouom.neriplayer.common.locale.getDisplayName
+import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.view.drawToBitmap
+import kotlin.coroutines.resume
+import kotlin.math.absoluteValue
+import kotlin.math.roundToInt
+import androidx.core.graphics.createBitmap
+import androidx.core.content.ContextCompat
+import moe.ouom.neriplayer.core.startup.permission.StartupMediaPermission
+import moe.ouom.neriplayer.core.startup.permission.StartupNotificationPermission
+import moe.ouom.neriplayer.ui.theme.background.CustomBackground
+import kotlin.time.Duration.Companion.milliseconds
+import moe.ouom.neriplayer.R as AppR
+
+private enum class StartupStep {
+    Language,
+    Platforms,
+    PlaybackSources,
+    Permissions,
+    PlaybackControls,
+    Lyrics,
+    Personalize,
+    BackupRestore,
+    LearningGuide
+}
+
+private const val STARTUP_THEME_REVEAL_WATCHDOG_DELAY_MILLIS = 1100L
+private const val STARTUP_THEME_REVEAL_CAPTURE_TIMEOUT_MILLIS = 500L
+
+internal fun calculateStartupOnboardingProgress(stepIndex: Int, stepCount: Int): Float {
+    if (stepCount <= 0) return 0f
+    return ((stepIndex + 1).toFloat() / stepCount).coerceIn(0f, 1f)
+}
+
+internal fun shouldAdvanceStartupOnboarding(
+    permissionRequestActive: Boolean,
+    permissionNavigationBlocked: Boolean
+): Boolean = !permissionRequestActive && !permissionNavigationBlocked
+
+internal fun canNavigateStartupOnboardingStep(
+    finishing: Boolean,
+    transitionRunning: Boolean
+): Boolean = !finishing && !transitionRunning
+
+internal fun canNavigateStartupOnboardingBack(
+    finishing: Boolean,
+    transitionRunning: Boolean,
+    canReverseTransition: Boolean
+): Boolean = !finishing && (!transitionRunning || canReverseTransition)
+
+internal const val STARTUP_NOTIFICATION_PERMISSION_WARNING_ATTEMPTS = 2
+
+internal fun shouldShowStartupNotificationPermissionWarning(
+    permissionSupported: Boolean,
+    permissionGranted: Boolean,
+    attempts: Int
+): Boolean = permissionSupported && !permissionGranted &&
+    attempts < STARTUP_NOTIFICATION_PERMISSION_WARNING_ATTEMPTS
+
+internal fun shouldWarnStartupNoPlatformConnected(
+    biliState: SavedCookieAuthState,
+    neteaseState: SavedCookieAuthState,
+    youTubeState: YouTubeAuthState
+): Boolean = biliState == SavedCookieAuthState.Missing &&
+    neteaseState == SavedCookieAuthState.Missing &&
+    youTubeState == YouTubeAuthState.Missing
+
+internal fun hasFinishedStartupNotificationPermissionWarning(
+    attempts: Int
+): Boolean = attempts >= STARTUP_NOTIFICATION_PERMISSION_WARNING_ATTEMPTS
+
+internal fun shouldPromptStartupEnhancedAdvancedBlur(
+    advancedBlurAvailable: Boolean,
+    enhancedAdvancedBlurEnabled: Boolean,
+    backgroundImageImported: Boolean
+): Boolean = advancedBlurAvailable && backgroundImageImported && !enhancedAdvancedBlurEnabled
+
+private tailrec fun Context.findStartupActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findStartupActivity()
+    else -> null
+}
+
+@Composable
+fun StartupOnboardingScreen(
+    onLanguageChanged: (LanguageManager.Language) -> Unit = {}
+) {
+    val context = LocalContext.current
+    val composeResources = LocalResources.current
+    val activity = LocalView.current.context.findStartupActivity()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
+    val repo = AppContainer.settingsRepo
+
+    val steps = remember { StartupStep.entries }
+    var stepIndex by rememberSaveable { mutableIntStateOf(0) }
+    val stepTransitionState = rememberStartupOnboardingLayerTransitionState(
+        initialStepIndex = stepIndex
+    )
+    var selectedLanguageCode by rememberSaveable {
+        mutableStateOf(LanguageManager.getCurrentLanguage(context).code)
+    }
+    val selectedLanguage = remember(selectedLanguageCode) {
+        LanguageManager.Language.entries.firstOrNull { it.code == selectedLanguageCode }
+            ?: LanguageManager.Language.SYSTEM
+    }
+
+    val uiDensityScale by repo.uiDensityScaleFlow.collectAsStateWithLifecycle(initialValue = 1.0f)
+    val configuration = LocalConfiguration.current
+    val uiScaleRange = UiDensityScalePreference.forDevice(configuration.smallestScreenWidthDp, configuration.uiMode)
+    var pendingUiScale by rememberSaveable { mutableFloatStateOf(uiScaleRange.normalize(uiDensityScale)) }
+    val appliedPendingUiScale = uiScaleRange.normalize(pendingUiScale)
+    LaunchedEffect(uiDensityScale, uiScaleRange.maximumScale) {
+        val normalizedScale = uiScaleRange.normalize(uiDensityScale)
+        if ((pendingUiScale - normalizedScale).absoluteValue > 0.001f) {
+            pendingUiScale = normalizedScale
+        }
+    }
+    val backgroundImageUri by repo.backgroundImageUriFlow.collectAsStateWithLifecycle(initialValue = null)
+    val backgroundImageBlur by repo.backgroundImageBlurFlow.collectAsStateWithLifecycle(initialValue = 0f)
+    val backgroundImageAlpha by repo.backgroundImageAlphaFlow.collectAsStateWithLifecycle(initialValue = 0.3f)
+    val advancedBlurEnabled by repo.advancedBlurEnabledFlow.collectAsStateWithLifecycle(
+        initialValue = true
+    )
+    val enhancedAdvancedBlurEnabled by repo.enhancedAdvancedBlurEnabledFlow.collectAsStateWithLifecycle(
+        initialValue = false
+    )
+    val enhancedAdvancedBlurRadiusDp by repo.enhancedAdvancedBlurRadiusDpFlow
+        .collectAsStateWithLifecycle(initialValue = DEFAULT_ENHANCED_ADVANCED_BLUR_RADIUS_DP)
+    val initialAdvancedBlurQuality = remember {
+        AdvancedBlurQualityPreference.defaultForDevice(isCurrentBuildDimensity())
+    }
+    val advancedBlurQuality by repo.advancedBlurQualityFlow.collectAsStateWithLifecycle(
+        initialValue = initialAdvancedBlurQuality
+    )
+    var pendingBackgroundImageBlur by remember { mutableStateOf<Float?>(null) }
+    var pendingBackgroundImageAlpha by remember { mutableStateOf<Float?>(null) }
+    val effectiveBackgroundImageBlur = pendingBackgroundImageBlur ?: backgroundImageBlur
+    val effectiveBackgroundImageAlpha = pendingBackgroundImageAlpha ?: backgroundImageAlpha
+    val playbackControlLayoutPreferences by repo.playbackControlLayoutPreferencesFlow
+        .collectAsStateWithLifecycle(initialValue = repo.defaultPlaybackControlLayoutPreferences)
+    val lyricFontScales by repo.lyricFontScalesFlow.collectAsStateWithLifecycle(
+        initialValue = repo.defaultLyricFontScales
+    )
+    val neteaseAutoSourceSwitch by repo.neteaseAutoSourceSwitchFlow.collectAsStateWithLifecycle(
+        initialValue = false
+    )
+    val neteaseLocalSourceFallback by repo.neteaseLocalSourceFallbackFlow
+        .collectAsStateWithLifecycle(initialValue = false)
+    val followSystemDark by repo.followSystemDarkFlow.collectAsStateWithLifecycle(initialValue = true)
+    val forceDark by repo.forceDarkFlow.collectAsStateWithLifecycle(initialValue = false)
+    val systemDark = isSystemInDarkTheme()
+    var pendingFollowSystemDark by remember { mutableStateOf<Boolean?>(null) }
+    var pendingForceDark by remember { mutableStateOf<Boolean?>(null) }
+    val effectiveThemeMode = resolveStartupOnboardingThemeMode(
+        storedFollowSystemDark = followSystemDark,
+        storedForceDark = forceDark,
+        pendingFollowSystemDark = pendingFollowSystemDark,
+        pendingForceDark = pendingForceDark
+    )
+    val isDarkTheme = effectiveThemeMode.resolveUseDark(systemDark)
+    val latestIsDarkTheme = rememberUpdatedState(isDarkTheme)
+    val latestEnhancedAdvancedBlurEnabled = rememberUpdatedState(enhancedAdvancedBlurEnabled)
+
+    LaunchedEffect(backgroundImageBlur, pendingBackgroundImageBlur) {
+        if (
+            pendingBackgroundImageBlur != null &&
+            ((pendingBackgroundImageBlur ?: backgroundImageBlur) - backgroundImageBlur)
+                .absoluteValue < 0.001f
+        ) {
+            pendingBackgroundImageBlur = null
+        }
+    }
+    LaunchedEffect(backgroundImageAlpha, pendingBackgroundImageAlpha) {
+        if (
+            pendingBackgroundImageAlpha != null &&
+            ((pendingBackgroundImageAlpha ?: backgroundImageAlpha) - backgroundImageAlpha)
+                .absoluteValue < 0.001f
+        ) {
+            pendingBackgroundImageAlpha = null
+        }
+    }
+
+    val sdkInt = Build.VERSION.SDK_INT
+    val enhancedAdvancedBlurAvailable = isAdvancedGlassBackendSupported(sdkInt)
+    val advancedGlassController = remember(
+        sdkInt,
+        advancedBlurEnabled,
+        enhancedAdvancedBlurEnabled,
+        enhancedAdvancedBlurRadiusDp,
+        advancedBlurQuality
+    ) {
+        AdvancedGlassController(
+            sdkInt = sdkInt,
+            advancedBlurEnabled = advancedBlurEnabled,
+            enhancedAdvancedBlurEnabled = enhancedAdvancedBlurEnabled,
+            backendReady = enhancedAdvancedBlurAvailable,
+            enhancedAdvancedBlurRadiusDp = enhancedAdvancedBlurRadiusDp,
+            advancedBlurQuality = advancedBlurQuality
+        )
+    }
+    val backgroundGlassBackdrop = rememberAdvancedGlassBackdrop()
+    val contentGlassBackdrop = rememberAdvancedGlassBackdrop()
+    val notificationPermission = StartupNotificationPermission.permission
+    val localMediaPermission = remember(sdkInt) {
+        StartupMediaPermission.permissionFor(sdkInt)
+    }
+    var notificationPermissionGranted by remember(notificationPermission) {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, notificationPermission) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
+    var localMediaPermissionGranted by remember(localMediaPermission) {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, localMediaPermission) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
+    var permissionRequestActive by remember { mutableStateOf(false) }
+    var permissionNavigationBlocked by remember { mutableStateOf(false) }
+    var notificationPermissionWarningVisible by rememberSaveable { mutableStateOf(false) }
+    var notificationPermissionWarningAttempts by rememberSaveable { mutableIntStateOf(0) }
+    var noPlatformWarningVisible by rememberSaveable { mutableStateOf(false) }
+    var enhancedAdvancedBlurPromptVisible by rememberSaveable { mutableStateOf(false) }
+
+    var inlineMessage by remember { mutableStateOf<UiText?>(null) }
+    var loginSuccessTitle by remember { mutableStateOf<Int?>(null) }
+    var finishing by remember { mutableStateOf(false) }
+    val rootView = LocalView.current
+    var themeRevealSnapshot by remember { mutableStateOf<ImageBitmap?>(null) }
+    var themeRevealOriginWindow by remember { mutableStateOf<Offset?>(null) }
+    var themeRevealStartRadiusPx by remember { mutableFloatStateOf(0f) }
+    var themeRevealFallbackColor by remember { mutableStateOf<ComposeColor?>(null) }
+    var themeRevealCaptureInFlight by remember { mutableStateOf(false) }
+    var themeRevealCaptureJob by remember { mutableStateOf<Job?>(null) }
+    var themeRevealCaptureToken by remember { mutableIntStateOf(0) }
+
+    var showNeteaseSheet by remember { mutableStateOf(false) }
+    var showNeteaseConfirm by remember { mutableStateOf(false) }
+    var showNeteaseSavedCookieDialog by remember { mutableStateOf(false) }
+    var neteaseMaskedPhone by remember { mutableStateOf<String?>(null) }
+    var neteaseSheetTab by rememberSaveable { mutableIntStateOf(0) }
+
+    var showBiliSheet by remember { mutableStateOf(false) }
+    var showBiliSavedCookieDialog by remember { mutableStateOf(false) }
+    var biliSheetTab by rememberSaveable { mutableIntStateOf(0) }
+
+    var showYouTubeSheet by remember { mutableStateOf(false) }
+    var showYouTubeSavedCookieDialog by remember { mutableStateOf(false) }
+    var youTubeSheetTab by rememberSaveable { mutableIntStateOf(0) }
+    var showGitHubConfigDialog by remember { mutableStateOf(false) }
+    var showClearGitHubConfigDialog by remember { mutableStateOf(false) }
+    var showWebDavConfigDialog by remember { mutableStateOf(false) }
+    var showClearWebDavConfigDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(followSystemDark, pendingFollowSystemDark) {
+        if (pendingFollowSystemDark != null && pendingFollowSystemDark == followSystemDark) {
+            pendingFollowSystemDark = null
+        }
+    }
+    LaunchedEffect(forceDark, pendingForceDark) {
+        if (pendingForceDark != null && pendingForceDark == forceDark) {
+            pendingForceDark = null
+        }
+    }
+    val neteaseVm: NeteaseAuthViewModel = viewModel()
+    val neteaseState by neteaseVm.uiState.collectAsStateWithLifecycle()
+    val biliVm: BiliAuthViewModel = viewModel()
+    val biliState by biliVm.uiState.collectAsStateWithLifecycle()
+    val youTubeVm: YouTubeAuthViewModel = viewModel()
+    val youTubeState by youTubeVm.uiState.collectAsStateWithLifecycle()
+    val githubVm: GitHubSyncViewModel = viewModel()
+    val githubState by githubVm.uiState.collectAsStateWithLifecycle()
+    val webDavVm: WebDavSyncViewModel = viewModel()
+    val webDavState by webDavVm.uiState.collectAsStateWithLifecycle()
+    val syncUpgradeVm = rememberSyncProtocolUpgradeViewModel()
+    val syncUpgradeState by syncUpgradeVm.uiState.collectAsStateWithLifecycle()
+    val githubTarget = if (githubState.isConfigured) {
+        SyncProtocolUpgradeRepository.githubTargetHash(githubState.repoOwner, githubState.repoName)
+    } else null
+    val webDavTarget = if (webDavState.isConfigured) {
+        SyncProtocolUpgradeRepository.webDavTargetHash(
+            webDavState.serverUrl, webDavState.basePath, webDavState.username
+        )
+    } else null
+    LaunchedEffect(githubTarget, webDavTarget) {
+        syncUpgradeVm.refreshTargets()
+    }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val imported = BackgroundImageStorage.importFromUri(
+                context = context,
+                sourceUri = uri,
+                previousUriString = backgroundImageUri
+            )
+            if (imported != null) {
+                repo.setBackgroundImageUri(imported.toString())
+                if (
+                    shouldPromptStartupEnhancedAdvancedBlur(
+                        advancedBlurAvailable = enhancedAdvancedBlurAvailable,
+                        enhancedAdvancedBlurEnabled = latestEnhancedAdvancedBlurEnabled.value,
+                        backgroundImageImported = true
+                    )
+                ) {
+                    enhancedAdvancedBlurPromptVisible = true
+                }
+            }
+        }
+    }
+    fun showNotificationPermissionWarning() {
+        if (
+            !shouldShowStartupNotificationPermissionWarning(
+                permissionSupported = StartupNotificationPermission.isSupported(sdkInt),
+                permissionGranted = notificationPermissionGranted,
+                attempts = notificationPermissionWarningAttempts
+            )
+        ) {
+            return
+        }
+        notificationPermissionWarningAttempts += 1
+        notificationPermissionWarningVisible = true
+    }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        notificationPermissionGranted = granted
+        permissionRequestActive = false
+        if (granted) {
+            notificationPermissionWarningVisible = false
+            notificationPermissionWarningAttempts = 0
+        } else {
+            showNotificationPermissionWarning()
+        }
+        scope.launch {
+            delay(500L.milliseconds)
+            permissionNavigationBlocked = false
+        }
+    }
+    val localMediaPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        localMediaPermissionGranted = granted
+        permissionRequestActive = false
+        scope.launch {
+            delay(500L.milliseconds)
+            permissionNavigationBlocked = false
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, neteaseVm, biliVm, youTubeVm) {
+        fun refresh() {
+            neteaseVm.refreshAuthHealth()
+            biliVm.refreshAuthHealth()
+            youTubeVm.refreshAuthHealth()
+        }
+        refresh()
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) refresh()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val applicationContext = context.applicationContext
+    LaunchedEffect(githubVm, applicationContext) {
+        githubVm.initialize(applicationContext)
+    }
+    LaunchedEffect(webDavVm, applicationContext) {
+        webDavVm.initialize(applicationContext)
+    }
+
+    LaunchedEffect(neteaseVm) {
+        neteaseVm.events.collect { event ->
+            when (event) {
+                is NeteaseAuthEvent.ShowSnack -> inlineMessage = event.message
+                is NeteaseAuthEvent.AskConfirmSend -> {
+                    neteaseMaskedPhone = event.masked
+                    showNeteaseConfirm = true
+                }
+                NeteaseAuthEvent.LoginSuccess -> {
+                    showNeteaseSavedCookieDialog = false
+                    inlineMessage = null
+                    showNeteaseSheet = false
+                    loginSuccessTitle = CoreCommonR.string.settings_netease_login_success
+                    neteaseVm.refreshAuthHealth()
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(biliVm) {
+        biliVm.events.collect { event ->
+            when (event) {
+                is BiliAuthEvent.ShowSnack -> inlineMessage = event.message
+                BiliAuthEvent.LoginSuccess -> {
+                    showBiliSavedCookieDialog = false
+                    inlineMessage = null
+                    showBiliSheet = false
+                    loginSuccessTitle = CoreCommonR.string.settings_bili_login_success
+                    biliVm.refreshAuthHealth()
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(youTubeVm) {
+        youTubeVm.events.collect { event ->
+            when (event) {
+                is YouTubeAuthEvent.ShowSnack -> inlineMessage = event.message
+                YouTubeAuthEvent.LoginSuccess -> {
+                    showYouTubeSavedCookieDialog = false
+                    inlineMessage = null
+                    showYouTubeSheet = false
+                    loginSuccessTitle = CoreCommonR.string.settings_youtube_login_success
+                    youTubeVm.refreshAuthHealth()
+                }
+            }
+        }
+    }
+
+    val baseDensity = LocalDensity.current
+    val previewDensity = remember(
+        baseDensity.fontScale,
+        composeResources.displayMetrics.density,
+        appliedPendingUiScale
+    ) {
+        Density(
+            composeResources.displayMetrics.density * appliedPendingUiScale,
+            baseDensity.fontScale
+        )
+    }
+
+    fun selectLanguage(language: LanguageManager.Language) {
+        if (selectedLanguage == language) return
+        selectedLanguageCode = language.code
+        LanguageManager.setLanguage(context, language)
+        onLanguageChanged(language)
+    }
+
+    fun finishOnboarding() {
+        if (finishing) return
+        finishing = true
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    repo.setUiDensityScale(pendingUiScale)
+                    repo.setStartupOnboardingCompleted(true)
+                }
+            }
+            if (result.isFailure) {
+                finishing = false
+            }
+        }
+    }
+
+    fun transitionToStep(targetIndex: Int) {
+        val nextIndex = targetIndex.coerceIn(0, steps.lastIndex)
+        if (finishing) return
+        if (
+            stepTransitionState.isRunning &&
+            !stepTransitionState.canReverseTo(nextIndex)
+        ) {
+            return
+        }
+        if (nextIndex == stepIndex) return
+        stepTransitionState.request(nextIndex)
+        stepIndex = nextIndex
+    }
+
+    fun requestNotificationPermission() {
+        if (!StartupNotificationPermission.isSupported(sdkInt)) {
+            notificationPermissionGranted = true
+            permissionRequestActive = false
+            permissionNavigationBlocked = false
+            return
+        }
+        permissionRequestActive = true
+        permissionNavigationBlocked = true
+        notificationPermissionWarningVisible = false
+        notificationPermissionLauncher.launch(notificationPermission)
+    }
+
+    fun goNextStep() {
+        if (
+            !canNavigateStartupOnboardingStep(
+                finishing = finishing,
+                transitionRunning = stepTransitionState.isRunning
+            )
+        ) {
+            return
+        }
+        if (
+            !shouldAdvanceStartupOnboarding(
+                permissionRequestActive = permissionRequestActive,
+                permissionNavigationBlocked = permissionNavigationBlocked
+            )
+        ) {
+            return
+        }
+        if (
+            steps[stepIndex] == StartupStep.Permissions &&
+            shouldShowStartupNotificationPermissionWarning(
+                permissionSupported = StartupNotificationPermission.isSupported(sdkInt),
+                permissionGranted = notificationPermissionGranted,
+                attempts = notificationPermissionWarningAttempts
+            )
+        ) {
+            showNotificationPermissionWarning()
+            return
+        }
+        if (
+            steps[stepIndex] == StartupStep.Platforms &&
+            shouldWarnStartupNoPlatformConnected(
+                biliState = biliState.health.state,
+                neteaseState = neteaseState.health.state,
+                youTubeState = youTubeState.health.state
+            )
+        ) {
+            noPlatformWarningVisible = true
+            return
+        }
+        if (stepIndex == steps.lastIndex) {
+            finishOnboarding()
+            return
+        }
+
+        transitionToStep(stepIndex + 1)
+    }
+
+    fun clearThemeRevealVisualState() {
+        themeRevealSnapshot = null
+        themeRevealOriginWindow = null
+        themeRevealStartRadiusPx = 0f
+        themeRevealFallbackColor = null
+    }
+
+    fun clearThemeRevealState() {
+        themeRevealCaptureToken += 1
+        themeRevealCaptureJob?.cancel()
+        themeRevealCaptureJob = null
+        themeRevealCaptureInFlight = false
+        pendingFollowSystemDark = null
+        pendingForceDark = null
+        clearThemeRevealVisualState()
+    }
+
+    fun finishThemeReveal(captureToken: Int) {
+        if (themeRevealCaptureToken == captureToken) {
+            clearThemeRevealVisualState()
+        }
+    }
+
+    fun requestThemeToggle(originInWindow: Offset, startRadiusPx: Float) {
+        if (
+            shouldBlockStartupOnboardingThemeToggle(
+                captureInFlight = themeRevealCaptureInFlight,
+                revealActive = themeRevealOriginWindow != null &&
+                    themeRevealFallbackColor != null
+            )
+        ) {
+            return
+        }
+
+        val isDarkBeforeToggle = latestIsDarkTheme.value
+        val nextDark = !isDarkBeforeToggle
+        val captureToken = themeRevealCaptureToken + 1
+        themeRevealCaptureToken = captureToken
+        themeRevealCaptureJob?.cancel()
+        themeRevealCaptureJob = null
+        themeRevealCaptureInFlight = true
+        val captureJob = scope.launch {
+            var themeWriteStarted = false
+            var themeWriteCompleted = false
+            val captureView = activity?.window?.decorView?.rootView ?: rootView.rootView
+            try {
+                awaitStartupStableDraw(captureView)
+                val snapshot = withTimeoutOrNull(STARTUP_THEME_REVEAL_CAPTURE_TIMEOUT_MILLIS.milliseconds) {
+                    runCatching {
+                        captureStartupThemeRevealSnapshot(
+                            activity = activity,
+                            fallbackView = captureView
+                        )
+                    }.getOrNull()
+                }
+                val lifecycleActive = lifecycleOwner.lifecycle.currentState
+                    .isAtLeast(Lifecycle.State.STARTED)
+                val activityValid = activity == null ||
+                    (!activity.isFinishing && !activity.isDestroyed)
+                if (themeRevealCaptureToken != captureToken || !lifecycleActive || !activityValid) {
+                    return@launch
+                }
+
+                clearThemeRevealVisualState()
+                themeRevealSnapshot = snapshot
+                themeRevealFallbackColor = if (isDarkBeforeToggle) {
+                    ComposeColor(0xFF121212)
+                } else {
+                    ComposeColor.White
+                }
+                themeRevealOriginWindow = originInWindow
+                themeRevealStartRadiusPx = startRadiusPx.coerceAtLeast(1f)
+                themeRevealCaptureInFlight = false
+                pendingFollowSystemDark = false
+                pendingForceDark = nextDark
+                themeWriteStarted = true
+                repo.setThemeMode(
+                    followSystemDark = false,
+                    forceDark = nextDark
+                )
+                themeWriteCompleted = true
+            } finally {
+                if (themeRevealCaptureToken == captureToken) {
+                    if (themeWriteStarted && !themeWriteCompleted) {
+                        pendingFollowSystemDark = null
+                        pendingForceDark = null
+                        clearThemeRevealVisualState()
+                    }
+                    themeRevealCaptureJob = null
+                    themeRevealCaptureInFlight = false
+                }
+            }
+        }
+        themeRevealCaptureJob = captureJob
+    }
+
+    val themeRevealActive = themeRevealOriginWindow != null && themeRevealFallbackColor != null
+    val activeThemeRevealToken = themeRevealCaptureToken
+    LaunchedEffect(themeRevealActive, activeThemeRevealToken) {
+        if (!themeRevealActive) {
+            return@LaunchedEffect
+        }
+        delay(STARTUP_THEME_REVEAL_WATCHDOG_DELAY_MILLIS.milliseconds)
+        finishThemeReveal(activeThemeRevealToken)
+    }
+    DisposableEffect(lifecycleOwner) {
+        onDispose { clearThemeRevealState() }
+    }
+
+    @Composable
+    fun RenderOnboardingStepContent(currentStep: Int) {
+        StepContainer(stepIndex = currentStep) {
+            when (steps[currentStep]) {
+                StartupStep.Language -> LanguageContent(
+                    selectedLanguage = selectedLanguage,
+                    onSelectLanguage = ::selectLanguage
+                )
+                StartupStep.Platforms -> StartupPlatformAccounts(
+                    inlineMessage = inlineMessage?.asString(),
+                    onInlineMessageChange = { inlineMessage = null },
+                    biliState = biliState,
+                    neteaseState = neteaseState,
+                    youTubeState = youTubeState,
+                    isActive = stepIndex == currentStep && !stepTransitionState.isRunning && !finishing,
+                    onLogin = { platform ->
+                        inlineMessage = null
+                        when (platform) {
+                            SettingsAccountPlatform.Bilibili -> {
+                                biliSheetTab = 0
+                                showBiliSheet = true
+                            }
+                            SettingsAccountPlatform.Netease -> {
+                                neteaseSheetTab = 0
+                                showNeteaseSheet = true
+                            }
+                            SettingsAccountPlatform.YouTube -> {
+                                youTubeSheetTab = 0
+                                showYouTubeSheet = true
+                            }
+                            SettingsAccountPlatform.QqMusic -> Unit
+                        }
+                    },
+                    onManageSaved = { platform ->
+                        inlineMessage = null
+                        when (platform) {
+                            SettingsAccountPlatform.Bilibili -> showBiliSavedCookieDialog = true
+                            SettingsAccountPlatform.Netease -> showNeteaseSavedCookieDialog = true
+                            SettingsAccountPlatform.YouTube -> showYouTubeSavedCookieDialog = true
+                            SettingsAccountPlatform.QqMusic -> Unit
+                        }
+                    }
+                )
+                StartupStep.PlaybackSources -> StartupPlaybackSourceContent(
+                    autoSourceSwitchEnabled = neteaseAutoSourceSwitch,
+                    localSourceFallbackEnabled = neteaseLocalSourceFallback,
+                    onSetFallbackEnabled = { enabled ->
+                        scope.launch {
+                            repo.setNeteasePlaybackSourceFallback(enabled)
+                        }
+                    }
+                )
+                StartupStep.Permissions -> StartupPermissionContent(
+                    notificationPermissionSupported =
+                        StartupNotificationPermission.isSupported(sdkInt),
+                    notificationPermissionGranted = notificationPermissionGranted,
+                    localMediaPermissionGranted = localMediaPermissionGranted,
+                    onRequestNotificationPermission = {
+                        requestNotificationPermission()
+                    },
+                    onRequestLocalMediaPermission = {
+                        permissionRequestActive = true
+                        permissionNavigationBlocked = true
+                        localMediaPermissionLauncher.launch(localMediaPermission)
+                    }
+                )
+                StartupStep.PlaybackControls -> StartupPlaybackControlsContent(
+                    preferences = playbackControlLayoutPreferences,
+                    coverLyricFontScale = lyricFontScales.coverLyric,
+                    onCoverLyricFontScaleChange = { scale ->
+                        scope.launch {
+                            repo.setLyricFontScale(
+                                LyricFontScaleTarget.COVER_LYRIC,
+                                scale
+                            )
+                        }
+                    },
+                    onPreferencesChange = { preferences ->
+                        scope.launch {
+                            repo.setPlaybackControlLayoutPreferences(preferences)
+                        }
+                    }
+                )
+                StartupStep.Lyrics -> StartupLyricsContent(
+                    preferences = playbackControlLayoutPreferences,
+                    lyricFontScale = lyricFontScales.lyricsPageLyric,
+                    onLyricFontScaleChange = { scale ->
+                        scope.launch {
+                            repo.setLyricFontScale(
+                                LyricFontScaleTarget.LYRICS_PAGE_LYRIC,
+                                scale
+                            )
+                        }
+                    },
+                    onPreferencesChange = { preferences ->
+                        scope.launch {
+                            repo.setPlaybackControlLayoutPreferences(preferences)
+                        }
+                    }
+                )
+                StartupStep.BackupRestore -> StartupBackupRestoreSyncGate(
+                    state = syncUpgradeState,
+                    onRetry = syncUpgradeVm::refreshTargets
+                ) {
+                    BackupRestoreContent(
+                        gitHubState = githubState,
+                        webDavState = webDavState,
+                        onDismissGitHubMessage = githubVm::clearMessages,
+                        onDismissWebDavMessage = webDavVm::clearMessages,
+                        onOpenGitHubConfig = {
+                            githubVm.clearMessages()
+                            showGitHubConfigDialog = true
+                        },
+                        onOpenClearGitHubConfig = {
+                            githubVm.clearMessages()
+                            showClearGitHubConfigDialog = true
+                        },
+                        onToggleGitHubAutoSync = { enabled ->
+                            githubVm.toggleAutoSync(context, enabled)
+                        },
+                        onGitHubSyncNow = {
+                            githubTarget?.let { target ->
+                                requestStartupBackupSync(target, syncUpgradeVm) { targetId, finished, upgradeRequired ->
+                                    githubVm.performSyncForTarget(context, targetId, finished, upgradeRequired)
+                                }
+                            }
+                        },
+                        onOpenWebDavConfig = {
+                            webDavVm.clearMessages()
+                            showWebDavConfigDialog = true
+                        },
+                        onOpenClearWebDavConfig = {
+                            webDavVm.clearMessages()
+                            showClearWebDavConfigDialog = true
+                        },
+                        onToggleWebDavAutoSync = { enabled ->
+                            webDavVm.toggleAutoSync(context, enabled)
+                        },
+                        onWebDavSyncNow = {
+                            webDavTarget?.let { target ->
+                                requestStartupBackupSync(target, syncUpgradeVm) { targetId, finished, upgradeRequired ->
+                                    webDavVm.performSyncForTarget(context, targetId, finished, upgradeRequired)
+                                }
+                            }
+                        }
+                    )
+                }
+                StartupStep.Personalize -> PersonalizeContent(
+                    pendingUiScale = appliedPendingUiScale,
+                    onUiScaleChange = { pendingUiScale = it },
+                    onUiScaleCommit = { scope.launch { repo.setUiDensityScale(pendingUiScale) } },
+                    backgroundImageUri = backgroundImageUri,
+                    backgroundImageBlur = effectiveBackgroundImageBlur,
+                    backgroundImageAlpha = effectiveBackgroundImageAlpha,
+                    enhancedAdvancedBlurAvailable = enhancedAdvancedBlurAvailable,
+                    enhancedAdvancedBlurEnabled = enhancedAdvancedBlurEnabled,
+                    onSelectBackground = {
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
+                    onClearBackground = {
+                        pendingBackgroundImageBlur = null
+                        pendingBackgroundImageAlpha = null
+                        scope.launch {
+                            BackgroundImageStorage.deleteManagedBackground(context, backgroundImageUri)
+                            repo.setBackgroundImageUri(null)
+                        }
+                    },
+                    onBackgroundBlurChange = { blur ->
+                        pendingBackgroundImageBlur = blur
+                    },
+                    onBackgroundBlurCommit = { blur ->
+                        scope.launch { repo.setBackgroundImageBlur(blur) }
+                    },
+                    onBackgroundAlphaChange = { alpha ->
+                        pendingBackgroundImageAlpha = alpha
+                    },
+                    onBackgroundAlphaCommit = { alpha ->
+                        scope.launch { repo.setBackgroundImageAlpha(alpha) }
+                    },
+                    onEnhancedAdvancedBlurChange = { enabled ->
+                        scope.launch {
+                            repo.setEnhancedAdvancedBlurEnabled(enabled)
+                        }
+                    },
+                    isDarkTheme = isDarkTheme,
+                    onThemeToggleRequest = ::requestThemeToggle
+                )
+                StartupStep.LearningGuide -> StartupLearningGuideContent()
+            }
+        }
+    }
+
+    LaunchedEffect(stepIndex) {
+        stepTransitionState.request(stepIndex)
+    }
+
+    CompositionLocalProvider(LocalDensity provides previewDensity) {
+        val colorScheme = MaterialTheme.colorScheme
+        val canNavigateNext = canNavigateStartupOnboardingStep(
+            finishing = finishing,
+            transitionRunning = stepTransitionState.isRunning
+        )
+        val canNavigateBack = canNavigateStartupOnboardingBack(
+            finishing = finishing,
+            transitionRunning = stepTransitionState.isRunning,
+            canReverseTransition = stepTransitionState.canReverseTo(stepIndex - 1)
+        )
+        val visibleStepScenes = stepTransitionState.visibleScenes
+        val activeGlassStepIndex = stepTransitionState.activeGlassStepIndex
+        val activeNavigationOwners = setOf(steps[activeGlassStepIndex])
+        val prewarmedNavigationOwners = visibleStepScenes.mapTo(linkedSetOf()) { scene ->
+            steps[scene.stepIndex]
+        }
+        val animatedProgress by animateFloatAsState(
+            targetValue = calculateStartupOnboardingProgress(stepIndex, steps.size),
+            animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+            label = "startup_onboarding_progress"
+        )
+        AdvancedGlassHost(
+            controller = advancedGlassController,
+            backgroundBackdrop = backgroundGlassBackdrop,
+            contentBackdrop = contentGlassBackdrop,
+            activeNavigationOwners = activeNavigationOwners,
+            prewarmedNavigationOwners = prewarmedNavigationOwners,
+            disableStretchOverscroll = backgroundImageUri != null
+        ) {
+            AdvancedGlassNavigationHandoff(enabled = visibleStepScenes.size > 1) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .captureAdvancedGlassBackdrop(backgroundGlassBackdrop)
+                            .background(colorScheme.background)
+                    ) {
+                        CustomBackground(
+                            imageUri = backgroundImageUri,
+                            blur = effectiveBackgroundImageBlur,
+                            alpha = effectiveBackgroundImageAlpha
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .captureAdvancedGlassBackdrop(contentGlassBackdrop)
+                    ) {
+                        StartupOnboardingLayout(
+                            header = {
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = colorScheme.secondaryContainer
+                                ) {
+                                    Text(
+                                        text = stringResource(AppR.string.onboarding_badge),
+                                        modifier = Modifier.padding(
+                                            horizontal = 12.dp,
+                                            vertical = 6.dp
+                                        ),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = colorScheme.onSecondaryContainer
+                                    )
+                                }
+                                Spacer(Modifier.height(14.dp))
+                                Text(
+                                    text = stringResource(AppR.string.onboarding_title),
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colorScheme.onSurface
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    text = stringResource(AppR.string.onboarding_subtitle),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.height(18.dp))
+                                LinearProgressIndicator(
+                                    progress = { animatedProgress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(999.dp))
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                Text(
+                                    text = stringResource(
+                                        AppR.string.onboarding_step_counter,
+                                        stepIndex + 1,
+                                        steps.size
+                                    ),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = colorScheme.onSurfaceVariant
+                                )
+                            },
+                            actions = {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (stepIndex > 0) {
+                                            HapticTextButton(
+                                                onClick = {
+                                                    transitionToStep(stepIndex - 1)
+                                                },
+                                                enabled = canNavigateBack,
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(stringResource(CoreCommonR.string.action_back))
+                                            }
+                                        } else {
+                                            Spacer(Modifier.weight(1f))
+                                        }
+
+                                        HapticButton(
+                                            onClick = ::goNextStep,
+                                            enabled = canNavigateNext,
+                                            modifier = Modifier.weight(1.4f),
+                                            shape = OnboardingControlShape
+                                        ) {
+                                            Text(
+                                                text = if (stepIndex == steps.lastIndex) {
+                                                    stringResource(AppR.string.onboarding_learning_enter_app)
+                                                } else {
+                                                    stringResource(AppR.string.onboarding_action_next)
+                                                }
+                                            )
+                                        }
+                                    }
+                                    HapticTextButton(
+                                        onClick = { finishOnboarding() },
+                                        enabled = canNavigateNext,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(stringResource(AppR.string.onboarding_skip_all))
+                                    }
+                                }
+                            }
+                        ) {
+                            StartupOnboardingLayerHost(
+                                transitionState = stepTransitionState,
+                                modifier = Modifier.fillMaxSize(),
+                            ) { scene ->
+                                key(scene.stepIndex) {
+                                    CompositionLocalProvider(
+                                        LocalAdvancedGlassNavigationOwner provides
+                                            steps[scene.stepIndex]
+                                    ) {
+                                        AdvancedGlassSceneLayer(
+                                            controller = advancedGlassController,
+                                            modifier = Modifier.fillMaxSize(),
+                                            disableStretchOverscroll =
+                                                backgroundImageUri != null,
+                                            fixedBackground = true,
+                                            background = {
+                                                Box(Modifier.fillMaxSize())
+                                            },
+                                            content = {
+                                                Box(Modifier.fillMaxSize()) {
+                                                    RenderOnboardingStepContent(scene.stepIndex)
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            SettingsNeteaseAuthDialogs(
+                showSheet = showNeteaseSheet,
+                initialTab = neteaseSheetTab,
+                onDismissSheet = { showNeteaseSheet = false },
+                inlineMsg = inlineMessage,
+                onInlineMsgChange = { inlineMessage = it },
+                showConfirmDialog = showNeteaseConfirm,
+                confirmPhoneMasked = neteaseMaskedPhone,
+                onDismissConfirmDialog = { showNeteaseConfirm = false },
+                vm = neteaseVm,
+                showSavedCookieDialog = showNeteaseSavedCookieDialog,
+                onDismissSavedCookieDialog = { showNeteaseSavedCookieDialog = false },
+                onOpenSheetAtTab = { tab ->
+                    inlineMessage = null
+                    neteaseSheetTab = tab
+                    showNeteaseSheet = true
+                },
+                onLogout = {
+                    showNeteaseSavedCookieDialog = false
+                    neteaseVm.clearCookies()
+                },
+                onBrowserLogin = null
+            )
+            SettingsBiliAuthDialogs(
+                showSheet = showBiliSheet,
+                initialTab = biliSheetTab,
+                onDismissSheet = { showBiliSheet = false },
+                inlineMsg = inlineMessage,
+                onInlineMsgChange = { inlineMessage = it },
+                vm = biliVm,
+                showSavedCookieDialog = showBiliSavedCookieDialog,
+                onDismissSavedCookieDialog = { showBiliSavedCookieDialog = false },
+                onOpenSheetAtTab = { tab ->
+                    inlineMessage = null
+                    biliSheetTab = tab
+                    showBiliSheet = true
+                },
+                onLogout = {
+                    showBiliSavedCookieDialog = false
+                    biliVm.clearCookies()
+                },
+                onBrowserLogin = null
+            )
+            SettingsYouTubeAuthDialogs(
+                showSheet = showYouTubeSheet,
+                initialTab = youTubeSheetTab,
+                onDismissSheet = { showYouTubeSheet = false },
+                inlineMsg = inlineMessage,
+                onInlineMsgChange = { inlineMessage = it },
+                vm = youTubeVm,
+                showSavedCookieDialog = showYouTubeSavedCookieDialog,
+                onDismissSavedCookieDialog = { showYouTubeSavedCookieDialog = false },
+                onOpenSheetAtTab = { tab ->
+                    inlineMessage = null
+                    youTubeSheetTab = tab
+                    showYouTubeSheet = true
+                },
+                onLogout = {
+                    showYouTubeSavedCookieDialog = false
+                    youTubeVm.clearAuth()
+                }
+            )
+            if (syncUpgradeState.startupRegistrationComplete) {
+                SettingsGitHubDialogs(
+                    showGitHubConfigDialog = showGitHubConfigDialog,
+                    onShowGitHubConfigDialogChange = { showGitHubConfigDialog = it },
+                    showClearGitHubConfigDialog = showClearGitHubConfigDialog,
+                    onShowClearGitHubConfigDialogChange = { showClearGitHubConfigDialog = it }
+                )
+                SettingsWebDavDialogs(
+                    showWebDavConfigDialog = showWebDavConfigDialog,
+                    onShowWebDavConfigDialogChange = { showWebDavConfigDialog = it },
+                    showClearWebDavConfigDialog = showClearWebDavConfigDialog,
+                    onShowClearWebDavConfigDialogChange = { showClearWebDavConfigDialog = it }
+                )
+            }
+            StartupSyncUpgradePrompt(
+                canShowDialog = syncUpgradeState.startupRegistrationComplete &&
+                    steps[stepIndex] == StartupStep.BackupRestore && !finishing &&
+                    !githubState.isSyncing && !webDavState.isSyncing &&
+                    !showGitHubConfigDialog && !showClearGitHubConfigDialog &&
+                    !showWebDavConfigDialog && !showClearWebDavConfigDialog,
+                viewModel = syncUpgradeVm
+            )
+            if (notificationPermissionWarningVisible) {
+                StartupNotificationPermissionWarningDialog(
+                    attempt = notificationPermissionWarningAttempts,
+                    onRequestPermission = ::requestNotificationPermission,
+                    onDismiss = {
+                        notificationPermissionWarningVisible = false
+                        if (
+                            !hasFinishedStartupNotificationPermissionWarning(
+                                notificationPermissionWarningAttempts
+                            )
+                        ) {
+                            scope.launch {
+                                delay(180L.milliseconds)
+                                if (!notificationPermissionGranted) {
+                                    showNotificationPermissionWarning()
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+            if (noPlatformWarningVisible) {
+                StartupNoPlatformWarningDialog(
+                    onContinue = {
+                        noPlatformWarningVisible = false
+                        transitionToStep(stepIndex + 1)
+                    },
+                    onDismiss = { noPlatformWarningVisible = false }
+                )
+            }
+            if (enhancedAdvancedBlurPromptVisible) {
+                StartupEnhancedAdvancedBlurPromptDialog(
+                    onEnable = {
+                        enhancedAdvancedBlurPromptVisible = false
+                        scope.launch { repo.setEnhancedAdvancedBlurEnabled(true) }
+                    },
+                    onDismiss = { enhancedAdvancedBlurPromptVisible = false }
+                )
+            }
+            loginSuccessTitle?.let { title ->
+                LoginSuccessDialog(
+                    title = stringResource(title),
+                    onDismiss = { loginSuccessTitle = null }
+                )
+            }
+            val revealOrigin = themeRevealOriginWindow
+            val revealFallbackColor = themeRevealFallbackColor
+            if (revealOrigin != null && revealFallbackColor != null) {
+                ThemeRevealOverlay(
+                    snapshot = themeRevealSnapshot,
+                    fallbackColor = revealFallbackColor,
+                    originInWindow = revealOrigin,
+                    modifier = Modifier.fillMaxSize(),
+                    startRadiusPx = themeRevealStartRadiusPx,
+                    durationMillis = 640,
+                    onFinished = { finishThemeReveal(activeThemeRevealToken) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StepContainer(
+    stepIndex: Int,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    key(stepIndex) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun LanguageContent(
+    selectedLanguage: LanguageManager.Language,
+    onSelectLanguage: (LanguageManager.Language) -> Unit
+) {
+    StepHeader(
+        icon = Icons.Outlined.Language,
+        title = stringResource(AppR.string.onboarding_language_title),
+        description = stringResource(AppR.string.onboarding_language_desc)
+    )
+    Spacer(Modifier.height(18.dp))
+    LanguageManager.Language.entries.forEach { language ->
+        OptionCard(
+            title = language.getDisplayName(LocalContext.current),
+            selected = selectedLanguage == language,
+            onClick = { onSelectLanguage(language) }
+        )
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
+@Composable
+private fun PersonalizeContent(
+    pendingUiScale: Float,
+    onUiScaleChange: (Float) -> Unit,
+    onUiScaleCommit: () -> Unit,
+    backgroundImageUri: String?,
+    backgroundImageBlur: Float,
+    backgroundImageAlpha: Float,
+    enhancedAdvancedBlurAvailable: Boolean,
+    enhancedAdvancedBlurEnabled: Boolean,
+    onSelectBackground: () -> Unit,
+    onClearBackground: () -> Unit,
+    onBackgroundBlurChange: (Float) -> Unit,
+    onBackgroundBlurCommit: (Float) -> Unit,
+    onBackgroundAlphaChange: (Float) -> Unit,
+    onBackgroundAlphaCommit: (Float) -> Unit,
+    onEnhancedAdvancedBlurChange: (Boolean) -> Unit,
+    isDarkTheme: Boolean,
+    onThemeToggleRequest: (Offset, Float) -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    val configuration = LocalConfiguration.current
+    val uiScaleRange = UiDensityScalePreference.forDevice(configuration.smallestScreenWidthDp, configuration.uiMode)
+
+    StepHeader(
+        icon = Icons.Outlined.Palette,
+        title = stringResource(AppR.string.onboarding_personalize_title),
+        description = stringResource(AppR.string.onboarding_personalize_desc)
+    )
+    Spacer(Modifier.height(18.dp))
+    HintCard(
+        title = stringResource(CoreCommonR.string.settings_ui_scale),
+        body = stringResource(AppR.string.onboarding_ui_scale_hint, (pendingUiScale * 100).roundToInt())
+    ) {
+        Slider(
+            value = pendingUiScale,
+            onValueChange = onUiScaleChange,
+            onValueChangeFinished = onUiScaleCommit,
+            valueRange = uiScaleRange.valueRange,
+            steps = uiScaleRange.steps
+        )
+    }
+    Spacer(Modifier.height(14.dp))
+    HintCard(
+        title = stringResource(AppR.string.onboarding_theme_mode_title),
+        body = if (isDarkTheme) {
+            stringResource(CoreCommonR.string.settings_theme_toggle_light)
+        } else {
+            stringResource(CoreCommonR.string.settings_theme_toggle_dark)
+        }
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            ThemeModeActionButton(
+                isDarkTheme = isDarkTheme,
+                onToggleRequest = onThemeToggleRequest
+            )
+        }
+    }
+    Spacer(Modifier.height(14.dp))
+    HintCard(
+        title = stringResource(CoreCommonR.string.background_custom),
+        body = stringResource(AppR.string.onboarding_background_hint)
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            HapticOutlinedButton(
+                onClick = onSelectBackground,
+                modifier = Modifier.weight(1f),
+                shape = OnboardingControlShape,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    if (backgroundImageUri == null) {
+                        stringResource(AppR.string.onboarding_background_select)
+                    } else {
+                        stringResource(AppR.string.onboarding_background_change)
+                    },
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (backgroundImageUri != null) {
+                HapticOutlinedButton(
+                    onClick = onClearBackground,
+                    modifier = Modifier.weight(1f),
+                    shape = OnboardingControlShape,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = stringResource(AppR.string.onboarding_background_clear),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+        if (backgroundImageUri != null) {
+            Text(stringResource(CoreCommonR.string.background_blur), color = colors.onSurface, style = MaterialTheme.typography.bodyMedium)
+            Slider(
+                value = backgroundImageBlur,
+                onValueChange = onBackgroundBlurChange,
+                onValueChangeFinished = { onBackgroundBlurCommit(backgroundImageBlur) },
+                valueRange = 0f..25f
+            )
+            Text(stringResource(CoreCommonR.string.background_opacity), color = colors.onSurface, style = MaterialTheme.typography.bodyMedium)
+            Slider(
+                value = backgroundImageAlpha,
+                onValueChange = onBackgroundAlphaChange,
+                onValueChangeFinished = { onBackgroundAlphaCommit(backgroundImageAlpha) },
+                valueRange = 0.1f..1.0f
+            )
+        }
+    }
+    if (enhancedAdvancedBlurAvailable) {
+        Spacer(Modifier.height(14.dp))
+        HintCard(
+            title = stringResource(CoreCommonR.string.settings_enhanced_advanced_blur),
+            body = if (backgroundImageUri == null) {
+                stringResource(AppR.string.onboarding_enhanced_blur_no_background_desc)
+            } else {
+                stringResource(AppR.string.onboarding_enhanced_blur_background_desc)
+            }
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(AppR.string.onboarding_enhanced_blur_switch_title),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.onSurface
+                )
+                Switch(
+                    checked = enhancedAdvancedBlurEnabled,
+                    onCheckedChange = onEnhancedAdvancedBlurChange
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(14.dp))
+    Text(
+        text = stringResource(AppR.string.onboarding_complete_hint),
+        style = MaterialTheme.typography.bodyMedium,
+        color = colors.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun OptionCard(title: String, selected: Boolean, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    OnboardingGlassSurface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(OnboardingCardShape)
+            .clickable(onClick = onClick),
+        shape = OnboardingCardShape,
+        color = if (selected) colors.secondaryContainer else colors.surfaceContainerHigh
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 18.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = if (selected) colors.onSecondaryContainer else colors.onSurface
+            )
+            if (selected) {
+                Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = colors.onSecondaryContainer)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StartupNoPlatformWarningDialog(
+    onContinue: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(stringResource(AppR.string.onboarding_platforms_no_login_title))
+        },
+        text = {
+            Text(stringResource(AppR.string.onboarding_platforms_no_login_desc))
+        },
+        confirmButton = {
+            ApplyOverlayWindowNavigationBarPolicy()
+            HapticTextButton(onClick = onContinue) {
+                Text(stringResource(AppR.string.onboarding_platforms_no_login_continue))
+            }
+        },
+        dismissButton = {
+            HapticTextButton(onClick = onDismiss) {
+                Text(stringResource(AppR.string.onboarding_platforms_no_login_connect))
+            }
+        }
+    )
+}
+
+@Composable
+private fun StartupEnhancedAdvancedBlurPromptDialog(
+    onEnable: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(stringResource(AppR.string.onboarding_enhanced_blur_prompt_title))
+        },
+        text = {
+            Text(stringResource(AppR.string.onboarding_enhanced_blur_prompt_desc))
+        },
+        confirmButton = {
+            ApplyOverlayWindowNavigationBarPolicy()
+            HapticTextButton(onClick = onEnable) {
+                Text(stringResource(AppR.string.onboarding_enhanced_blur_prompt_enable))
+            }
+        },
+        dismissButton = {
+            HapticTextButton(onClick = onDismiss) {
+                Text(stringResource(AppR.string.onboarding_enhanced_blur_prompt_not_now))
+            }
+        }
+    )
+}
+
+@Composable
+private fun StartupNotificationPermissionWarningDialog(
+    attempt: Int,
+    onRequestPermission: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val isFinalWarning = attempt >= STARTUP_NOTIFICATION_PERMISSION_WARNING_ATTEMPTS
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                stringResource(
+                    if (isFinalWarning) {
+                        AppR.string.onboarding_notification_permission_final_warning_title
+                    } else {
+                        AppR.string.onboarding_notification_permission_warning_title
+                    }
+                )
+            )
+        },
+        text = {
+            Text(
+                stringResource(
+                    if (isFinalWarning) {
+                        AppR.string.onboarding_notification_permission_final_warning_desc
+                    } else {
+                        AppR.string.onboarding_notification_permission_warning_desc
+                    }
+                )
+            )
+        },
+        confirmButton = {
+            ApplyOverlayWindowNavigationBarPolicy()
+            HapticTextButton(onClick = onRequestPermission) {
+                Text(
+                    stringResource(
+                        if (isFinalWarning) {
+                            AppR.string.onboarding_notification_permission_final_request
+                        } else {
+                            AppR.string.onboarding_notification_permission_request_again
+                        }
+                    )
+                )
+            }
+        },
+        dismissButton = {
+            HapticTextButton(onClick = onDismiss) {
+                Text(
+                    stringResource(
+                        if (isFinalWarning) {
+                            AppR.string.onboarding_notification_permission_final_skip
+                        } else {
+                            AppR.string.onboarding_notification_permission_skip
+                        }
+                    )
+                )
+            }
+        }
+    )
+}
+
+private suspend fun captureStartupThemeRevealSnapshot(
+    activity: Activity?,
+    fallbackView: View
+): ImageBitmap? {
+    val windowBitmap = activity?.let { currentActivity ->
+        suspendCancellableCoroutine { continuation ->
+            val decorView = currentActivity.window.decorView
+            if (decorView.width <= 0 || decorView.height <= 0) {
+                continuation.resume(null)
+                return@suspendCancellableCoroutine
+            }
+
+            val bitmap = createBitmap(decorView.width, decorView.height)
+
+            PixelCopy.request(
+                currentActivity.window,
+                bitmap,
+                { result ->
+                    if (continuation.isActive) {
+                        if (result == PixelCopy.SUCCESS) {
+                            continuation.resume(bitmap)
+                        } else {
+                            bitmap.recycle()
+                            continuation.resume(null)
+                        }
+                    } else {
+                        bitmap.recycle()
+                    }
+                },
+                Handler(Looper.getMainLooper())
+            )
+        }
+    }
+
+    return windowBitmap?.asImageBitmap() ?: captureStartupThemeRevealFallbackSnapshot(fallbackView)
+}
+
+private suspend fun captureStartupThemeRevealFallbackSnapshot(view: View): ImageBitmap? {
+    return withContext(Dispatchers.Main.immediate) {
+        runCatching {
+            if (view.width > 0 && view.height > 0) {
+                view.drawToBitmap().asImageBitmap()
+            } else {
+                null
+            }
+        }.getOrNull()
+    }
+}
+
+private suspend fun awaitStartupNextDraw(view: View) {
+    if (!view.isAttachedToWindow || view.width <= 0 || view.height <= 0) {
+        return
+    }
+
+    withTimeoutOrNull(120L.milliseconds) {
+        suspendCancellableCoroutine { continuation ->
+            val observer = view.viewTreeObserver
+            var handled = false
+            val drawListener = object : ViewTreeObserver.OnDrawListener {
+                override fun onDraw() {
+                    if (handled) return
+                    handled = true
+                    view.post {
+                        if (observer.isAlive) {
+                            observer.removeOnDrawListener(this)
+                        }
+                        if (continuation.isActive) {
+                            continuation.resume(Unit)
+                        }
+                    }
+                }
+            }
+
+            observer.addOnDrawListener(drawListener)
+            continuation.invokeOnCancellation {
+                if (handled) {
+                    return@invokeOnCancellation
+                }
+                handled = true
+                view.post {
+                    if (observer.isAlive) {
+                        observer.removeOnDrawListener(drawListener)
+                    }
+                }
+            }
+            view.invalidate()
+        }
+    }
+}
+
+private suspend fun awaitStartupStableDraw(view: View) {
+    repeat(2) {
+        awaitStartupNextDraw(view)
+    }
+}

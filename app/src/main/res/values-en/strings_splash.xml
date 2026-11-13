@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash screen -->
+    <string name="splash_app_name">Shiguang Music</string>
+    <string name="splash_app_tagline">Gather the sound of every moment</string>
+</resources>

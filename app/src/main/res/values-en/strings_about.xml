@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- About: 拾光音乐 fork of NeriPlayer, GPLv3 -->
+    
+    <string name="about_app_name">Shiguang Music · Timber</string>
+    <string name="about_app_footer">Secondary development based on the upstream NeriPlayer project</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 拾光音乐：启动图改用新 LOGO（splash_logo.png），与 values-v31 的 SplashScreen 保持一致 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:drawable="@drawable/splash_logo"
+        android:gravity="center"
+        android:width="96dp"
+        android:height="96dp" />
+
+</layer-list>

@@ -1,0 +1,241 @@
+package moe.ouom.neriplayer.ui.viewmodel.artist
+
+import moe.ouom.neriplayer.ui.i18n.UiText
+import moe.ouom.neriplayer.ui.viewmodel.feedbackText
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import moe.ouom.neriplayer.common.R as CoreCommonR
+import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicCreatorBrowseEndpoint
+import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicCreatorDetail
+import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicCreatorItem
+import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicCreatorItemsPage
+import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicCreatorSection
+import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicCreatorSummary
+import moe.ouom.neriplayer.core.di.AppContainer
+import moe.ouom.neriplayer.data.model.SongItem
+import moe.ouom.neriplayer.platform.youtube.api.transport.buildYouTubeMusicMediaUri
+import moe.ouom.neriplayer.platform.youtube.api.transport.stableYouTubeMusicId
+import moe.ouom.neriplayer.platform.youtube.api.transport.youtubeMusicThumbnailUrl
+import moe.ouom.neriplayer.ui.viewmodel.tab.YouTubeMusicPlaylist
+
+data class YouTubeMusicCreatorDetailUiState(
+    val loading: Boolean = true,
+    val error: UiText? = null,
+    val detail: YouTubeMusicCreatorDetail? = null,
+    val playbackQueueLoadingSectionKey: String? = null,
+    val playbackQueueErrorSectionKey: String? = null,
+    val playbackQueueError: UiText? = null
+)
+
+class YouTubeMusicCreatorDetailViewModel(
+    application: Application,
+    private val loadDetail: suspend (YouTubeMusicCreatorSummary) -> YouTubeMusicCreatorDetail = {
+        creator -> AppContainer.youtubeMusicClient.getCreatorDetail(creator)
+    }
+) : AndroidViewModel(application) {
+    private val client by lazy { AppContainer.youtubeMusicClient }
+    internal var fetchCreatorItems: suspend (YouTubeMusicCreatorBrowseEndpoint, String) -> YouTubeMusicCreatorItemsPage =
+        { endpoint, fallbackTitle -> client.getCreatorItems(endpoint, fallbackTitle) }
+    internal var fetchCreatorItemsContinuation: suspend (String) -> YouTubeMusicCreatorItemsPage =
+        { continuation -> client.getCreatorItemsContinuation(continuation) }
+    private val _uiState = MutableStateFlow(YouTubeMusicCreatorDetailUiState())
+    val uiState: StateFlow<YouTubeMusicCreatorDetailUiState> = _uiState
+    private val _playbackRequests = MutableSharedFlow<YouTubeMusicCreatorPlaybackQueue>()
+    internal val playbackRequests: SharedFlow<YouTubeMusicCreatorPlaybackQueue> =
+        _playbackRequests.asSharedFlow()
+
+    private var currentCreator: YouTubeMusicCreatorSummary? = null
+    private var loadJob: Job? = null
+    private var playbackQueueJob: Job? = null
+
+    fun start(creator: YouTubeMusicCreatorSummary, forceRefresh: Boolean = false) {
+        if (
+            !forceRefresh &&
+            creator.browseId == currentCreator?.browseId &&
+            _uiState.value.detail != null
+        ) {
+            return
+        }
+        currentCreator = creator
+        loadJob?.cancel()
+        playbackQueueJob?.cancel()
+        _uiState.value = YouTubeMusicCreatorDetailUiState(
+            loading = true,
+            detail = _uiState.value.detail?.takeIf {
+                it.header.browseId == creator.browseId
+            }
+        )
+        loadJob = viewModelScope.launch {
+            try {
+                val detail = withContext(Dispatchers.IO) {
+                    loadDetail(creator)
+                }
+                if (!isCurrentCreator(creator.browseId)) {
+                    return@launch
+                }
+                _uiState.value = YouTubeMusicCreatorDetailUiState(detail = detail, loading = false)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                if (!isCurrentCreator(creator.browseId)) {
+                    return@launch
+                }
+                _uiState.value = _uiState.value.copy(
+                    loading = false,
+                    error = feedbackText(
+                        CoreCommonR.string.youtube_creator_load_failed,
+                        error.message ?: error.javaClass.simpleName
+                    )
+                )
+            }
+        }
+    }
+
+    fun retry() {
+        currentCreator?.let { start(it, forceRefresh = true) }
+    }
+
+    fun playSectionSong(
+        section: YouTubeMusicCreatorSection,
+        selectedItem: YouTubeMusicCreatorItem
+    ) {
+        if (playbackQueueJob?.isActive == true) {
+            return
+        }
+        val creatorBrowseId = currentCreator?.browseId ?: return
+        val sectionKey = youtubeMusicCreatorSectionKey(section)
+        playbackQueueJob = viewModelScope.launch {
+            markPlaybackQueueLoading(creatorBrowseId, sectionKey)
+            try {
+                val queue = withContext(Dispatchers.IO) {
+                    loadYouTubeMusicCreatorPlaybackQueue(
+                        section = section,
+                        selectedItem = selectedItem,
+                        fetchFirstPage = fetchCreatorItems,
+                        fetchContinuation = fetchCreatorItemsContinuation
+                    )
+                } ?: throw IllegalStateException("No playable YouTube Music items")
+                if (!isCurrentCreator(creatorBrowseId)) {
+                    return@launch
+                }
+                _playbackRequests.emit(queue)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                if (!isCurrentCreator(creatorBrowseId)) {
+                    return@launch
+                }
+                publishPlaybackQueueError(sectionKey, section.title, error)
+            } finally {
+                clearPlaybackQueueLoading(creatorBrowseId)
+            }
+        }
+    }
+
+    private fun isCurrentCreator(browseId: String): Boolean = currentCreator?.browseId == browseId
+
+    private fun markPlaybackQueueLoading(creatorBrowseId: String, sectionKey: String) {
+        _uiState.update { current ->
+            if (!isCurrentCreator(creatorBrowseId)) {
+                current
+            } else {
+                current.copy(
+                    playbackQueueLoadingSectionKey = sectionKey,
+                    playbackQueueErrorSectionKey = null,
+                    playbackQueueError = null
+                )
+            }
+        }
+    }
+
+    private fun publishPlaybackQueueError(sectionKey: String, sectionTitle: String, error: Exception) {
+        _uiState.update { current ->
+            current.copy(
+                playbackQueueErrorSectionKey = sectionKey,
+                playbackQueueError = creatorItemsError(sectionTitle, error)
+            )
+        }
+    }
+
+    private fun clearPlaybackQueueLoading(creatorBrowseId: String) {
+        if (isCurrentCreator(creatorBrowseId)) {
+            _uiState.update { current ->
+                current.copy(playbackQueueLoadingSectionKey = null)
+            }
+        }
+    }
+
+    private fun creatorItemsError(sectionTitle: String, error: Exception): UiText {
+        return feedbackText(
+            CoreCommonR.string.youtube_creator_items_load_failed,
+            sectionTitle,
+            error.message ?: error.javaClass.simpleName
+        )
+    }
+}
+
+internal fun YouTubeMusicCreatorItem.toCreatorSongItem(): SongItem? {
+    if (videoId.isBlank()) {
+        return null
+    }
+    val displayArtist = artist.ifBlank { subtitle }
+        .ifBlank { "YouTube" }
+    val displayAlbum = album.ifBlank { "YouTube Music" }
+    val cover = coverUrl.ifBlank { youtubeMusicThumbnailUrl(videoId) }
+    return SongItem(
+        id = stableYouTubeMusicId(videoId),
+        name = title,
+        artist = displayArtist,
+        album = displayAlbum,
+        albumId = stableYouTubeMusicId("$videoId|$displayAlbum"),
+        durationMs = durationMs,
+        coverUrl = cover,
+        mediaUri = buildYouTubeMusicMediaUri(videoId),
+        originalName = title,
+        originalArtist = displayArtist,
+        originalCoverUrl = cover,
+        channelId = "youtubeMusic",
+        audioId = videoId
+    )
+}
+
+internal fun YouTubeMusicCreatorItem.toCreatorPlaylist(): YouTubeMusicPlaylist? {
+    if (browseId.isBlank()) {
+        return null
+    }
+    return YouTubeMusicPlaylist(
+        browseId = browseId,
+        playlistId = playlistId.ifBlank {
+            browseId.removePrefix("VL")
+        },
+        title = title,
+        subtitle = subtitle,
+        coverUrl = coverUrl,
+        trackCount = 0
+    )
+}
+
+internal fun YouTubeMusicCreatorItem.toCreatorSummary(): YouTubeMusicCreatorSummary? {
+    if (browseId.isBlank()) {
+        return null
+    }
+    return YouTubeMusicCreatorSummary(
+        browseId = browseId,
+        title = title,
+        subtitle = subtitle,
+        coverUrl = coverUrl,
+        channelId = browseId.takeIf { it.startsWith("UC") }.orEmpty()
+    )
+}

@@ -1,0 +1,353 @@
+package moe.ouom.neriplayer.ui.effect.glass
+
+import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.isSpecified as isColorSpecified
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlin.math.max
+import kotlin.math.min
+import moe.ouom.neriplayer.ui.theme.NeriDesign
+
+internal fun isAdvancedGlassNavigationOwnerActive(
+    isGlobalNavigationSurface: Boolean,
+    activeNavigationOwners: Set<Any>?,
+    navigationOwner: Any?
+): Boolean = isGlobalNavigationSurface ||
+    activeNavigationOwners == null ||
+    navigationOwner in activeNavigationOwners
+
+internal fun shouldRegisterAdvancedGlassRegion(
+    sceneActive: Boolean,
+    backdropRegistrationEnabled: Boolean,
+    belongsToActiveNavigationScreen: Boolean,
+    belongsToPrewarmedNavigationScreen: Boolean
+): Boolean = sceneActive && backdropRegistrationEnabled &&
+    (belongsToActiveNavigationScreen || belongsToPrewarmedNavigationScreen)
+
+internal fun shouldSuppressAdvancedGlassSurfaceForInactiveNavigationOwner(
+    suppressInactiveNavigationSurface: Boolean,
+    canRenderGlass: Boolean,
+    belongsToActiveNavigationScreen: Boolean,
+    belongsToPrewarmedNavigationScreen: Boolean
+): Boolean = suppressInactiveNavigationSurface &&
+    canRenderGlass &&
+    !belongsToActiveNavigationScreen &&
+    belongsToPrewarmedNavigationScreen
+
+/**
+ * Clean cards carry body text straight over the user's image, so a bright patch must never
+ * show through strongly enough to wash grey copy out. Chrome roles keep their lighter tints.
+ */
+internal fun cleanLegibleTintFloor(role: AdvancedGlassRole, isDarkTheme: Boolean): Float = when (role) {
+    AdvancedGlassRole.SettingsGroup,
+    AdvancedGlassRole.SettingsHeader,
+    AdvancedGlassRole.SettingsSection,
+    AdvancedGlassRole.SemanticCard,
+    AdvancedGlassRole.PlaylistSheet -> if (isDarkTheme) 0.56f else 0.62f
+    else -> 0f
+}
+
+internal fun resolveAdvancedGlassRelativeOpacity(sceneOpacity: Float, backdropOpacity: Float): Float {
+    if (!sceneOpacity.isFinite() || !backdropOpacity.isFinite() || backdropOpacity <= 0f) return 0f
+    return (sceneOpacity / backdropOpacity).coerceIn(0f, 1f)
+}
+
+@Composable
+internal fun AdvancedGlassSurface(
+    role: AdvancedGlassRole,
+    modifier: Modifier = Modifier,
+    shape: Shape = RectangleShape,
+    fallbackColor: Color = Color.Transparent,
+    tintColor: Color = Color.Unspecified,
+    enabled: Boolean = true,
+    suppressInactiveNavigationSurface: Boolean = false,
+    content: @Composable BoxScope.() -> Unit
+) {
+    val controller = LocalAdvancedGlassController.current
+    val availableBackdrops = LocalAdvancedGlassBackdrops.current
+    val glassDepth = LocalAdvancedGlassDepth.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val navigationOwner = LocalAdvancedGlassNavigationOwner.current ?: lifecycleOwner
+    val activeNavigationOwners = LocalAdvancedGlassActiveNavigationOwners.current
+    val prewarmedNavigationOwners = LocalAdvancedGlassPrewarmedNavigationOwners.current
+    val sceneActive = LocalAdvancedGlassSceneActive.current
+    val sceneOpacity = LocalAdvancedGlassSceneOpacity.current
+    val backdropRegistrationEnabled = LocalAdvancedGlassBackdropRegistrationEnabled.current
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val isDarkTheme = isSystemInDarkTheme()
+    val enhancedBlurRadiusDp = if (controller.isBaseBlurEnabled) {
+        controller.normalizedBlurAmountDp
+    } else {
+        null
+    }
+    val tokens = advancedGlassTokens(
+        role,
+        isDarkTheme,
+        enhancedBlurRadiusDp,
+        liquid = controller.isLiquidGlassEnabled
+    )
+    val resolvedTintColor = if (tintColor.isColorSpecified) tintColor else advancedGlassRoleColor(role)
+    val legibleTintFloor = if (NeriDesign.isClean) cleanLegibleTintFloor(role, isDarkTheme) else 0f
+    val edgeBaseColor = MaterialTheme.colorScheme.onSurface
+    val requiresContentBackdrop = role == AdvancedGlassRole.MiniPlayer ||
+        role == AdvancedGlassRole.BottomNavigation
+    val backdropsReady = availableBackdrops?.let { backdrops ->
+        backdrops.background.positionInWindow.isSpecified &&
+            (!requiresContentBackdrop || backdrops.content.positionInWindow.isSpecified)
+    } == true
+    val belongsToActiveNavigationScreen = isAdvancedGlassNavigationOwnerActive(
+        isGlobalNavigationSurface = isGlobalAdvancedGlassNavigation(role),
+        activeNavigationOwners = activeNavigationOwners,
+        navigationOwner = navigationOwner
+    )
+    val belongsToPrewarmedNavigationScreen = navigationOwner in prewarmedNavigationOwners
+    val canRenderGlass = enabled && sceneActive && backdropsReady &&
+        canSampleAdvancedGlassBackdrop(controller, glassDepth, role)
+    val glassEnabled = canRenderGlass && belongsToActiveNavigationScreen
+    val suppressesInactiveNavigationSurface =
+        shouldSuppressAdvancedGlassSurfaceForInactiveNavigationOwner(
+        suppressInactiveNavigationSurface = suppressInactiveNavigationSurface,
+        canRenderGlass = canRenderGlass,
+        belongsToActiveNavigationScreen = belongsToActiveNavigationScreen,
+        belongsToPrewarmedNavigationScreen = belongsToPrewarmedNavigationScreen
+    )
+    val registersBackdrop = canRenderGlass && shouldRegisterAdvancedGlassRegion(
+        sceneActive = sceneActive,
+        backdropRegistrationEnabled = backdropRegistrationEnabled,
+        belongsToActiveNavigationScreen = belongsToActiveNavigationScreen,
+        belongsToPrewarmedNavigationScreen = belongsToPrewarmedNavigationScreen
+    )
+    val regionKey = remember { Any() }
+    val regionCoordinates = remember { AdvancedGlassSurfaceRegionCoordinates() }
+    val latestSceneOpacity = rememberUpdatedState(sceneOpacity)
+    val latestBackdropOpacity = rememberUpdatedState(availableBackdrops?.sceneOpacity)
+    // 坐标回调晚于宿主组合，宿主直接读取当前变换，避免遮罩落后动画一帧
+    val regionProvider = remember(role, shape, density, layoutDirection, navigationOwner) {
+        {
+            val coordinates = regionCoordinates.coordinates
+            if (coordinates == null || !coordinates.isAttached) {
+                null
+            } else {
+                val opacity = resolveAdvancedGlassRelativeOpacity(
+                    sceneOpacity = latestSceneOpacity.value(),
+                    backdropOpacity = latestBackdropOpacity.value?.invoke() ?: 1f
+                )
+                val bounds = coordinates.boundsInWindow()
+                if (bounds.width <= 0f || bounds.height <= 0f) {
+                    null
+                } else {
+                    val windowScale = coordinates.advancedGlassScaleInWindow()
+                    val localCornerRadii = resolveCornerRadiiPx(
+                        shape = shape,
+                        size = coordinates.size.toSize(),
+                        layoutDirection = layoutDirection,
+                        density = density
+                    )
+                    AdvancedGlassRegion(
+                        role = role,
+                        boundsInWindow = bounds,
+                        cornerRadiiPx = localCornerRadii.toWindowPixels(min(windowScale.x, windowScale.y)),
+                        navigationOwner = advancedGlassRegionNavigationOwner(role, navigationOwner),
+                        opacity = opacity,
+                        layoutCoordinates = coordinates
+                    )
+                }
+            }
+        }
+    }
+
+    DisposableEffect(availableBackdrops, regionKey, registersBackdrop) {
+        if (!registersBackdrop) {
+            regionCoordinates.coordinates = null
+            availableBackdrops?.regionRegistry?.remove(regionKey)
+        }
+        onDispose {
+            regionCoordinates.coordinates = null
+            availableBackdrops?.regionRegistry?.remove(regionKey)
+        }
+    }
+
+    val regionRegistrationModifier = if (registersBackdrop) {
+        Modifier.onGloballyPositioned { coordinates ->
+            val registry = availableBackdrops.regionRegistry
+            regionCoordinates.coordinates = coordinates
+            val region = regionProvider()
+            if (region == null) {
+                registry.remove(regionKey)
+            } else {
+                registry.update(regionKey, region.copy(regionProvider = regionProvider))
+            }
+        }
+    } else {
+        Modifier
+    }
+
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .then(regionRegistrationModifier)
+    ) {
+        if (glassEnabled) {
+            GlassColorLayer(
+                shape = shape,
+                color = resolvedTintColor.copy(
+                    alpha = resolvedTintColor.alpha * max(tokens.tintAlpha, legibleTintFloor)
+                )
+            )
+        } else if (
+            fallbackColor != Color.Transparent &&
+            !suppressesInactiveNavigationSurface
+        ) {
+            GlassColorLayer(shape, fallbackColor)
+        }
+
+        CompositionLocalProvider(
+            LocalAdvancedGlassDepth provides if (glassEnabled) glassDepth + 1 else glassDepth
+        ) {
+            content()
+        }
+
+        if (glassEnabled && tokens.edgeAlpha > 0f) {
+            GlassEdgeLayer(
+                role = role,
+                shape = shape,
+                color = edgeBaseColor.copy(alpha = tokens.edgeAlpha)
+            )
+        }
+    }
+}
+
+private class AdvancedGlassSurfaceRegionCoordinates {
+    var coordinates: LayoutCoordinates? = null
+}
+
+private fun AdvancedGlassCornerRadii.toWindowPixels(scale: Float) = AdvancedGlassCornerRadii(
+    topLeft = topLeft * scale,
+    topRight = topRight * scale,
+    bottomRight = bottomRight * scale,
+    bottomLeft = bottomLeft * scale
+)
+
+private fun resolveCornerRadiiPx(
+    shape: Shape,
+    size: Size,
+    layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+    density: androidx.compose.ui.unit.Density
+): AdvancedGlassCornerRadii = when (
+    val outline = shape.createOutline(size, layoutDirection, density)
+) {
+    is Outline.Rounded -> {
+        val roundRect = outline.roundRect
+        AdvancedGlassCornerRadii(
+            topLeft = roundRect.topLeftCornerRadius.x,
+            topRight = roundRect.topRightCornerRadius.x,
+            bottomRight = roundRect.bottomRightCornerRadius.x,
+            bottomLeft = roundRect.bottomLeftCornerRadius.x
+        )
+    }
+    else -> (shape as? CornerBasedShape)?.let { cornerShape ->
+        val ltr = layoutDirection == androidx.compose.ui.unit.LayoutDirection.Ltr
+        val topStart = cornerShape.topStart.toPx(size, density)
+        val topEnd = cornerShape.topEnd.toPx(size, density)
+        val bottomEnd = cornerShape.bottomEnd.toPx(size, density)
+        val bottomStart = cornerShape.bottomStart.toPx(size, density)
+        val maxRadius = minOf(size.width, size.height) / 2f
+        AdvancedGlassCornerRadii(
+            topLeft = (if (ltr) topStart else topEnd).coerceAtMost(maxRadius),
+            topRight = (if (ltr) topEnd else topStart).coerceAtMost(maxRadius),
+            bottomRight = (if (ltr) bottomEnd else bottomStart).coerceAtMost(maxRadius),
+            bottomLeft = (if (ltr) bottomStart else bottomEnd).coerceAtMost(maxRadius)
+        )
+    } ?: AdvancedGlassCornerRadii.Zero
+}
+
+@Composable
+private fun BoxScope.GlassColorLayer(shape: Shape, color: Color) {
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .drawWithCache {
+                val path = Path().apply {
+                    addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache))
+                }
+                onDrawBehind { drawPath(path = path, color = color) }
+            }
+    )
+}
+
+@Composable
+private fun BoxScope.GlassEdgeLayer(
+    role: AdvancedGlassRole,
+    shape: Shape,
+    color: Color
+) {
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .drawWithCache {
+                val path = Path().apply {
+                    addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache))
+                }
+                val stroke = Stroke(width = 1.dp.toPx())
+                val rectangular = shape.createOutline(size, layoutDirection, this@drawWithCache) is Outline.Rectangle
+                onDrawBehind {
+                    // an edge-to-edge bar only needs its top seam; floating capsules get a full rim
+                    if (role == AdvancedGlassRole.BottomNavigation && rectangular) {
+                        drawLine(
+                            color = color,
+                            start = Offset.Zero,
+                            end = Offset(size.width, 0f),
+                            strokeWidth = stroke.width
+                        )
+                    } else {
+                        drawPath(path = path, color = color, style = stroke)
+                    }
+                }
+            }
+    )
+}
+
+@Composable
+private fun advancedGlassRoleColor(role: AdvancedGlassRole): Color = when (role) {
+    AdvancedGlassRole.MiniPlayer -> MaterialTheme.colorScheme.secondaryContainer
+    AdvancedGlassRole.BottomNavigation,
+    AdvancedGlassRole.NavigationRail,
+    AdvancedGlassRole.ScreenTopTab,
+    AdvancedGlassRole.SettingsGroup,
+    AdvancedGlassRole.SettingsSection -> MaterialTheme.colorScheme.surfaceContainerHighest
+    AdvancedGlassRole.SettingsHeader -> MaterialTheme.colorScheme.primaryContainer
+    AdvancedGlassRole.PlaylistSheet,
+    AdvancedGlassRole.SemanticCard -> MaterialTheme.colorScheme.surfaceContainerHigh
+    AdvancedGlassRole.ExploreTag -> MaterialTheme.colorScheme.surface
+    AdvancedGlassRole.ThemeModeToggle -> MaterialTheme.colorScheme.surfaceVariant
+    AdvancedGlassRole.InlineControl -> Color.Transparent
+}

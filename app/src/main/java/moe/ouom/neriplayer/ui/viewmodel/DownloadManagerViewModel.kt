@@ -1,0 +1,89 @@
+package moe.ouom.neriplayer.ui.viewmodel
+
+/*
+ * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 NeriPlayer developers
+ * https://github.com/cwuom/NeriPlayer
+ *
+ * This software is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this software.
+ * If not, see <https://www.gnu.org/licenses/>.
+ *
+ * File: moe.ouom.neriplayer.ui.viewmodel/DownloadManagerViewModel
+ * Updated: 2026/3/23
+ */
+
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import moe.ouom.neriplayer.data.model.download.DownloadedSong
+import moe.ouom.neriplayer.data.model.download.DownloadedSongDeleteResult
+import moe.ouom.neriplayer.core.download.GlobalDownloadManager
+
+class DownloadManagerViewModel(application: Application) : AndroidViewModel(application) {
+
+    val downloadedSongs = GlobalDownloadManager.downloadedSongs
+    val legacyPreviewClips = GlobalDownloadManager.legacyPreviewClips
+    val isRefreshing = GlobalDownloadManager.isRefreshing
+    val downloadedSongDeleteProgress = GlobalDownloadManager.downloadedSongDeleteProgress
+    val downloadedSongDeleteFailureDismissed =
+        GlobalDownloadManager.downloadedSongDeleteFailureDismissed
+
+    fun dismissDownloadedSongDeleteFailure(deleteId: Long) {
+        GlobalDownloadManager.dismissDownloadedSongDeleteFailure(
+            getApplication(), deleteId
+        )
+    }
+
+    fun refreshDownloadedSongs(forceRefresh: Boolean = false) {
+        val appContext = getApplication<Application>()
+        GlobalDownloadManager.refreshDownloadedSongsForManager(
+            context = appContext,
+            forceRefresh = forceRefresh
+        )
+    }
+
+    fun deleteDownloadedSong(
+        song: DownloadedSong,
+        onResult: (DownloadedSongDeleteResult) -> Unit = {}
+    ) {
+        deleteDownloadedSongs(songs = listOf(song), onResult = onResult)
+    }
+
+    fun deleteDownloadedSongs(
+        songs: List<DownloadedSong>,
+        deleteEntireLibrary: Boolean = false,
+        onResult: (DownloadedSongDeleteResult) -> Unit = {}
+    ) {
+        val appContext = getApplication<Application>()
+        viewModelScope.launch {
+            val result = withContext(NonCancellable) {
+                GlobalDownloadManager.deleteDownloadedSongsWithResult(
+                    context = appContext,
+                    songs = songs,
+                    deleteEntireLibrary = deleteEntireLibrary
+                )
+            }
+            onResult(result)
+        }
+    }
+
+    fun playDownloadedSong(song: DownloadedSong) {
+        val appContext = getApplication<Application>()
+        GlobalDownloadManager.playDownloadedSong(appContext, song)
+    }
+}

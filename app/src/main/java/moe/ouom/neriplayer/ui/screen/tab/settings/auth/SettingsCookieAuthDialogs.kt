@@ -1,0 +1,432 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
+package moe.ouom.neriplayer.ui.screen.tab.settings.auth
+
+/*
+ * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 NeriPlayer developers
+ * https://github.com/cwuom/NeriPlayer
+ *
+ * This software is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this software.
+ * If not, see <https://www.gnu.org/licenses/>.
+ *
+ * File: moe.ouom.neriplayer.ui.screen.tab.settings.auth/SettingsCookieAuthDialogs
+ * Updated: 2026/3/23
+ */
+
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import moe.ouom.neriplayer.ui.component.overlay.DensityScaledModalBottomSheet as ModalBottomSheet
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import moe.ouom.neriplayer.ui.i18n.UiText
+import moe.ouom.neriplayer.ui.i18n.asString
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import moe.ouom.neriplayer.common.R as CoreCommonR
+import moe.ouom.neriplayer.activity.auth.BiliQrLoginActivity
+import moe.ouom.neriplayer.activity.auth.YouTubeWebLoginActivity
+import moe.ouom.neriplayer.core.di.AppContainer
+import moe.ouom.neriplayer.ui.component.sheet.bottomSheetDragBlocker
+import moe.ouom.neriplayer.ui.screen.tab.settings.component.InlineMessage
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsButton
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsDialog
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsSegmentedTabs
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsTextButton
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsTextField
+import moe.ouom.neriplayer.ui.viewmodel.auth.BiliAuthViewModel
+import moe.ouom.neriplayer.ui.viewmodel.auth.YouTubeAuthViewModel
+import moe.ouom.neriplayer.R as AppR
+
+@Composable
+internal fun SettingsBiliAuthDialogs(
+    showSheet: Boolean,
+    initialTab: Int,
+    onDismissSheet: () -> Unit,
+    inlineMsg: UiText?,
+    onInlineMsgChange: (UiText?) -> Unit,
+    vm: BiliAuthViewModel,
+    showSavedCookieDialog: Boolean = false,
+    onDismissSavedCookieDialog: () -> Unit = {},
+    onOpenSheetAtTab: (Int) -> Unit = {},
+    onLogout: (() -> Unit)? = null,
+    onBrowserLogin: (() -> Unit)? = null
+) {
+    val context = LocalContext.current
+
+    if (showSavedCookieDialog) {
+        SavedCookieActionDialog(
+            title = stringResource(CoreCommonR.string.settings_bili_saved_cookie_title),
+            message = stringResource(CoreCommonR.string.settings_bili_saved_cookie_message),
+            onDismiss = onDismissSavedCookieDialog,
+            onContinueLogin = {
+                onDismissSavedCookieDialog()
+                onOpenSheetAtTab(0)
+            },
+            onLogout = {
+                onDismissSavedCookieDialog()
+                onLogout?.invoke()
+            }
+        )
+    }
+
+    if (showSheet) {
+        val authStorage = rememberAuthLoginStorageStatus(SettingsAccountPlatform.Bilibili)
+        val launchBrowserLogin: () -> Unit = onBrowserLogin?.let { injectedBrowserLogin ->
+            {
+                onInlineMsgChange(null)
+                injectedBrowserLogin()
+            }
+        } ?: run {
+            val webLoginLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.StartActivityForResult()
+            ) { result ->
+                if (result.resultCode == android.app.Activity.RESULT_OK) {
+                    val json = result.data?.getStringExtra(BiliQrLoginActivity.RESULT_COOKIE) ?: "{}"
+                    vm.importCookiesFromMap(vm.parseJsonToMap(json))
+                } else {
+                    onInlineMsgChange(UiText.Resource(CoreCommonR.string.settings_cookie_cancelled))
+                }
+            }
+            val defaultBrowserLogin: () -> Unit = {
+                onInlineMsgChange(null)
+                AppContainer.pauseYouTubeBackgroundWebWorkForForegroundLogin()
+                webLoginLauncher.launch(Intent(context, BiliQrLoginActivity::class.java))
+            }
+            defaultBrowserLogin
+        }
+
+        SettingsCookieLoginSheet(
+            title = stringResource(AppR.string.platform_bilibili),
+            initialTab = initialTab,
+            inlineMsg = inlineMsg?.asString(),
+            onInlineMsgChange = { onInlineMsgChange(null) },
+            onDismiss = onDismissSheet,
+            browserTabLabel = stringResource(CoreCommonR.string.login_qr),
+            browserButtonLabel = stringResource(CoreCommonR.string.login_start_bili_qr),
+            browserHintContent = {
+                Text(
+                    stringResource(CoreCommonR.string.settings_bili_login_browser_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            cookieLabel = stringResource(CoreCommonR.string.login_paste_bili_cookie_hint),
+            onBrowserLogin = launchBrowserLogin,
+            onSaveCookie = { rawCookie ->
+                if (rawCookie.isBlank()) {
+                    onInlineMsgChange(UiText.Resource(CoreCommonR.string.auth_cookie_empty))
+                } else {
+                    vm.importCookiesFromRaw(rawCookie)
+                }
+            },
+            requiresCompatibilityStorageWarning = authStorage?.requiresCompatibilityWarning ?: false,
+            isAuthStoragePersistent = authStorage?.isPersistent ?: false,
+            isAuthStorageReady = authStorage != null
+        )
+    }
+
+}
+
+@Composable
+internal fun SettingsYouTubeAuthDialogs(
+    showSheet: Boolean,
+    initialTab: Int,
+    onDismissSheet: () -> Unit,
+    inlineMsg: UiText?,
+    onInlineMsgChange: (UiText?) -> Unit,
+    vm: YouTubeAuthViewModel,
+    showSavedCookieDialog: Boolean = false,
+    onDismissSavedCookieDialog: () -> Unit = {},
+    onOpenSheetAtTab: (Int) -> Unit = {},
+    onLogout: (() -> Unit)? = null,
+    onBrowserLogin: (() -> Unit)? = null
+) {
+    val context = LocalContext.current
+
+    if (showSavedCookieDialog) {
+        SavedCookieActionDialog(
+            title = stringResource(CoreCommonR.string.settings_youtube_saved_cookie_title),
+            message = stringResource(CoreCommonR.string.settings_youtube_saved_cookie_message),
+            onDismiss = onDismissSavedCookieDialog,
+            onContinueLogin = {
+                onDismissSavedCookieDialog()
+                onOpenSheetAtTab(0)
+            },
+            onLogout = {
+                onDismissSavedCookieDialog()
+                onLogout?.invoke()
+            }
+        )
+    }
+
+    if (showSheet) {
+        val authStorage = rememberAuthLoginStorageStatus(SettingsAccountPlatform.YouTube)
+        val launchBrowserLogin: () -> Unit = onBrowserLogin?.let { injectedBrowserLogin ->
+            {
+                onInlineMsgChange(null)
+                injectedBrowserLogin()
+            }
+        } ?: run {
+            val webLoginLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.StartActivityForResult()
+            ) { result ->
+                if (result.resultCode == android.app.Activity.RESULT_OK) {
+                    val json = result.data?.getStringExtra(YouTubeWebLoginActivity.RESULT_AUTH_JSON) ?: "{}"
+                    vm.importAuthFromJson(json)
+                } else {
+                    onInlineMsgChange(UiText.Resource(CoreCommonR.string.settings_cookie_cancelled))
+                }
+            }
+            val defaultBrowserLogin: () -> Unit = {
+                onInlineMsgChange(null)
+                AppContainer.pauseYouTubeBackgroundWebWorkForForegroundLogin()
+                webLoginLauncher.launch(Intent(context, YouTubeWebLoginActivity::class.java))
+            }
+            defaultBrowserLogin
+        }
+
+        SettingsCookieLoginSheet(
+            title = stringResource(CoreCommonR.string.common_youtube),
+            initialTab = initialTab,
+            inlineMsg = inlineMsg?.asString(),
+            onInlineMsgChange = { onInlineMsgChange(null) },
+            onDismiss = onDismissSheet,
+            browserTabLabel = stringResource(CoreCommonR.string.login_browser),
+            browserButtonLabel = stringResource(CoreCommonR.string.login_start_browser),
+            browserHintContent = {
+                Text(
+                    stringResource(CoreCommonR.string.settings_youtube_login_browser_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    stringResource(CoreCommonR.string.settings_youtube_login_browser_warning),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            cookieLabel = stringResource(CoreCommonR.string.login_paste_youtube_cookie_hint),
+            onBrowserLogin = launchBrowserLogin,
+            onSaveCookie = { rawCookie ->
+                if (rawCookie.isBlank()) {
+                    onInlineMsgChange(UiText.Resource(CoreCommonR.string.auth_cookie_empty))
+                } else {
+                    vm.importCookiesFromRaw(rawCookie)
+                }
+            },
+            requiresCompatibilityStorageWarning = authStorage?.requiresCompatibilityWarning ?: false,
+            isAuthStoragePersistent = authStorage?.isPersistent ?: false,
+            isAuthStorageReady = authStorage != null
+        )
+    }
+
+}
+
+@Composable
+internal fun SettingsCookieLoginSheet(
+    title: String,
+    initialTab: Int,
+    inlineMsg: String?,
+    onInlineMsgChange: (String?) -> Unit,
+    onDismiss: () -> Unit,
+    browserTabLabel: String,
+    browserButtonLabel: String,
+    browserHintContent: @Composable ColumnScope.() -> Unit,
+    cookieLabel: String,
+    onBrowserLogin: () -> Unit,
+    onSaveCookie: (String) -> Unit,
+    requiresCompatibilityStorageWarning: Boolean = false,
+    isAuthStoragePersistent: Boolean = true,
+    isAuthStorageReady: Boolean = true
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab.coerceIn(0, 1)) }
+    var rawCookie by remember { mutableStateOf("") }
+    val storageGate = remember { AuthLoginStorageGate() }
+    LaunchedEffect(inlineMsg, storageGate.submitted) {
+        if (inlineMsg != null) storageGate.allowRetry()
+    }
+
+    fun requestLogin(action: () -> Unit) {
+        if (!isAuthStorageReady) return
+        storageGate.request(requiresCompatibilityStorageWarning, isAuthStoragePersistent) {
+            onInlineMsgChange(null)
+            action()
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        sheetGesturesEnabled = false,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 0.dp
+    ) {
+        Box(
+            modifier = Modifier
+                .bottomSheetDragBlocker()
+                .padding(start = 20.dp, end = 20.dp, bottom = 48.dp, top = 8.dp)
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        stringResource(CoreCommonR.string.login_title),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                AnimatedVisibility(visible = inlineMsg != null, enter = fadeIn(), exit = fadeOut()) {
+                    InlineMessage(
+                        text = inlineMsg ?: "",
+                        onClose = { onInlineMsgChange(null) }
+                    )
+                }
+
+                MiuixSettingsSegmentedTabs(
+                    labels = listOf(
+                        browserTabLabel,
+                        stringResource(CoreCommonR.string.login_paste_cookie)
+                    ),
+                    selectedIndex = selectedTab,
+                    onSelectedIndexChange = { selectedTab = it }
+                )
+
+                if (!isAuthStorageReady) {
+                    Text(
+                        text = stringResource(CoreCommonR.string.auth_storage_checking),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        when (selectedTab) {
+                            0 -> {
+                                browserHintContent()
+                                MiuixSettingsButton(
+                                    onClick = { requestLogin(onBrowserLogin) },
+                                    enabled = isAuthStorageReady && !storageGate.submitted,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(browserButtonLabel)
+                                }
+                            }
+
+                            else -> {
+                                MiuixSettingsTextField(
+                                    value = rawCookie,
+                                    onValueChange = { rawCookie = it },
+                                    label = { Text(cookieLabel) },
+                                    minLines = 6,
+                                    maxLines = 10,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                MiuixSettingsButton(
+                                    onClick = { requestLogin { onSaveCookie(rawCookie) } },
+                                    enabled = isAuthStorageReady && !storageGate.submitted,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(stringResource(CoreCommonR.string.login_save_cookie))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        AuthLoginStorageDialogs(storageGate, isAuthStorageReady && isAuthStoragePersistent)
+    }
+}
+
+@Composable
+internal fun SavedCookieActionDialog(
+    title: String,
+    message: String,
+    onDismiss: () -> Unit,
+    onContinueLogin: () -> Unit,
+    onLogout: () -> Unit
+) {
+    MiuixSettingsDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(message) },
+        confirmButton = {
+            MiuixSettingsTextButton(onClick = onContinueLogin) {
+                Text(stringResource(CoreCommonR.string.settings_saved_cookie_continue))
+            }
+        },
+        dismissButton = {
+            MiuixSettingsTextButton(onClick = onLogout) {
+                Text(stringResource(CoreCommonR.string.settings_saved_cookie_logout))
+            }
+        }
+    )
+}
+
+@Composable
+internal fun LoginSuccessDialog(
+    title: String,
+    onDismiss: () -> Unit
+) {
+    MiuixSettingsDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        confirmButton = {
+            MiuixSettingsTextButton(onClick = onDismiss) {
+                Text(stringResource(CoreCommonR.string.action_ok))
+            }
+        }
+    )
+}

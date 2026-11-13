@@ -1,0 +1,69 @@
+package moe.ouom.neriplayer.ui.effect.glass
+
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.geometry.Rect
+
+internal data class AdvancedGlassRegion(
+    val role: AdvancedGlassRole,
+    val boundsInWindow: Rect,
+    val cornerRadiiPx: AdvancedGlassCornerRadii,
+    val navigationOwner: Any?,
+    val opacity: Float = 1f,
+    val regionProvider: (() -> AdvancedGlassRegion?)? = null,
+    /** Lets the host place the mask relative to its backdrop without going through the window. */
+    val layoutCoordinates: LayoutCoordinates? = null
+)
+
+internal fun resolveCurrentAdvancedGlassRegions(
+    regions: Collection<AdvancedGlassRegion>
+): List<AdvancedGlassRegion> = regions.mapNotNull { region ->
+    val provider = region.regionProvider
+    if (provider == null) region else provider()
+}
+
+internal data class AdvancedGlassCornerRadii(
+    val topLeft: Float,
+    val topRight: Float,
+    val bottomRight: Float,
+    val bottomLeft: Float
+) {
+    companion object {
+        val Zero = AdvancedGlassCornerRadii(0f, 0f, 0f, 0f)
+    }
+}
+
+@Stable
+internal class AdvancedGlassRegionRegistry {
+    private val mutableRegions = mutableStateMapOf<Any, AdvancedGlassRegion>()
+    private val handoffGuards = mutableStateMapOf<Any, Unit>()
+
+    val regions: Collection<AdvancedGlassRegion>
+        get() = mutableRegions.values
+
+    val retainsEffectDuringHandoff: Boolean
+        get() = handoffGuards.isNotEmpty()
+
+    fun update(key: Any, region: AdvancedGlassRegion) {
+        if (mutableRegions[key] != region) {
+            mutableRegions[key] = region
+        }
+    }
+
+    fun remove(key: Any) {
+        mutableRegions.remove(key)
+    }
+
+    fun setHandoffGuard(key: Any, enabled: Boolean) {
+        if (enabled) {
+            handoffGuards[key] = Unit
+        } else {
+            handoffGuards.remove(key)
+        }
+    }
+
+    fun removeHandoffGuard(key: Any) {
+        handoffGuards.remove(key)
+    }
+}

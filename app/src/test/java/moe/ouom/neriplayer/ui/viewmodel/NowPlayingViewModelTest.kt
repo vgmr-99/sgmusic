@@ -1,0 +1,189 @@
+package moe.ouom.neriplayer.ui.viewmodel
+
+import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicCreatorSummary
+import moe.ouom.neriplayer.data.model.SongItem
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class NowPlayingViewModelTest {
+
+    @Test
+    fun `buildLocalOriginalSongInfo restores embedded original lyrics when available`() {
+        val song = SongItem(
+            id = 1L,
+            name = "当前标题",
+            artist = "当前歌手",
+            album = "当前专辑",
+            albumId = 0L,
+            durationMs = 1000L,
+            coverUrl = "current-cover",
+            mediaUri = "content://song",
+            originalName = "原始标题",
+            originalArtist = "原始歌手",
+            originalCoverUrl = "origin-cover",
+            originalLyric = "[00:00.00]原始歌词",
+            originalTranslatedLyric = "[00:00.00]原始翻译",
+            originalRomanizedLyric = "[00:00.00]原始罗马字"
+        )
+
+        val info = buildLocalOriginalSongInfo(song)
+
+        assertEquals("原始标题", info.name)
+        assertEquals("原始歌手", info.artist)
+        assertEquals("origin-cover", info.coverUrl)
+        assertFalse(info.shouldClearLyrics)
+        assertEquals("[00:00.00]原始歌词", info.lyric)
+        assertEquals("[00:00.00]原始翻译", info.translatedLyric)
+        assertEquals("[00:00.00]原始罗马字", info.romanizedLyric)
+    }
+
+    @Test
+    fun `buildLocalOriginalSongInfo clears lyrics when no original lyrics exist`() {
+        val song = SongItem(
+            id = 2L,
+            name = "当前标题",
+            artist = "当前歌手",
+            album = "当前专辑",
+            albumId = 0L,
+            durationMs = 1000L,
+            coverUrl = "current-cover",
+            mediaUri = "content://song"
+        )
+
+        val info = buildLocalOriginalSongInfo(song)
+
+        assertTrue(info.shouldClearLyrics)
+        assertNull(info.lyric)
+        assertNull(info.translatedLyric)
+        assertNull(info.romanizedLyric)
+    }
+
+    @Test
+    fun `buildLocalOriginalSongInfo keeps legacy matched lyrics during upgrade`() {
+        val song = SongItem(
+            id = 3L,
+            name = "当前标题",
+            artist = "当前歌手",
+            album = "当前专辑",
+            albumId = 0L,
+            durationMs = 1000L,
+            coverUrl = "current-cover",
+            mediaUri = "content://song",
+            matchedLyric = "[00:00.00]旧版本保存的歌词",
+            matchedTranslatedLyric = "[00:00.00]旧版本保存的翻译",
+            matchedRomanizedLyric = "[00:00.00]旧版本保存的罗马字"
+        )
+
+        val info = buildLocalOriginalSongInfo(song)
+
+        assertFalse(info.shouldClearLyrics)
+        assertEquals("[00:00.00]旧版本保存的歌词", info.lyric)
+        assertEquals("[00:00.00]旧版本保存的翻译", info.translatedLyric)
+        assertEquals("[00:00.00]旧版本保存的罗马字", info.romanizedLyric)
+    }
+
+    @Test
+    fun `buildLocalOriginalSongInfo keeps a romanized-only original lyric`() {
+        val song = SongItem(
+            id = 4L,
+            name = "当前标题",
+            artist = "当前歌手",
+            album = "当前专辑",
+            albumId = 0L,
+            durationMs = 1000L,
+            coverUrl = "current-cover",
+            mediaUri = "content://song",
+            originalRomanizedLyric = "[00:00.00]仅罗马字"
+        )
+
+        val info = buildLocalOriginalSongInfo(song)
+
+        assertFalse(info.shouldClearLyrics)
+        assertEquals("[00:00.00]仅罗马字", info.romanizedLyric)
+    }
+
+    @Test
+    fun `buildLocalOriginalSongInfo uses nearby cover fallback when metadata cover is absent`() {
+        val song = SongItem(
+            id = 5L,
+            name = "当前标题",
+            artist = "当前歌手",
+            album = "当前专辑",
+            albumId = 0L,
+            durationMs = 1_000L,
+            coverUrl = null,
+            mediaUri = "content://song"
+        )
+
+        val info = buildLocalOriginalSongInfo(
+            song = song,
+            coverFallbackUrl = "file:///storage/emulated/0/neriplayer-download/Covers/Song.jpg"
+        )
+
+        assertEquals(
+            "file:///storage/emulated/0/neriplayer-download/Covers/Song.jpg",
+            info.coverUrl
+        )
+    }
+
+    @Test
+    fun `buildLocalOriginalSongInfo prefers local cover over stale remote metadata`() {
+        val song = SongItem(
+            id = 6L,
+            name = "当前标题",
+            artist = "当前歌手",
+            album = "当前专辑",
+            albumId = 0L,
+            durationMs = 1_000L,
+            coverUrl = "https://example.com/current.jpg",
+            originalCoverUrl = "https://example.com/original.jpg",
+            mediaUri = "file:///storage/emulated/0/neriplayer-download/Song.mp3"
+        )
+
+        val info = buildLocalOriginalSongInfo(
+            song = song,
+            coverFallbackUrl = "file:///storage/emulated/0/neriplayer-download/Covers/Song.jpg"
+        )
+
+        assertEquals(
+            "file:///storage/emulated/0/neriplayer-download/Covers/Song.jpg",
+            info.coverUrl
+        )
+    }
+
+    @Test
+    fun `youtube artist resolver splits common collaboration separators`() {
+        assertEquals(
+            listOf("Artist One", "Artist Two", "Artist Three", "Artist Four"),
+            splitYouTubeMusicArtistNames(
+                "Artist One / Artist Two feat. Artist Three、Artist Four"
+            )
+        )
+    }
+
+    @Test
+    fun `youtube artist resolver only accepts exact creator names`() {
+        val matches = findExactYouTubeMusicCreatorMatches(
+            artistName = "Demo Artist",
+            candidates = listOf(
+                YouTubeMusicCreatorSummary(
+                    browseId = "UCdemoTopic",
+                    title = "Demo Artist - Topic",
+                    subtitle = "Artist",
+                    coverUrl = ""
+                ),
+                YouTubeMusicCreatorSummary(
+                    browseId = "UCsimilar",
+                    title = "Demo Artist Covers",
+                    subtitle = "Artist",
+                    coverUrl = ""
+                )
+            )
+        )
+
+        assertEquals(listOf("UCdemoTopic"), matches.map(YouTubeMusicCreatorSummary::browseId))
+    }
+}

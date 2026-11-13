@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  系统启动页占位图标：全透明。
+
+  Android 12+ 强制要求应用先经过系统 SplashScreen，而系统页不支持旋转动画与文字排版，
+  与应用内自绘的动态启动页（旋转黑胶 + 品牌文字）视觉不一致，会出现"先静态图标、再动态页"的割裂感。
+  这里让系统启动页只保留与动态页一致的白底，首帧绘制完成后立即撤掉，用户只看到动态启动页。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,0h48v48h-48z" />
+</vector>

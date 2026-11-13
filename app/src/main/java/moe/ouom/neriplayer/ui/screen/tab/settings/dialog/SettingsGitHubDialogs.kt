@@ -1,0 +1,312 @@
+package moe.ouom.neriplayer.ui.screen.tab.settings.dialog
+
+/*
+ * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 NeriPlayer developers
+ * https://github.com/cwuom/NeriPlayer
+ *
+ * This software is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this software.
+ * If not, see <https://www.gnu.org/licenses/>.
+ *
+ * File: moe.ouom.neriplayer.ui.screen.tab.settings.dialog/SettingsGitHubDialogs
+ * Updated: 2026/3/23
+ */
+
+import moe.ouom.neriplayer.ui.i18n.asString
+import android.content.Context
+import android.content.Intent
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import androidx.lifecycle.viewmodel.compose.viewModel
+import moe.ouom.neriplayer.common.R as CoreCommonR
+import moe.ouom.neriplayer.ui.feedback.AppFeedback
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsButton
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsChoiceRow
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsDialog
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsInlineMessage
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsTextButton
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsTextField
+import moe.ouom.neriplayer.ui.screen.tab.settings.state.collectAsStateWithLifecycleCompat
+import moe.ouom.neriplayer.ui.viewmodel.GitHubSyncViewModel
+import moe.ouom.neriplayer.ui.sync.upgrade.syncProtocolStartupConfigurationGate
+import moe.ouom.neriplayer.util.platform.tryStartActivity
+
+internal const val GITHUB_TOKEN_CREATION_URL =
+    "https://github.com/settings/tokens/new?scopes=repo&description=NeriPlayer%20Backup"
+
+internal fun openGitHubTokenCreationPage(context: Context) {
+    val intent = Intent(Intent.ACTION_VIEW, GITHUB_TOKEN_CREATION_URL.toUri())
+    if (!context.tryStartActivity(intent)) {
+        AppFeedback.showToast(
+            context = context,
+            message = context.getString(CoreCommonR.string.sync_create_token_open_failed)
+        )
+    }
+}
+
+@Stable
+internal class GitHubConfigDraft(
+    val token: MutableState<String>,
+    val newRepoName: MutableState<String>,
+    val useExistingRepo: MutableState<Boolean>,
+    val existingRepoName: MutableState<String>
+)
+
+/** The token is deliberately kept out of saved instance state. */
+@Composable
+internal fun rememberGitHubConfigDraft(): GitHubConfigDraft {
+    val token = remember { mutableStateOf("") }
+    val newRepoName = rememberSaveable { mutableStateOf("neriplayer-backup") }
+    val useExistingRepo = rememberSaveable { mutableStateOf(false) }
+    val existingRepoName = rememberSaveable { mutableStateOf("") }
+    return remember(token, newRepoName, useExistingRepo, existingRepoName) {
+        GitHubConfigDraft(token, newRepoName, useExistingRepo, existingRepoName)
+    }
+}
+
+@Composable
+internal fun SettingsGitHubDialogs(
+    showGitHubConfigDialog: Boolean,
+    onShowGitHubConfigDialogChange: (Boolean) -> Unit,
+    showClearGitHubConfigDialog: Boolean,
+    onShowClearGitHubConfigDialogChange: (Boolean) -> Unit
+) {
+    val context = LocalContext.current
+    val githubVm: GitHubSyncViewModel = viewModel()
+
+    LaunchedEffect(githubVm, context) {
+        githubVm.initialize(context)
+    }
+
+    if (syncProtocolStartupConfigurationGate(
+            dialogRequested = showGitHubConfigDialog || showClearGitHubConfigDialog,
+            onDismiss = {
+                onShowGitHubConfigDialogChange(false)
+                onShowClearGitHubConfigDialogChange(false)
+            }
+        )) return
+
+    if (showGitHubConfigDialog) {
+        val githubState by githubVm.uiState.collectAsStateWithLifecycleCompat()
+        val draft = rememberGitHubConfigDraft()
+        var githubToken by draft.token
+        var githubRepoName by draft.newRepoName
+        var useExistingRepo by draft.useExistingRepo
+        var existingRepoName by draft.existingRepoName
+
+        DisposableEffect(githubVm, context) {
+            githubVm.resetTokenValidation()
+            githubVm.initialize(context)
+            onDispose { githubVm.resetTokenValidation() }
+        }
+
+        val dismissConfigDialog = {
+            githubVm.resetTokenValidation()
+            onShowGitHubConfigDialogChange(false)
+        }
+
+        MiuixSettingsDialog(
+            onDismissRequest = dismissConfigDialog,
+            title = { Text(stringResource(CoreCommonR.string.sync_config)) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    githubState.errorMessage?.let { error ->
+                        MiuixSettingsInlineMessage(
+                            message = error.asString(),
+                            isSuccess = false,
+                            onClose = githubVm::clearMessages
+                        )
+                    }
+                    githubState.successMessage?.let { message ->
+                        MiuixSettingsInlineMessage(
+                            message = message.asString(),
+                            isSuccess = true,
+                            onClose = githubVm::clearMessages
+                        )
+                    }
+                    Text(
+                        stringResource(CoreCommonR.string.sync_step1_token),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    MiuixSettingsTextField(
+                        value = githubToken,
+                        onValueChange = {
+                            githubToken = it
+                            githubVm.resetTokenValidation()
+                        },
+                        label = { Text(stringResource(CoreCommonR.string.settings_github_token_label)) },
+                        placeholder = { Text(stringResource(CoreCommonR.string.settings_github_token_placeholder)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        stringResource(CoreCommonR.string.settings_github_token_permission),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    MiuixSettingsTextButton(
+                        onClick = { openGitHubTokenCreationPage(context) }
+                    ) {
+                        Text(stringResource(CoreCommonR.string.sync_create_token))
+                    }
+
+                    if (githubState.tokenValid && !githubState.isConfigured) {
+                        Text(
+                            stringResource(CoreCommonR.string.sync_step2_repo),
+                            style = MaterialTheme.typography.titleSmall
+                        )
+
+                        MiuixSettingsChoiceRow(
+                            title = stringResource(CoreCommonR.string.sync_create_new_repo),
+                            selected = !useExistingRepo,
+                            onClick = { useExistingRepo = false }
+                        )
+
+                        if (!useExistingRepo) {
+                            MiuixSettingsTextField(
+                                value = githubRepoName,
+                                onValueChange = { githubRepoName = it },
+                                label = { Text(stringResource(CoreCommonR.string.sync_repo_name)) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        MiuixSettingsChoiceRow(
+                            title = stringResource(CoreCommonR.string.sync_use_existing_repo),
+                            selected = useExistingRepo,
+                            onClick = { useExistingRepo = true }
+                        )
+
+                        if (useExistingRepo) {
+                            MiuixSettingsTextField(
+                                value = existingRepoName,
+                                onValueChange = { existingRepoName = it },
+                                label = { Text(stringResource(CoreCommonR.string.sync_repo_full_name)) },
+                                placeholder = { Text(stringResource(CoreCommonR.string.settings_sync_repo_placeholder)) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                when {
+                    githubState.isConfigured && (githubToken.isBlank() || githubState.tokenValid) -> {
+                        MiuixSettingsButton(onClick = dismissConfigDialog) {
+                            Text(stringResource(CoreCommonR.string.action_close))
+                        }
+                    }
+                    !githubState.tokenValid -> {
+                        MiuixSettingsButton(
+                            onClick = { githubVm.validateToken(context, githubToken) },
+                            enabled = githubToken.isNotBlank() && !githubState.isValidating
+                        ) {
+                            if (githubState.isValidating) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Text(stringResource(CoreCommonR.string.sync_verify_token))
+                        }
+                    }
+                    else -> {
+                        MiuixSettingsButton(
+                            onClick = {
+                                if (useExistingRepo) {
+                                    githubVm.useExistingRepository(context, existingRepoName)
+                                } else {
+                                    githubVm.createRepository(context, githubRepoName)
+                                }
+                            },
+                            enabled = !githubState.isCreatingRepo && !githubState.isCheckingRepo
+                        ) {
+                            if (githubState.isCreatingRepo || githubState.isCheckingRepo) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Text(stringResource(CoreCommonR.string.action_done))
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                MiuixSettingsTextButton(onClick = dismissConfigDialog) {
+                    Text(stringResource(CoreCommonR.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    if (showClearGitHubConfigDialog) {
+        MiuixSettingsDialog(
+            onDismissRequest = { onShowClearGitHubConfigDialogChange(false) },
+            title = { Text(stringResource(CoreCommonR.string.sync_clear_config)) },
+            text = { Text(stringResource(CoreCommonR.string.sync_clear_config_desc)) },
+            confirmButton = {
+                MiuixSettingsTextButton(
+                    onClick = {
+                        githubVm.clearConfiguration(context)
+                        onShowClearGitHubConfigDialogChange(false)
+                    }
+                ) {
+                    Text(
+                        stringResource(CoreCommonR.string.action_confirm_clear),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                MiuixSettingsTextButton(onClick = { onShowClearGitHubConfigDialogChange(false) }) {
+                    Text(stringResource(CoreCommonR.string.action_cancel))
+                }
+            }
+        )
+    }
+}

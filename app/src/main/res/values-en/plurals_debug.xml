@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Debug & Logs -->
+    <plurals name="debug_page_not_found">
+        <item quantity="one">Page %d not found</item>
+        <item quantity="other">Page %d not found</item>
+    </plurals>
+    <plurals name="crash_log_cleared">
+        <item quantity="one">Cleared %d crash log</item>
+        <item quantity="other">Cleared %d crash logs</item>
+    </plurals>
+    <plurals name="log_cleared_count">
+        <item quantity="one">Cleared %d log file</item>
+        <item quantity="other">Cleared %d log files</item>
+    </plurals>
+</resources>

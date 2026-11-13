@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dialogs -->
+    <string name="dialog_confirm_delete">Confirm Delete</string>
+    <string name="dialog_confirm_clear">Confirm Clear</string>
+    <string name="dialog_hint">Hint</string>
+</resources>

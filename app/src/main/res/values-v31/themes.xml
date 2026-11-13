@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Base.Theme.NeriPlayer" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FFFFFFFF</item>
+        <item name="android:forceDarkAllowed">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowDisablePreview">true</item>
+    </style>
+
+    <!--
+      系统启动页只保留白底，图标用透明占位。
+      应用内自绘的动态启动页（旋转黑胶 + 品牌文字）才是真正的启动画面，
+      系统页在首帧绘制完成后立即撤掉，避免出现"先静态图标、再动态页"的割裂感。
+    -->
+    <style name="Theme.NeriPlayer.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#FFFFFFFF</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_system_placeholder</item>
+        <item name="postSplashScreenTheme">@style/Theme.NeriPlayer</item>
+    </style>
+</resources>

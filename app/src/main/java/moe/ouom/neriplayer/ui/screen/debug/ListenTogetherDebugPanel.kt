@@ -1,0 +1,1627 @@
+package moe.ouom.neriplayer.ui.screen.debug
+
+import moe.ouom.neriplayer.data.ltw.validation.format
+
+import android.content.ClipData
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.res.Resources
+import androidx.annotation.StringRes
+import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.NetworkCheck
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.SettingsEthernet
+import androidx.compose.material.icons.outlined.StopCircle
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.Clipboard
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import moe.ouom.neriplayer.BuildConfig
+import moe.ouom.neriplayer.common.R as CoreCommonR
+import moe.ouom.neriplayer.core.di.AppContainer
+import moe.ouom.neriplayer.core.player.PlayerManager
+import moe.ouom.neriplayer.data.listentogether.ListenTogetherPreferences
+import moe.ouom.neriplayer.data.ltw.ListenTogetherSessionManager
+import moe.ouom.neriplayer.data.ltw.invite.buildListenTogetherInviteUri
+import moe.ouom.neriplayer.core.player.ltw.PlayerListenTogetherSongMapper
+import moe.ouom.neriplayer.data.ltw.invite.parseListenTogetherInvite
+import moe.ouom.neriplayer.data.ltw.invite.resolveListenTogetherBaseUrl
+import moe.ouom.neriplayer.data.ltw.invite.resolveListenTogetherInviteJoinBaseUrl
+import moe.ouom.neriplayer.data.model.ltw.session.ListenTogetherConnectionState
+import moe.ouom.neriplayer.data.model.ltw.room.ListenTogetherMember
+import moe.ouom.neriplayer.data.model.ltw.room.ListenTogetherRoomSettings
+import moe.ouom.neriplayer.data.model.ltw.room.ListenTogetherRoomState
+import moe.ouom.neriplayer.data.model.ltw.room.ListenTogetherRoomStatuses
+import moe.ouom.neriplayer.data.model.ltw.session.ListenTogetherSessionState
+import moe.ouom.neriplayer.data.model.ltw.track.ListenTogetherTrack
+import moe.ouom.neriplayer.core.player.ltw.indexOfTrack
+import moe.ouom.neriplayer.data.model.ltw.session.ListenTogetherValidationError
+import moe.ouom.neriplayer.data.ltw.validation.normalizeListenTogetherRoomId
+import moe.ouom.neriplayer.data.ltw.validation.sanitizeListenTogetherJoinSecretOrNull
+import moe.ouom.neriplayer.data.ltw.validation.validateListenTogetherNickname
+import moe.ouom.neriplayer.data.ltw.validation.validateListenTogetherRoomCreation
+import moe.ouom.neriplayer.data.ltw.validation.validateListenTogetherUserUuid
+import moe.ouom.neriplayer.ui.navigation.LocalMiniPlayerHeight
+import moe.ouom.neriplayer.data.model.SongItem
+import moe.ouom.neriplayer.ui.feedback.AppFeedback
+import moe.ouom.neriplayer.ui.theme.NeriDesign
+import moe.ouom.neriplayer.ui.theme.neriRoundedShape
+import moe.ouom.neriplayer.ui.theme.neriSearchFieldColors
+import moe.ouom.neriplayer.ui.theme.neriSearchFieldShape
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import moe.ouom.neriplayer.R as AppR
+
+internal data class DebugField(
+    val label: String,
+    val value: String
+)
+
+@Composable
+fun ListenTogetherDebugScreen() {
+    val miniH = LocalMiniPlayerHeight.current
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .imePadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(bottom = miniH),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = stringResource(CoreCommonR.string.listen_together_title),
+            style = MaterialTheme.typography.titleLarge
+        )
+        Text(
+            text = stringResource(CoreCommonR.string.listen_together_debug_desc),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        ListenTogetherRoomPanel(showBaseUrlEditor = true, showAdvancedDebug = true)
+    }
+}
+
+@Composable
+fun ListenTogetherRoomPanel(
+    modifier: Modifier = Modifier,
+    showBaseUrlEditor: Boolean = false,
+    showAdvancedDebug: Boolean = false
+) {
+    val context = LocalContext.current
+    val composeResources = LocalResources.current
+    val activity = remember(context) { context.findComponentActivity() }
+    val clipboard = LocalClipboard.current
+    val clipboardScope = rememberCoroutineScope()
+    val sessionManager = remember { AppContainer.listenTogetherSessionManager }
+    val preferences = remember { AppContainer.listenTogetherPreferences }
+    val sessionState by sessionManager.sessionState.collectAsState()
+    val roomState by sessionManager.roomState.collectAsState()
+    val savedBaseUrlInput by preferences.workerBaseUrlInputFlow.collectAsState(initial = "")
+    val savedUserUuid by preferences.userUuidFlow.collectAsState(initial = "")
+    val savedNickname by preferences.nicknameFlow.collectAsState(initial = "")
+    val savedAllowMemberControl by preferences.allowMemberControlFlow.collectAsState(initial = true)
+    val savedAutoPauseOnMemberChange by preferences.autoPauseOnMemberChangeFlow.collectAsState(initial = true)
+    val savedShareAudioLinks by preferences.shareAudioLinksFlow.collectAsState(initial = true)
+    val currentQueue by PlayerManager.currentQueueFlow.collectAsState()
+    val currentSong by PlayerManager.currentSongFlow.collectAsState()
+    val isPlaying by PlayerManager.isPlayingFlow.collectAsState()
+    val positionMs by PlayerManager.playbackPositionFlow.collectAsStateWithLifecycle()
+
+    var baseUrl by rememberSaveable { mutableStateOf("") }
+    var roomIdInput by rememberSaveable { mutableStateOf("") }
+    var userUuid by rememberSaveable { mutableStateOf("") }
+    var nickname by rememberSaveable { mutableStateOf("") }
+    var allowMemberControl by rememberSaveable { mutableStateOf(true) }
+    var autoPauseOnMemberChange by rememberSaveable { mutableStateOf(true) }
+    var shareAudioLinks by rememberSaveable { mutableStateOf(true) }
+    var runningActionResId by remember { mutableStateOf<Int?>(null) }
+    var showSessionDetails by rememberSaveable { mutableStateOf(false) }
+    var showTrackPayload by rememberSaveable { mutableStateOf(false) }
+    var showMemberDetails by rememberSaveable { mutableStateOf(false) }
+
+    val isInRoom = !sessionState.roomId.isNullOrBlank()
+    val role = resolveListenTogetherRole(sessionState.userUuid, sessionState.role, roomState)
+    val isController = role == "controller"
+    val effectiveBaseUrl = resolveListenTogetherBaseUrl(baseUrl)
+    val tokenPreview = remember(sessionState.token) { sessionState.token.maskedTokenPreview() }
+    val roomSettings = roomState?.settings ?: ListenTogetherRoomSettings(
+        allowMemberControl = allowMemberControl,
+        autoPauseOnMemberChange = autoPauseOnMemberChange,
+        shareAudioLinks = shareAudioLinks
+    )
+    val currentSongIndex = currentQueue.indexOfTrack(currentSong)
+    val roomCreationError = validateListenTogetherRoomCreation(
+        queue = currentQueue,
+        currentIndex = currentSongIndex,
+        currentSong = currentSong,
+        songMapper = PlayerListenTogetherSongMapper
+    )
+    fun showMessage(message: String) {
+        AppFeedback.showToast(context = context, message = message)
+    }
+    val inviteUri = remember(
+        sessionState.roomId,
+        sessionState.nickname,
+        sessionState.joinSecret,
+        effectiveBaseUrl
+    ) {
+        sessionState.roomId?.let { roomId ->
+            sanitizeListenTogetherJoinSecretOrNull(sessionState.joinSecret)?.let { joinSecret ->
+                buildListenTogetherInviteUri(
+                    roomId = roomId,
+                    inviterNickname = sessionState.nickname,
+                    baseUrl = effectiveBaseUrl,
+                    joinSecret = joinSecret,
+                    inviteScheme = BuildConfig.LISTEN_TOGETHER_INVITE_SCHEME,
+                    formatValidationError = { it.format(context) }
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(savedBaseUrlInput) {
+        if (baseUrl != savedBaseUrlInput) {
+            baseUrl = savedBaseUrlInput
+        }
+    }
+    LaunchedEffect(savedUserUuid, isInRoom) {
+        if (!isInRoom) {
+            userUuid = savedUserUuid.ifBlank { preferences.getOrCreateUserUuid() }
+        }
+    }
+    LaunchedEffect(savedNickname) {
+        if (nickname.isBlank()) {
+            nickname = savedNickname.ifBlank { preferences.getOrCreateNickname() }
+        }
+    }
+    LaunchedEffect(sessionState.roomId) { sessionState.roomId?.let { roomIdInput = it } }
+    LaunchedEffect(savedAllowMemberControl, savedAutoPauseOnMemberChange, savedShareAudioLinks, isInRoom) {
+        if (!isInRoom) {
+            allowMemberControl = savedAllowMemberControl
+            autoPauseOnMemberChange = savedAutoPauseOnMemberChange
+            shareAudioLinks = savedShareAudioLinks
+        }
+    }
+    LaunchedEffect(roomState?.settings, isController) {
+        if (isController && roomState != null) {
+            allowMemberControl = roomSettings.allowMemberControl
+            autoPauseOnMemberChange = roomSettings.autoPauseOnMemberChange
+            shareAudioLinks = roomSettings.shareAudioLinks
+        }
+    }
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = if (NeriDesign.isClean) NeriDesign.tokens.groupShape else CardDefaults.shape,
+        colors = CardDefaults.cardColors(
+            containerColor = if (NeriDesign.isClean) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
+                else MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+        )
+    ) {
+        if (showAdvancedDebug) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                DebugHeader(
+                    connectionState = sessionState.connectionState,
+                    role = role,
+                    roomStatus = roomState?.roomStatus,
+                    roomVersion = roomState?.version,
+                    roomId = sessionState.roomId
+                )
+                if (showBaseUrlEditor) {
+                    OutlinedTextField(
+                        value = baseUrl,
+                        onValueChange = { baseUrl = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(CoreCommonR.string.listen_together_worker_base_url)) },
+                        singleLine = true
+                    )
+                }
+                OutlinedTextField(
+                    value = nickname,
+                    onValueChange = { nickname = it.trim().take(24) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(stringResource(CoreCommonR.string.listen_together_nickname)) },
+                    singleLine = true
+                )
+                if (isInRoom) {
+                    OutlinedTextField(
+                        value = roomIdInput,
+                        onValueChange = {},
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(CoreCommonR.string.listen_together_room_id)) },
+                        singleLine = true,
+                        readOnly = true
+                    )
+                }
+                runningActionResId?.let { resId ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Text(stringResource(resId), style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                validateListenTogetherNickname(nickname)?.let { ErrorText(it) }
+                if (!isInRoom) {
+                    roomCreationError?.let { ErrorText(it) }
+                }
+                QuickActionSection(
+                    activity = activity,
+                    sessionState = sessionState,
+                    effectiveBaseUrl = effectiveBaseUrl,
+                    clipboard = clipboard,
+                    clipboardScope = clipboardScope,
+                    onRunningActionChange = { runningActionResId = it },
+                    onShowMessage = ::showMessage
+                )
+                if (!isInRoom) {
+                    RoomActions(
+                        runningActionResId = runningActionResId,
+                        currentQueue = currentQueue,
+                        currentSong = currentSong,
+                        isPlaying = isPlaying,
+                        positionMs = positionMs,
+                        activity = activity,
+                        userUuid = userUuid,
+                        nickname = nickname,
+                        baseUrlInput = baseUrl,
+                        effectiveBaseUrl = effectiveBaseUrl,
+                        roomSettings = ListenTogetherRoomSettings(allowMemberControl, autoPauseOnMemberChange, shareAudioLinks),
+                        sessionState = sessionState,
+                        preferences = preferences,
+                        sessionManager = sessionManager,
+                        onRunningActionChange = { runningActionResId = it },
+                        onShowMessage = ::showMessage
+                    )
+                } else {
+                    ConnectedActions(
+                        runningActionResId = runningActionResId,
+                        effectiveBaseUrl = effectiveBaseUrl,
+                        nickname = nickname,
+                        roomIdInput = roomIdInput,
+                        sessionState = sessionState,
+                        sessionManager = sessionManager,
+                        preferences = preferences,
+                        activity = activity,
+                        onRunningActionChange = { runningActionResId = it },
+                        onShowMessage = ::showMessage
+                    )
+                }
+                if (isController) {
+                    InviteCopyActions(
+                        sessionState = sessionState,
+                        inviteUri = inviteUri,
+                        clipboard = clipboard,
+                        clipboardScope = clipboardScope,
+                        onShowMessage = ::showMessage
+                    )
+                }
+                if (isController || !isInRoom) {
+                    HorizontalDivider()
+                    SettingsSection(
+                        settings = if (isInRoom) roomSettings else ListenTogetherRoomSettings(allowMemberControl, autoPauseOnMemberChange, shareAudioLinks),
+                        enabled = runningActionResId == null && (!isInRoom || isController),
+                        onSettingsChange = { updated ->
+                            allowMemberControl = updated.allowMemberControl
+                            autoPauseOnMemberChange = updated.autoPauseOnMemberChange
+                            shareAudioLinks = updated.shareAudioLinks
+                            activity?.lifecycleScope?.launch {
+                                runCatching {
+                                    persistSettings(preferences, baseUrl, effectiveBaseUrl, userUuid, nickname, updated)
+                                    if (isInRoom && isController) {
+                                        val result = sessionManager.updateRoomSettings(updated)
+                                        check(result.ok) {
+                                            result.error ?: composeResources.getString(CoreCommonR.string.listen_together_debug_ws_unavailable)
+                                        }
+                                    }
+                                }.onFailure {
+                                    showMessage(it.message ?: it.javaClass.simpleName)
+                                }
+                            } ?: showMessage(
+                                composeResources.getString(CoreCommonR.string.listen_together_action_unavailable)
+                            )
+                        }
+                    )
+                }
+                HorizontalDivider()
+                StatusSection(
+                    sessionState = sessionState,
+                    roomState = roomState,
+                    role = role,
+                    fallbackTrackName = currentSong?.name,
+                    isPlaying = isPlaying,
+                    effectiveBaseUrl = effectiveBaseUrl,
+                    tokenPreview = tokenPreview,
+                    expanded = showSessionDetails,
+                    onToggleExpanded = { showSessionDetails = !showSessionDetails }
+                )
+                TrackDebugSection(
+                    track = roomState?.track,
+                    fallbackTrackName = currentSong?.name,
+                    expanded = showTrackPayload,
+                    onToggleExpanded = { showTrackPayload = !showTrackPayload }
+                )
+                MemberSection(
+                    members = roomState?.members?.sortedBy { it.joinedAt }.orEmpty(),
+                    expanded = showMemberDetails,
+                    onToggleExpanded = { showMemberDetails = !showMemberDetails }
+                )
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (showBaseUrlEditor) {
+                    OutlinedTextField(
+                        value = baseUrl,
+                        onValueChange = { baseUrl = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        label = { Text(stringResource(CoreCommonR.string.listen_together_worker_base_url)) },
+                        singleLine = true
+                    )
+                }
+                OutlinedTextField(
+                    value = nickname,
+                    onValueChange = { nickname = it.trim().take(24) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    shape = neriSearchFieldShape(OutlinedTextFieldDefaults.shape),
+                    colors = neriSearchFieldColors(),
+                    label = { Text(stringResource(CoreCommonR.string.listen_together_nickname)) },
+                    singleLine = true
+                )
+                if (isInRoom) {
+                    OutlinedTextField(
+                        value = roomIdInput,
+                        onValueChange = {},
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        shape = neriSearchFieldShape(OutlinedTextFieldDefaults.shape),
+                        colors = neriSearchFieldColors(),
+                        label = { Text(stringResource(CoreCommonR.string.listen_together_room_id)) },
+                        singleLine = true,
+                        readOnly = true
+                    )
+                }
+                runningActionResId?.let { resId ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Text(stringResource(resId), style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                validateListenTogetherNickname(nickname)?.let { SimpleErrorText(it) }
+                if (!isInRoom) {
+                    roomCreationError?.let { SimpleErrorText(it) }
+                }
+                if (!isInRoom) {
+                    RoomActions(
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                        runningActionResId = runningActionResId,
+                        currentQueue = currentQueue,
+                        currentSong = currentSong,
+                        isPlaying = isPlaying,
+                        positionMs = positionMs,
+                        activity = activity,
+                        userUuid = userUuid,
+                        nickname = nickname,
+                        baseUrlInput = baseUrl,
+                        effectiveBaseUrl = effectiveBaseUrl,
+                        roomSettings = ListenTogetherRoomSettings(allowMemberControl, autoPauseOnMemberChange, shareAudioLinks),
+                        sessionState = sessionState,
+                        preferences = preferences,
+                        sessionManager = sessionManager,
+                        onRunningActionChange = { runningActionResId = it },
+                        onShowMessage = ::showMessage
+                    )
+                }
+                if (isInRoom) {
+                    ConnectedActions(
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                        runningActionResId = runningActionResId,
+                        effectiveBaseUrl = effectiveBaseUrl,
+                        nickname = nickname,
+                        roomIdInput = roomIdInput,
+                        sessionState = sessionState,
+                        sessionManager = sessionManager,
+                        preferences = preferences,
+                        activity = activity,
+                        onRunningActionChange = { runningActionResId = it },
+                        onShowMessage = ::showMessage
+                    )
+                }
+                if (isController) {
+                    InviteCopyActions(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        sessionState = sessionState,
+                        inviteUri = inviteUri,
+                        clipboard = clipboard,
+                        clipboardScope = clipboardScope,
+                        onShowMessage = ::showMessage
+                    )
+                }
+                if (isController || !isInRoom) {
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                    SettingsSection(
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                        settings = if (isInRoom) roomSettings else ListenTogetherRoomSettings(allowMemberControl, autoPauseOnMemberChange, shareAudioLinks),
+                        enabled = runningActionResId == null && (!isInRoom || isController),
+                        onSettingsChange = { updated ->
+                            allowMemberControl = updated.allowMemberControl
+                            autoPauseOnMemberChange = updated.autoPauseOnMemberChange
+                            shareAudioLinks = updated.shareAudioLinks
+                            activity?.lifecycleScope?.launch {
+                                runCatching {
+                                    persistSettings(preferences, baseUrl, effectiveBaseUrl, userUuid, nickname, updated)
+                                    if (isInRoom && isController) {
+                                        val result = sessionManager.updateRoomSettings(updated)
+                                        check(result.ok) {
+                                            result.error ?: composeResources.getString(
+                                                CoreCommonR.string.listen_together_debug_ws_unavailable
+                                            )
+                                        }
+                                    }
+                                }.onFailure { showMessage(it.message ?: it.javaClass.simpleName) }
+                            } ?: showMessage(
+                                composeResources.getString(CoreCommonR.string.listen_together_action_unavailable)
+                            )
+                        }
+                    )
+                }
+                SimpleStatusSection(sessionState, roomState, role, currentSong?.name, isPlaying)
+                SimpleMemberSection(roomState?.members?.sortedBy { it.joinedAt }.orEmpty())
+            }
+        }
+    }
+}
+
+@Composable
+internal fun DebugHeader(
+    connectionState: ListenTogetherConnectionState,
+    role: String?,
+    roomStatus: String?,
+    roomVersion: Long?,
+    roomId: String?
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        DebugChip(stringResource(connectionState.labelResId()))
+        DebugChip(stringResource(roleLabelResId(role)))
+        DebugChip(stringResource(roomStatusLabelResId(roomStatus)))
+        roomId?.takeIf { it.isNotBlank() }?.let { DebugChip("#$it") }
+        DebugChip("v${roomVersion ?: -1}")
+    }
+}
+
+@Composable
+private fun QuickActionSection(
+    activity: ComponentActivity?,
+    sessionState: ListenTogetherSessionState,
+    effectiveBaseUrl: String,
+    clipboard: Clipboard,
+    clipboardScope: CoroutineScope,
+    onRunningActionChange: (Int?) -> Unit,
+    onShowMessage: (String) -> Unit
+) {
+    val composeResources = LocalResources.current
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OutlinedButton(
+            onClick = {
+                activity?.lifecycleScope?.launch {
+                    onRunningActionChange(CoreCommonR.string.settings_listen_together_server_testing)
+                    runCatching {
+                        val result = AppContainer.listenTogetherApi.testServerAvailability(effectiveBaseUrl)
+                        val detail = if (result.ok) {
+                            composeResources.getString(CoreCommonR.string.listen_together_debug_probe_reachable)
+                        } else {
+                            result.message
+                        }
+                        onShowMessage(
+                            composeResources.getString(
+                                CoreCommonR.string.listen_together_debug_probe_result,
+                                detail
+                            )
+                        )
+                    }.onFailure {
+                        onShowMessage(it.message ?: it.javaClass.simpleName)
+                    }
+                    onRunningActionChange(null)
+                }
+            }
+        ) {
+            Icon(Icons.Outlined.NetworkCheck, contentDescription = null)
+            Text(stringResource(CoreCommonR.string.listen_together_debug_probe))
+        }
+        OutlinedButton(
+            onClick = {
+                val sent = AppContainer.listenTogetherSessionManager.sendPing()
+                onShowMessage(
+                    composeResources.getString(
+                        if (sent) {
+                            CoreCommonR.string.listen_together_debug_ping_sent
+                        } else {
+                            CoreCommonR.string.listen_together_debug_ping_failed
+                        }
+                    )
+                )
+            },
+            enabled = sessionState.connectionState == ListenTogetherConnectionState.CONNECTED
+        ) {
+            Icon(Icons.Outlined.SettingsEthernet, contentDescription = null)
+            Text(stringResource(CoreCommonR.string.listen_together_debug_ping))
+        }
+        OutlinedButton(
+            onClick = { AppContainer.listenTogetherSessionManager.connectWebSocket() },
+            enabled = !sessionState.wsUrl.isNullOrBlank()
+        ) {
+            Icon(Icons.Outlined.Refresh, contentDescription = null)
+            Text(stringResource(CoreCommonR.string.listen_together_debug_reconnect_ws))
+        }
+        OutlinedButton(
+            onClick = { AppContainer.listenTogetherSessionManager.disconnectWebSocket() },
+            enabled = sessionState.connectionState != ListenTogetherConnectionState.DISCONNECTED
+        ) {
+            Icon(Icons.Outlined.StopCircle, contentDescription = null)
+            Text(stringResource(CoreCommonR.string.listen_together_debug_disconnect_ws))
+        }
+        OutlinedButton(
+            onClick = {
+                sessionState.wsUrl?.let {
+                    clipboard.copyText(clipboardScope, it)
+                    onShowMessage(
+                        composeResources.getString(CoreCommonR.string.listen_together_debug_ws_url_copied)
+                    )
+                }
+            },
+            enabled = !sessionState.wsUrl.isNullOrBlank()
+        ) {
+            Icon(Icons.Outlined.ContentCopy, contentDescription = null)
+            Text(stringResource(CoreCommonR.string.listen_together_debug_copy_ws_url))
+        }
+    }
+}
+
+@Composable
+private fun RoomActions(
+    modifier: Modifier = Modifier,
+    runningActionResId: Int?,
+    currentQueue: List<SongItem>,
+    currentSong: SongItem?,
+    isPlaying: Boolean,
+    positionMs: Long,
+    activity: ComponentActivity?,
+    userUuid: String,
+    nickname: String,
+    baseUrlInput: String,
+    effectiveBaseUrl: String,
+    roomSettings: ListenTogetherRoomSettings,
+    sessionState: ListenTogetherSessionState,
+    preferences: ListenTogetherPreferences,
+    sessionManager: ListenTogetherSessionManager,
+    onRunningActionChange: (Int?) -> Unit,
+    onShowMessage: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val composeResources = LocalResources.current
+    val clipboard = LocalClipboard.current
+    val userUuidError = validateListenTogetherUserUuid(userUuid)
+    val nicknameError = validateListenTogetherNickname(nickname)
+    val currentIndex = currentQueue.indexOfTrack(currentSong)
+    val roomCreationError = validateListenTogetherRoomCreation(
+        queue = currentQueue,
+        currentIndex = currentIndex,
+        currentSong = currentSong,
+        songMapper = PlayerListenTogetherSongMapper
+    )
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Button(
+            onClick = {
+                activity?.lifecycleScope?.launch {
+                    onRunningActionChange(CoreCommonR.string.listen_together_creating_room)
+                    runCatching {
+                        persistSettings(preferences, baseUrlInput, effectiveBaseUrl, userUuid, nickname, roomSettings)
+                        sessionManager.createRoom(
+                            baseUrl = effectiveBaseUrl,
+                            userUuid = userUuid,
+                            nickname = nickname,
+                            queue = currentQueue,
+                            currentIndex = currentIndex,
+                            positionMs = positionMs,
+                            isPlaying = isPlaying,
+                            roomSettings = roomSettings,
+                            currentSong = currentSong
+                        )
+                        sessionManager.connectWebSocket()
+                    }.onFailure {
+                        onShowMessage(it.message ?: it.javaClass.simpleName)
+                    }
+                    onRunningActionChange(null)
+                } ?: onShowMessage(
+                    composeResources.getString(CoreCommonR.string.listen_together_action_unavailable)
+                )
+            },
+            enabled = runningActionResId == null &&
+                currentQueue.isNotEmpty() &&
+                userUuidError == null &&
+                nicknameError == null &&
+                roomCreationError == null,
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(Icons.Outlined.PlayArrow, contentDescription = null)
+            Text(stringResource(CoreCommonR.string.listen_together_create_and_connect))
+        }
+        Button(
+            onClick = {
+                activity?.lifecycleScope?.launch {
+                    val invite = parseListenTogetherInvite(
+                        clipboard.getClipEntry()
+                            ?.clipData
+                            ?.takeIf { it.itemCount > 0 }
+                            ?.getItemAt(0)
+                            ?.coerceToText(context)
+                            ?.toString()
+                    )
+                    if (invite == null) {
+                        onShowMessage(
+                            composeResources.getString(
+                                CoreCommonR.string.listen_together_clipboard_invite_missing
+                            )
+                        )
+                        return@launch
+                    }
+                    val joinUserUuid = userUuid.takeIf {
+                        validateListenTogetherUserUuid(it) == null
+                    } ?: preferences.getOrCreateUserUuid()
+                    val joinNickname = nickname.takeIf {
+                        validateListenTogetherNickname(it) == null
+                    } ?: preferences.getOrCreateNickname()
+                    onRunningActionChange(CoreCommonR.string.listen_together_joining_room)
+                    runCatching {
+                        val targetRoomId = invite.roomId
+                        val currentRoomId = sessionState.roomId?.let(::normalizeListenTogetherRoomId)
+                        if (currentRoomId != null && currentRoomId == targetRoomId) {
+                            onShowMessage(
+                                composeResources.getString(
+                                    CoreCommonR.string.listen_together_same_room_join_ignored,
+                                    targetRoomId
+                                )
+                            )
+                            return@runCatching
+                        }
+                        persistSettings(
+                            preferences,
+                            baseUrlInput,
+                            effectiveBaseUrl,
+                            joinUserUuid,
+                            joinNickname,
+                            roomSettings
+                        )
+                        sessionManager.joinRoom(
+                            baseUrl = resolveListenTogetherInviteJoinBaseUrl(invite = invite),
+                            roomId = targetRoomId,
+                            userUuid = joinUserUuid,
+                            nickname = joinNickname,
+                            joinSecret = invite.joinSecret
+                        )
+                        sessionManager.connectWebSocket()
+                    }.onFailure {
+                        onShowMessage(it.message ?: it.javaClass.simpleName)
+                    }
+                    onRunningActionChange(null)
+                } ?: onShowMessage(
+                    composeResources.getString(CoreCommonR.string.listen_together_action_unavailable)
+                )
+            },
+            enabled = runningActionResId == null &&
+                (userUuid.isBlank() || userUuidError == null) &&
+                (nickname.isBlank() || nicknameError == null),
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(Icons.Outlined.Link, contentDescription = null)
+            Text(stringResource(CoreCommonR.string.listen_together_join_and_connect))
+        }
+    }
+}
+
+@Composable
+private fun InviteCopyActions(
+    modifier: Modifier = Modifier,
+    sessionState: ListenTogetherSessionState,
+    inviteUri: String?,
+    clipboard: Clipboard,
+    clipboardScope: CoroutineScope,
+    onShowMessage: (String) -> Unit
+) {
+    val composeResources = LocalResources.current
+
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        TextButton(
+            onClick = {
+                val roomId = sessionState.roomId ?: return@TextButton
+                val inviteText = buildString {
+                    append(
+                        composeResources.getString(
+                            CoreCommonR.string.listen_together_invite_share_text,
+                            sessionState.nickname ?: composeResources.getString(CoreCommonR.string.listen_together_title),
+                            roomId
+                        )
+                    )
+                    inviteUri?.let {
+                        append("\n")
+                        append(it)
+                    }
+                }
+                clipboard.copyText(clipboardScope, inviteText)
+                onShowMessage(composeResources.getString(CoreCommonR.string.listen_together_invite_copied))
+            },
+            enabled = inviteUri != null
+        ) {
+            Icon(Icons.Outlined.ContentCopy, contentDescription = null)
+            Text(stringResource(CoreCommonR.string.listen_together_copy_invite))
+        }
+    }
+}
+
+@Composable
+private fun ConnectedActions(
+    modifier: Modifier = Modifier,
+    runningActionResId: Int?,
+    effectiveBaseUrl: String,
+    nickname: String,
+    roomIdInput: String,
+    sessionState: ListenTogetherSessionState,
+    sessionManager: ListenTogetherSessionManager,
+    preferences: ListenTogetherPreferences,
+    activity: ComponentActivity?,
+    onRunningActionChange: (Int?) -> Unit,
+    onShowMessage: (String) -> Unit
+) {
+    val composeResources = LocalResources.current
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Button(
+            onClick = {
+                activity?.lifecycleScope?.launch {
+                    val roomId = sessionState.roomId ?: roomIdInput
+                    if (roomId.isBlank()) return@launch
+                    onRunningActionChange(CoreCommonR.string.listen_together_refreshing_room_state)
+                    runCatching {
+                        preferences.setNickname(nickname)
+                        sessionManager.refreshRoomState(effectiveBaseUrl, roomId)
+                    }.onFailure {
+                        onShowMessage(it.message ?: it.javaClass.simpleName)
+                    }
+                    onRunningActionChange(null)
+                } ?: onShowMessage(
+                    composeResources.getString(CoreCommonR.string.listen_together_action_unavailable)
+                )
+            },
+            enabled = runningActionResId == null,
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(Icons.Outlined.Refresh, contentDescription = null)
+            Text(stringResource(CoreCommonR.string.action_refresh))
+        }
+        Button(
+            onClick = { sessionManager.leaveRoom() },
+            enabled = sessionState.connectionState != ListenTogetherConnectionState.CONNECTING,
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(Icons.Outlined.StopCircle, contentDescription = null)
+            Text(stringResource(CoreCommonR.string.listen_together_leave_room))
+        }
+    }
+}
+
+internal fun Context.findComponentActivity(): ComponentActivity? = when (this) {
+    is ComponentActivity -> this
+    is ContextWrapper -> baseContext.findComponentActivity()
+    else -> null
+}
+
+private fun Clipboard.copyText(
+    scope: CoroutineScope?,
+    text: String
+) {
+    scope?.launch {
+        setClipEntry(ClipEntry(ClipData.newPlainText("text", text)))
+    }
+}
+
+@Composable
+internal fun SettingsSection(
+    modifier: Modifier = Modifier,
+    settings: ListenTogetherRoomSettings,
+    enabled: Boolean,
+    onSettingsChange: (ListenTogetherRoomSettings) -> Unit
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(stringResource(CoreCommonR.string.listen_together_settings_title), style = MaterialTheme.typography.titleSmall)
+        SettingToggleRow(
+            stringResource(CoreCommonR.string.listen_together_setting_member_control_title),
+            stringResource(CoreCommonR.string.listen_together_setting_member_control_desc),
+            settings.allowMemberControl,
+            enabled
+        ) { onSettingsChange(settings.copy(allowMemberControl = it)) }
+        SettingToggleRow(
+            stringResource(CoreCommonR.string.listen_together_setting_auto_pause_title),
+            stringResource(CoreCommonR.string.listen_together_setting_auto_pause_desc),
+            settings.autoPauseOnMemberChange,
+            enabled
+        ) { onSettingsChange(settings.copy(autoPauseOnMemberChange = it)) }
+        SettingToggleRow(
+            stringResource(CoreCommonR.string.listen_together_setting_share_audio_links_title),
+            stringResource(CoreCommonR.string.listen_together_setting_share_audio_links_desc),
+            settings.shareAudioLinks,
+            enabled
+        ) { onSettingsChange(settings.copy(shareAudioLinks = it)) }
+    }
+}
+
+@Composable
+private fun SettingToggleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked = checked, enabled = enabled, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+internal fun StatusSection(
+    sessionState: ListenTogetherSessionState,
+    roomState: ListenTogetherRoomState?,
+    role: String?,
+    fallbackTrackName: String?,
+    isPlaying: Boolean,
+    effectiveBaseUrl: String,
+    tokenPreview: String,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit
+) {
+    val resources = LocalResources.current
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        DebugSectionHeader(
+            title = stringResource(CoreCommonR.string.listen_together_debug_session_title),
+            expanded = expanded,
+            onToggleExpanded = onToggleExpanded
+        )
+        DebugFieldGrid(listenTogetherSessionSummaryFields(resources, sessionState, roomState, role, isPlaying))
+        ListenTogetherSessionBanners(sessionState)
+        if (expanded) {
+            DebugFieldGrid(
+                listenTogetherSessionDetailFields(
+                    resources = resources,
+                    sessionState = sessionState,
+                    roomState = roomState,
+                    fallbackTrackName = fallbackTrackName,
+                    effectiveBaseUrl = effectiveBaseUrl,
+                    tokenPreview = tokenPreview
+                )
+            )
+        }
+    }
+}
+
+@Composable
+internal fun TrackDebugSection(
+    track: ListenTogetherTrack?,
+    fallbackTrackName: String?,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit
+) {
+    val resources = LocalResources.current
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        DebugSectionHeader(
+            title = stringResource(CoreCommonR.string.listen_together_debug_track_payload_title),
+            expanded = expanded,
+            onToggleExpanded = onToggleExpanded
+        )
+        DebugFieldGrid(listenTogetherTrackSummaryFields(resources, track, fallbackTrackName))
+        if (expanded) {
+            DebugFieldGrid(listenTogetherTrackDetailFields(resources, track))
+        }
+    }
+}
+
+@Composable
+private fun ListenTogetherSessionBanners(sessionState: ListenTogetherSessionState) {
+    val context = LocalContext.current
+    sessionState.lastError.nonBlankOrNull()?.let {
+        DebugBanner(stringResource(CoreCommonR.string.listen_together_last_error), it, highlighted = true)
+    }
+    displayableListenTogetherNotice(sessionState.roomNotice)?.let {
+        DebugBanner(stringResource(CoreCommonR.string.listen_together_notice), it.toDisplayNotice(context))
+    }
+}
+
+private const val MISSING_DEBUG_VALUE = "-"
+
+private fun String?.orMissing(): String = this ?: MISSING_DEBUG_VALUE
+
+private fun String?.nonBlankOrNull(): String? = this?.takeIf(String::isNotBlank)
+
+private fun <T : Any> T?.debugValue(
+    missing: String = MISSING_DEBUG_VALUE,
+    value: (T) -> Any?
+): String = this?.let(value)?.toString() ?: missing
+
+private fun Resources.debugField(@StringRes labelResId: Int, value: String): DebugField =
+    DebugField(getString(labelResId), value)
+
+internal fun listenTogetherTrackName(track: ListenTogetherTrack?, fallbackTrackName: String?): String =
+    track?.name ?: fallbackTrackName.orMissing()
+
+@StringRes
+internal fun listenTogetherPlaybackLabelResId(
+    roomState: ListenTogetherRoomState?,
+    role: String?,
+    isPlaying: Boolean
+): Int = if (resolveDisplayedPlaybackState(roomState, role, isPlaying) == "playing") {
+    CoreCommonR.string.listen_together_playback_playing
+} else {
+    CoreCommonR.string.listen_together_playback_paused
+}
+
+private fun Resources.listenTogetherIdentityFields(
+    sessionState: ListenTogetherSessionState,
+    roomState: ListenTogetherRoomState?,
+    role: String?
+): List<DebugField> = listOf(
+    debugField(CoreCommonR.string.listen_together_connection, getString(sessionState.connectionState.labelResId())),
+    debugField(CoreCommonR.string.listen_together_role, getString(roleLabelResId(role))),
+    debugField(CoreCommonR.string.listen_together_room_status, getString(roomStatusLabelResId(roomState?.roomStatus))),
+    debugField(CoreCommonR.string.listen_together_room_id, sessionState.roomId.orMissing()),
+    debugField(CoreCommonR.string.listen_together_version, roomState.debugValue { it.version })
+)
+
+private fun Resources.listenTogetherRoomSizeFields(roomState: ListenTogetherRoomState?): List<DebugField> = listOf(
+    debugField(CoreCommonR.string.listen_together_members, roomState.debugValue(missing = "0") { it.members.size }),
+    debugField(CoreCommonR.string.listen_together_queue_size, roomState.debugValue(missing = "0") { it.queue.size })
+)
+
+private fun Resources.listenTogetherPlaybackField(
+    roomState: ListenTogetherRoomState?,
+    role: String?,
+    isPlaying: Boolean
+): DebugField = debugField(
+    CoreCommonR.string.listen_together_playback,
+    getString(listenTogetherPlaybackLabelResId(roomState, role, isPlaying))
+)
+
+internal fun listenTogetherSessionSummaryFields(
+    resources: Resources,
+    sessionState: ListenTogetherSessionState,
+    roomState: ListenTogetherRoomState?,
+    role: String?,
+    isPlaying: Boolean
+): List<DebugField> = resources.listenTogetherIdentityFields(sessionState, roomState, role) +
+    resources.listenTogetherRoomSizeFields(roomState) +
+    resources.listenTogetherPlaybackField(roomState, role, isPlaying)
+
+internal fun listenTogetherSessionDetailFields(
+    resources: Resources,
+    sessionState: ListenTogetherSessionState,
+    roomState: ListenTogetherRoomState?,
+    fallbackTrackName: String?,
+    effectiveBaseUrl: String,
+    tokenPreview: String
+): List<DebugField> = with(resources) {
+    listOfNotNull(
+        debugField(CoreCommonR.string.listen_together_track, listenTogetherTrackName(roomState?.track, fallbackTrackName)),
+        debugField(CoreCommonR.string.listen_together_debug_base_url, effectiveBaseUrl),
+        debugField(CoreCommonR.string.listen_together_debug_ws_url, sessionState.wsUrl.orMissing()),
+        debugField(CoreCommonR.string.listen_together_debug_token, tokenPreview),
+        debugField(CoreCommonR.string.listen_together_user_uuid, sessionState.userUuid.orMissing()),
+        debugField(CoreCommonR.string.listen_together_nickname, sessionState.nickname.orMissing()),
+        debugField(CoreCommonR.string.listen_together_debug_schema, roomState.debugValue { it.schemaVersion }),
+        debugField(
+            CoreCommonR.string.listen_together_debug_expected_position,
+            sessionState.expectedPositionMs.debugValue(value = ::formatDurationDebug)
+        ),
+        debugField(
+            CoreCommonR.string.listen_together_debug_playback_base_position,
+            roomState.debugValue { formatDurationDebug(it.playback.basePositionMs) }
+        ),
+        debugField(
+            CoreCommonR.string.listen_together_debug_playback_base_time,
+            roomState.debugValue { formatEpochDebug(it.playback.baseTimestampMs) }
+        ),
+        debugField(CoreCommonR.string.listen_together_debug_playback_rate, roomState.debugValue { it.playback.playbackRate }),
+        debugField(CoreCommonR.string.listen_together_debug_controller_uuid, roomState.debugValue { it.controllerUserUuid }),
+        debugField(CoreCommonR.string.listen_together_debug_controller_user_id, roomState.debugValue { it.controllerUserId }),
+        debugField(
+            CoreCommonR.string.listen_together_debug_controller_heartbeat,
+            roomState.debugValue { room -> room.controllerHeartbeatAt?.let(::formatEpochDebug) }
+        ),
+        debugField(
+            CoreCommonR.string.listen_together_debug_controller_offline_since,
+            roomState.debugValue { room -> room.controllerOfflineSince?.let(::formatEpochDebug) }
+        ),
+        debugField(CoreCommonR.string.listen_together_debug_updated_at, roomState.debugValue { formatEpochDebug(it.updatedAt) }),
+        debugField(CoreCommonR.string.listen_together_debug_closed_reason, roomState.debugValue { it.closedReason }),
+        sessionState.lastError.nonBlankOrNull()?.let { debugField(CoreCommonR.string.listen_together_last_error, it) },
+        sessionState.roomNotice.nonBlankOrNull()?.let { debugField(CoreCommonR.string.listen_together_debug_raw_notice, it) }
+    )
+}
+
+internal fun listenTogetherSimpleStatusFields(
+    resources: Resources,
+    sessionState: ListenTogetherSessionState,
+    roomState: ListenTogetherRoomState?,
+    role: String?,
+    fallbackTrackName: String?,
+    isPlaying: Boolean
+): List<DebugField> = with(resources) {
+    listenTogetherIdentityFields(sessionState, roomState, role) +
+        debugField(
+            CoreCommonR.string.listen_together_debug_updated_at,
+            roomState.debugValue { formatRoomUpdatedAtSimple(it.updatedAt) }
+        ) +
+        listenTogetherRoomSizeFields(roomState) +
+        debugField(CoreCommonR.string.listen_together_track, listenTogetherTrackName(roomState?.track, fallbackTrackName)) +
+        listenTogetherPlaybackField(roomState, role, isPlaying)
+}
+
+internal fun listenTogetherTrackSummaryFields(
+    resources: Resources,
+    track: ListenTogetherTrack?,
+    fallbackTrackName: String?
+): List<DebugField> = with(resources) {
+    listOf(
+        debugField(CoreCommonR.string.listen_together_debug_track_name, listenTogetherTrackName(track, fallbackTrackName)),
+        debugField(CoreCommonR.string.listen_together_debug_channel, track.debugValue { it.channelId }),
+        debugField(CoreCommonR.string.listen_together_debug_duration, track.debugValue { formatDurationDebug(it.durationMs) }),
+        debugField(CoreCommonR.string.listen_together_debug_stable_key, track.debugValue { it.stableKey })
+    )
+}
+
+internal fun listenTogetherTrackDetailFields(
+    resources: Resources,
+    track: ListenTogetherTrack?
+): List<DebugField> = with(resources) {
+    listOf(
+        debugField(CoreCommonR.string.listen_together_debug_audio_id, track.debugValue { it.audioId }),
+        debugField(CoreCommonR.string.listen_together_debug_sub_audio_id, track.debugValue { it.subAudioId }),
+        debugField(CoreCommonR.string.listen_together_debug_playlist_context, track.debugValue { it.playlistContextId }),
+        debugField(CoreCommonR.string.listen_together_debug_media_uri, track.debugValue { it.mediaUri }),
+        debugField(CoreCommonR.string.listen_together_debug_stream_url, track.debugValue { it.streamUrl }),
+        debugField(CoreCommonR.string.listen_together_debug_cover, track.debugValue { it.coverUrl })
+    )
+}
+
+@Composable
+internal fun MemberSection(
+    members: List<ListenTogetherMember>,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit
+) {
+    if (members.isEmpty()) return
+
+    val roleCounts = members.groupingBy { it.role.ifBlank { "unknown" } }.eachCount()
+    val summaryFields = buildList {
+        add(DebugField(stringResource(CoreCommonR.string.listen_together_members), members.size.toString()))
+        roleCounts.forEach { (role, count) ->
+            val label = when (role) {
+                "controller" -> stringResource(CoreCommonR.string.listen_together_role_controller)
+                "listener" -> stringResource(CoreCommonR.string.listen_together_role_listener)
+                else -> stringResource(CoreCommonR.string.listen_together_role_none)
+            }
+            add(DebugField(label, count.toString()))
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        DebugSectionHeader(
+            title = stringResource(CoreCommonR.string.listen_together_member_list_title),
+            expanded = expanded,
+            onToggleExpanded = onToggleExpanded,
+            suffix = members.size.toString()
+        )
+        DebugFieldGrid(summaryFields)
+        if (expanded) {
+            members.forEach { MemberCard(it) }
+        }
+    }
+}
+
+@Composable
+private fun MemberCard(member: ListenTogetherMember) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = member.nickname.ifBlank { member.userUuid.ifBlank { member.userId.orEmpty() } },
+                style = MaterialTheme.typography.bodyMedium
+            )
+            DebugFieldGrid(
+                listOf(
+                    DebugField(stringResource(CoreCommonR.string.listen_together_debug_member_role), member.role.ifBlank { "-" }),
+                    DebugField(stringResource(CoreCommonR.string.listen_together_debug_member_user_id), member.userId.orEmpty().ifBlank { "-" }),
+                    DebugField(stringResource(CoreCommonR.string.listen_together_debug_controller_uuid), member.userUuid.ifBlank { "-" }),
+                    DebugField(stringResource(CoreCommonR.string.listen_together_debug_member_joined), formatEpochDebug(member.joinedAt))
+                )
+            )
+        }
+    }
+}
+
+@Composable
+internal fun DebugFieldGrid(fields: List<DebugField>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        fields.chunked(2).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                row.forEach { field ->
+                    DebugFieldCard(field = field, modifier = Modifier.weight(1f))
+                }
+                if (row.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DebugFieldCard(
+    field: DebugField,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .background(
+                color = if (NeriDesign.isClean) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
+                shape = neriRoundedShape(12.dp)
+            )
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = field.label,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (NeriDesign.isClean) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = field.value,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+internal fun DebugBanner(
+    label: String,
+    value: String,
+    highlighted: Boolean = false
+) {
+    val bg = if (highlighted) {
+        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+    } else {
+        if (NeriDesign.isClean) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+    }
+    val fg = if (highlighted) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(bg, neriRoundedShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = fg)
+        Text(text = value, style = MaterialTheme.typography.bodySmall, color = fg)
+    }
+}
+
+@Composable
+private fun DebugChip(text: String) {
+    AssistChip(
+        onClick = {},
+        label = { Text(text) },
+        enabled = false,
+        colors = AssistChipDefaults.assistChipColors(
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    )
+}
+
+@Composable
+private fun ErrorText(error: ListenTogetherValidationError) {
+    Text(
+        text = stringResource(error.messageResId, *error.args.toTypedArray()),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.error
+    )
+}
+
+@Composable
+private fun SimpleErrorText(error: ListenTogetherValidationError) {
+    Text(
+        text = stringResource(error.messageResId, *error.args.toTypedArray()),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.error,
+        modifier = Modifier.padding(horizontal = 20.dp)
+    )
+}
+
+@Composable
+internal fun SimpleStatusSection(
+    sessionState: ListenTogetherSessionState,
+    roomState: ListenTogetherRoomState?,
+    role: String?,
+    fallbackTrackName: String?,
+    isPlaying: Boolean
+) {
+    val resources = LocalResources.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        DebugFieldGrid(
+            listenTogetherSimpleStatusFields(resources, sessionState, roomState, role, fallbackTrackName, isPlaying)
+        )
+        ListenTogetherSessionBanners(sessionState)
+    }
+}
+
+internal fun resolveDisplayedPlaybackState(
+    roomState: ListenTogetherRoomState?,
+    role: String?,
+    isPlaying: Boolean
+): String {
+    if (role == "controller" && roomState != null) {
+        return if (isPlaying) "playing" else "paused"
+    }
+    return roomState?.playback?.state ?: if (isPlaying) "playing" else "paused"
+}
+
+@Composable
+internal fun SimpleMemberSection(members: List<ListenTogetherMember>) {
+    if (members.isEmpty()) return
+    HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(stringResource(CoreCommonR.string.listen_together_member_list_title), style = MaterialTheme.typography.titleSmall)
+        members.forEach { member ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = member.nickname.ifBlank { member.userUuid.ifBlank { member.userId.orEmpty() } },
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = stringResource(roleLabelResId(member.role)),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ListenTogetherDebugPanel(modifier: Modifier = Modifier) {
+    ListenTogetherRoomPanel(modifier = modifier, showBaseUrlEditor = true, showAdvancedDebug = true)
+}
+
+@Composable
+internal fun DebugSectionHeader(
+    title: String,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    suffix: String? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggleExpanded)
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            suffix?.let {
+                Text(text = it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+        TextButton(onClick = onToggleExpanded) {
+            Text(
+                text = stringResource(
+                    if (expanded) {
+                        CoreCommonR.string.action_collapse
+                    } else {
+                        CoreCommonR.string.action_expand
+                    }
+                )
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                contentDescription = null
+            )
+        }
+    }
+}
+
+private suspend fun persistSettings(
+    preferences: ListenTogetherPreferences,
+    baseUrlInput: String,
+    baseUrl: String,
+    userUuid: String,
+    nickname: String,
+    settings: ListenTogetherRoomSettings
+) {
+    preferences.setWorkerBaseUrl(baseUrl)
+    preferences.setWorkerBaseUrlInput(baseUrlInput)
+    preferences.setUserUuid(userUuid)
+    preferences.setNickname(nickname)
+    preferences.setAllowMemberControl(settings.allowMemberControl)
+    preferences.setAutoPauseOnMemberChange(settings.autoPauseOnMemberChange)
+    preferences.setShareAudioLinks(settings.shareAudioLinks)
+}
+
+internal fun ListenTogetherConnectionState.labelResId(): Int = when (this) {
+    ListenTogetherConnectionState.DISCONNECTED -> CoreCommonR.string.listen_together_connection_disconnected
+    ListenTogetherConnectionState.CONNECTING -> CoreCommonR.string.listen_together_connection_connecting
+    ListenTogetherConnectionState.CONNECTED -> CoreCommonR.string.listen_together_connection_connected
+}
+
+internal fun roleLabelResId(role: String?): Int = when (role) {
+    "controller" -> CoreCommonR.string.listen_together_role_controller
+    "listener" -> CoreCommonR.string.listen_together_role_listener
+    else -> CoreCommonR.string.listen_together_role_none
+}
+
+internal fun resolveListenTogetherRole(
+    userUuid: String?,
+    fallbackRole: String?,
+    roomState: ListenTogetherRoomState?
+): String? {
+    val sessionUserId = userUuid.trimmedOrNull() ?: return fallbackRole
+    val controllerUserId = roomState?.controllerIdentity() ?: return fallbackRole
+    return if (sessionUserId == controllerUserId) "controller" else "listener"
+}
+
+private fun ListenTogetherRoomState.controllerIdentity(): String? =
+    controllerUserUuid.trimmedOrNull() ?: controllerUserId.trimmedOrNull()
+
+private fun String?.trimmedOrNull(): String? = this?.trim()?.takeIf(String::isNotEmpty)
+
+internal fun roomStatusLabelResId(status: String?): Int = when (status) {
+    ListenTogetherRoomStatuses.CONTROLLER_OFFLINE -> CoreCommonR.string.listen_together_room_status_controller_offline
+    ListenTogetherRoomStatuses.CLOSED -> CoreCommonR.string.listen_together_room_status_closed
+    else -> CoreCommonR.string.listen_together_room_status_active
+}
+
+private const val CONTROLLER_OFFLINE_NOTICE_PREFIX = "controller_offline:"
+private const val MEMBER_JOINED_NOTICE_PREFIX = "member_joined:"
+private const val MEMBER_LEFT_NOTICE_PREFIX = "member_left:"
+private const val DEFAULT_CONTROLLER_OFFLINE_NOTICE_MINUTES = 10
+
+private val exactListenTogetherNoticeResIds = mapOf(
+    "controller_reconnected" to CoreCommonR.string.listen_together_notice_controller_reconnected,
+    "controller_left" to CoreCommonR.string.listen_together_notice_controller_left,
+    "controller_timeout" to CoreCommonR.string.listen_together_notice_room_closed,
+    "room_closed" to CoreCommonR.string.listen_together_notice_room_closed
+)
+
+// earlier fragments win when a notice contains several of them
+private val listenTogetherNoticeFragmentResIds = listOf(
+    "room closed" to CoreCommonR.string.listen_together_notice_room_closed,
+    "unauthorized" to CoreCommonR.string.listen_together_error_unauthorized,
+    "http=401" to CoreCommonR.string.listen_together_error_unauthorized,
+    "(401)" to CoreCommonR.string.listen_together_error_unauthorized,
+    "room not initialized" to CoreCommonR.string.listen_together_error_room_not_found,
+    "not found in do" to CoreCommonR.string.listen_together_error_room_not_found,
+    "controller offline" to CoreCommonR.string.listen_together_error_controller_offline,
+    "member control disabled" to CoreCommonR.string.listen_together_error_member_control_disabled
+)
+
+internal fun displayableListenTogetherNotice(notice: String?): String? =
+    notice.nonBlankOrNull()?.takeUnless {
+        it.startsWith(MEMBER_JOINED_NOTICE_PREFIX) || it.startsWith(MEMBER_LEFT_NOTICE_PREFIX)
+    }
+
+internal fun String.toDisplayNotice(context: Context): String =
+    prefixedNoticeMessage(context)
+        ?: knownNoticeResId()?.let { context.getString(it) }
+        ?: this
+
+private fun String.prefixedNoticeMessage(context: Context): String? = when {
+    startsWith(CONTROLLER_OFFLINE_NOTICE_PREFIX) -> {
+        val minutes = controllerOfflineNoticeMinutes()
+        context.resources.getQuantityString(
+            AppR.plurals.listen_together_notice_controller_offline,
+            minutes,
+            minutes
+        )
+    }
+    startsWith(MEMBER_JOINED_NOTICE_PREFIX) ->
+        context.getString(CoreCommonR.string.listen_together_notice_member_joined, substringAfter(':'))
+    startsWith(MEMBER_LEFT_NOTICE_PREFIX) ->
+        context.getString(CoreCommonR.string.listen_together_notice_member_left, substringAfter(':'))
+    else -> null
+}
+
+private fun String.controllerOfflineNoticeMinutes(): Int =
+    substringAfter(':')
+        .toLongOrNull()
+        ?.coerceIn(0L, Int.MAX_VALUE.toLong())
+        ?.toInt()
+        ?: DEFAULT_CONTROLLER_OFFLINE_NOTICE_MINUTES
+
+@StringRes
+private fun String.knownNoticeResId(): Int? =
+    exactListenTogetherNoticeResIds[this]
+        ?: listenTogetherNoticeFragmentResIds
+            .firstOrNull { (fragment, _) -> contains(fragment, ignoreCase = true) }
+            ?.second
+
+internal fun String?.maskedTokenPreview(): String {
+    if (this.isNullOrBlank()) return "-"
+    if (length <= 10) return this
+    return "${take(6)}...${takeLast(4)}"
+}
+
+private fun formatEpochDebug(value: Long): String {
+    return runCatching {
+        "${SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(value))} ($value)"
+    }.getOrDefault(value.toString())
+}
+
+private fun formatRoomUpdatedAtSimple(value: Long): String {
+    return runCatching {
+        SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(value))
+    }.getOrDefault(value.toString())
+}
+
+private fun formatDurationDebug(value: Long): String {
+    val totalSeconds = value / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "%d:%02d (%d ms)".format(minutes, seconds, value)
+}

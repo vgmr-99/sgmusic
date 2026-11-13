@@ -1,0 +1,379 @@
+package moe.ouom.neriplayer.ui.screen.tab.settings.dialog
+
+/*
+ * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 NeriPlayer developers
+ * https://github.com/cwuom/NeriPlayer
+ *
+ * This software is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this software.
+ * If not, see <https://www.gnu.org/licenses/>.
+ *
+ * File: moe.ouom.neriplayer.ui.screen.tab.settings.dialog/SettingsCustomizationDialogs
+ * Updated: 2026/3/23
+ */
+
+import moe.ouom.neriplayer.ui.theme.NeriMotion
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloatAsState
+import android.annotation.SuppressLint
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.toColorInt
+import moe.ouom.neriplayer.common.R as CoreCommonR
+import moe.ouom.neriplayer.data.settings.appearance.ThemeDefaults
+import moe.ouom.neriplayer.data.settings.appearance.UiDensityScalePreference
+import moe.ouom.neriplayer.ui.component.settings.ThemeColorPicker
+import moe.ouom.neriplayer.ui.component.settings.ThemeColorPickerColor
+import moe.ouom.neriplayer.ui.component.settings.rememberThemeColorPickerState
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsButton
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsDialog
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsOutlinedButton
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsSlider
+import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsTextButton
+import java.util.Locale
+
+/**
+ * 主题色取色对话框：预设色板、自定义色板与 HSV/RGB/HEX 取色器
+ * 色板内的非预设色支持长按或角标删除，取色结果需点确认按钮才写入
+ */
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
+@Composable
+internal fun ColorPickerDialog(
+    currentHex: String,
+    palette: List<String>,
+    onDismiss: () -> Unit,
+    onColorSelected: (String) -> Unit,
+    onAddColor: (String) -> Unit,
+    onRemoveColor: (String) -> Unit
+) {
+    var pickedHex by remember(currentHex) { mutableStateOf(currentHex.uppercase(Locale.ROOT)) }
+    val pickerState = rememberThemeColorPickerState()
+
+    // 按钮读取颜色前先落地输入框草稿, 用户可能没按键盘 Done 就点了应用或加入色板
+    fun currentPickedHex(): String =
+        pickerState.commitPendingInput()?.uppercase(Locale.ROOT) ?: pickedHex
+
+    MiuixSettingsDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(CoreCommonR.string.settings_select_color)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 560.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 220.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        palette.forEach { hex ->
+                            val isPreset = ThemeDefaults.PRESET_SET.contains(hex.uppercase(Locale.ROOT))
+                            ColorPickerItem(
+                                hex = hex,
+                                isSelected = currentHex.equals(hex, ignoreCase = true),
+                                onClick = {
+                                    pickedHex = hex.uppercase(Locale.ROOT)
+                                    onColorSelected(hex)
+                                },
+                                onRemove = if (!isPreset) ({ onRemoveColor(hex) }) else null
+                            )
+                        }
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        stringResource(CoreCommonR.string.settings_custom_color),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    ThemeColorPicker(
+                        initialHex = currentHex,
+                        state = pickerState,
+                        onColorChanged = { pickedHex = it.uppercase(Locale.ROOT) }
+                    )
+                }
+
+                val existsInPalette = palette.any { it.equals(pickedHex, ignoreCase = true) }
+                // 按钮可用性以"归一后的草稿"为准, 避免输满 6 位后按钮仍按旧颜色判断
+                val draftHex = ThemeColorPickerColor.normalizeHex(pickerState.draftHex.orEmpty())
+                val effectivePickedHex = draftHex ?: pickedHex
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val useVerticalButtons = maxWidth < 360.dp
+                    if (useVerticalButtons) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            MiuixSettingsOutlinedButton(
+                                onClick = { onAddColor(currentPickedHex()) },
+                                enabled = !existsInPalette && !ThemeDefaults.PRESET_SET.contains(effectivePickedHex),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = stringResource(CoreCommonR.string.settings_add_to_palette),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    fontSize = 13.sp
+                                )
+                            }
+                            MiuixSettingsButton(
+                                onClick = { onColorSelected(currentPickedHex()) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = stringResource(CoreCommonR.string.settings_apply_color),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            MiuixSettingsOutlinedButton(
+                                onClick = { onAddColor(currentPickedHex()) },
+                                enabled = !existsInPalette && !ThemeDefaults.PRESET_SET.contains(effectivePickedHex),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = stringResource(CoreCommonR.string.settings_add_to_palette),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    fontSize = 13.sp
+                                )
+                            }
+                            MiuixSettingsButton(
+                                onClick = { onColorSelected(currentPickedHex()) },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = stringResource(CoreCommonR.string.settings_apply_color),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                val deletableCount = palette.count {
+                    !ThemeDefaults.PRESET_SET.contains(it.uppercase(Locale.ROOT))
+                }
+                if (deletableCount > 0) {
+                    Text(
+                        text = stringResource(CoreCommonR.string.settings_color_picker_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            MiuixSettingsTextButton(
+                onClick = onDismiss,
+                text = { Text(stringResource(CoreCommonR.string.action_close)) }
+            )
+        }
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ColorPickerItem(
+    hex: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onRemove: (() -> Unit)? = null
+) {
+    val color = Color(("#$hex").toColorInt())
+    val clickableModifier = if (onRemove != null) {
+        Modifier.combinedClickable(onClick = onClick, onLongClick = onRemove)
+    } else {
+        Modifier.clickable(onClick = onClick)
+    }
+
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(color)
+            .then(clickableModifier),
+        contentAlignment = Alignment.Center
+    ) {
+        val tick by animateFloatAsState(
+            targetValue = if (isSelected) 1f else 0f,
+            animationSpec = if (isSelected) NeriMotion.bouncy() else NeriMotion.snappy(),
+            label = "color_picker_tick"
+        )
+        if (tick > 0.01f) {
+            val contentColor = if (ColorUtils.calculateLuminance(color.toArgb()) > 0.5) {
+                Color.Black
+            } else {
+                Color.White
+            }
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = stringResource(CoreCommonR.string.common_selected),
+                tint = contentColor,
+                modifier = Modifier.graphicsLayer {
+                    alpha = tick.coerceIn(0f, 1f)
+                    scaleX = 0.4f + 0.6f * tick
+                    scaleY = 0.4f + 0.6f * tick
+                }
+            )
+        }
+
+        if (onRemove != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(18.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+                    .clickable(onClick = onRemove),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = stringResource(CoreCommonR.string.settings_delete_color),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+        }
+    }
+}
+
+/** DPI 设置对话框 */
+@SuppressLint("DefaultLocale")
+@Composable
+internal fun DpiSettingDialog(
+    currentScale: Float,
+    onDismiss: () -> Unit,
+    onApply: (Float) -> Unit
+) {
+    val configuration = LocalConfiguration.current
+    val scaleRange = UiDensityScalePreference.forDevice(configuration.smallestScreenWidthDp, configuration.uiMode)
+    var sliderValue by remember(currentScale, scaleRange.maximumScale) {
+        mutableFloatStateOf(scaleRange.normalize(currentScale))
+    }
+    var hasEdited by remember(currentScale, scaleRange.maximumScale) { mutableStateOf(false) }
+
+    MiuixSettingsDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(CoreCommonR.string.settings_ui_scale)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = String.format("%.2fx", sliderValue),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontFamily = FontFamily.Monospace
+                )
+                Spacer(Modifier.height(8.dp))
+                MiuixSettingsSlider(
+                    value = sliderValue,
+                    onValueChange = {
+                        if (it != sliderValue) {
+                            sliderValue = it
+                            hasEdited = true
+                        }
+                    },
+                    valueRange = scaleRange.valueRange,
+                    steps = scaleRange.steps,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(CoreCommonR.string.settings_restart_hint),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        },
+        confirmButton = {
+            MiuixSettingsTextButton(
+                // 原样应用不把车载临时上限写回平板的请求值
+                onClick = { if (hasEdited) onApply(sliderValue) else onDismiss() },
+                text = { Text(stringResource(CoreCommonR.string.action_apply)) }
+            )
+        },
+        dismissButton = {
+            MiuixSettingsTextButton(
+                onClick = { onApply(1.0f) },
+                text = { Text(stringResource(CoreCommonR.string.action_reset)) }
+            )
+        }
+    )
+}

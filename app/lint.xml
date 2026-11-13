@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  拾光音乐 lint 规则。
+
+  默认规则集偏弱，HardcodedText / SetTextI18n / MissingTranslation 等关键项默认只是警告，
+  这里提升为 error，让硬编码文案与国际化缺失在构建期就被拦下。
+-->
+<lint>
+    <!-- 用户可见文案不允许硬编码，必须走 strings.xml -->
+    <issue id="HardcodedText" severity="error" />
+    <!-- 拼接式文案无法被翻译，必须用带占位符的字符串资源 -->
+    <issue id="SetTextI18n" severity="error" />
+    <!-- 各语言目录必须提供完整翻译 -->
+    <issue id="MissingTranslation" severity="error" />
+    <!-- 字符串格式化参数不匹配会在运行时抛异常 -->
+    <issue id="StringFormatInvalid" severity="error" />
+    <issue id="StringFormatCount" severity="error" />
+    <issue id="StringFormatMatches" severity="error" />
+    <!-- 拼写错误 -->
+    <issue id="Typos" severity="error" />
+    <!-- 未使用的资源（保留警告，避免误伤动态引用） -->
+    <issue id="UnusedResources" severity="warning" />
+    <!-- 旧式 Handler/性能问题 -->
+    <issue id="HandlerLeak" severity="error" />
+    <issue id="StaticFieldLeak" severity="error" />
+</lint>

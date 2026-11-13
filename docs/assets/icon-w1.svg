@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="232" fill="#FFFFFF"/>
+  <!-- 黑胶唱片（纯色扁平） -->
+  <circle cx="512" cy="512" r="298" fill="#1E1E28"/>
+  <g fill="none" stroke="#FFFFFF" stroke-opacity=".16" stroke-width="4">
+    <circle cx="512" cy="512" r="248"/>
+    <circle cx="512" cy="512" r="202"/>
+    <circle cx="512" cy="512" r="156"/>
+  </g>
+  <!-- 唱片中心标签 -->
+  <circle cx="512" cy="512" r="90" fill="#FF7A45"/>
+  <circle cx="512" cy="512" r="14" fill="#FFFFFF"/>
+  <!-- 一道拾光弧带 -->
+  <circle cx="512" cy="512" r="338" fill="none" stroke="#FF7A45" stroke-width="14" stroke-linecap="round" pathLength="100" stroke-dasharray="13 87" transform="rotate(-64 512 512)"/>
+</svg>
