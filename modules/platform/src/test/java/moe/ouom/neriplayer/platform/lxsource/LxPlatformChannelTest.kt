@@ -1,7 +1,9 @@
 package moe.ouom.neriplayer.platform.lxsource
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -43,8 +45,26 @@ class LxPlatformChannelTest {
         assertNull(LxPlatform.forChannelId(null))
         assertNull(LxPlatform.forChannelId(""))
         assertNull(LxPlatform.forChannelId("bilibili"))
-        // 洛雪 source code 不是应用内的 channelId
-        assertNull(LxPlatform.forChannelId("wy"))
-        assertNull(LxPlatform.forChannelId("tx"))
+        assertNull(LxPlatform.forChannelId("local-music"))
+    }
+
+    @Test
+    fun `lx source codes are accepted as aliases`() {
+        // 洛雪的 source code 也可能出现在歌曲来源标识里，
+        // 只认应用内的 channelId 会让这些歌曲匹配不到源，白白多搜一遍。
+        assertEquals(LxPlatform.WY, LxPlatform.forChannelId("wy"))
+        assertEquals(LxPlatform.KG, LxPlatform.forChannelId("kg"))
+        assertEquals(LxPlatform.TX, LxPlatform.forChannelId("tx"))
+        assertEquals(LxPlatform.QS, LxPlatform.forChannelId("qs"))
+    }
+
+    @Test
+    fun `matchesChannelId accepts both spellings and rejects other platforms`() {
+        assertTrue(LxPlatform.matchesChannelId(LxPlatform.WY, "netease"))
+        assertTrue(LxPlatform.matchesChannelId(LxPlatform.WY, "wy"))
+        assertTrue(LxPlatform.matchesChannelId(LxPlatform.TX, "qq"))
+        assertTrue(LxPlatform.matchesChannelId(LxPlatform.TX, "tx"))
+        assertFalse(LxPlatform.matchesChannelId(LxPlatform.WY, "kugou"))
+        assertFalse(LxPlatform.matchesChannelId(LxPlatform.WY, null))
     }
 }
