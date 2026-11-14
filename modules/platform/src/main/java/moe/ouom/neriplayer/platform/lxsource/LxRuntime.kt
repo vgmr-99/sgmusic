@@ -153,6 +153,15 @@ class LxRuntime(
          * 这里给它 10 秒补齐 sources 的机会，超时后按 Mint 行为放行。
          */
         private const val INIT_FALLBACK_GRACE_MS = 10_000L
+
+        /**
+         * 歌词 action 的单次等待上限。
+         *
+         * 比取流（20 秒）短得多：歌词拿不到只是「没有逐字歌词」，
+         * 但取流慢会卡住播放。三个 action 连等最坏 18 秒，
+         * 之后调用方会记住「这个脚本没歌词能力」不再重试。
+         */
+        const val LYRIC_ACTION_TIMEOUT_MS = 6_000L
     }
 
     private fun createContext(): QuickJSContext {
@@ -639,11 +648,15 @@ class LxRuntime(
      * **不**走 `module.exports.getLyric` 的 actions 声明校验 ——
      * 很多脚本实现了歌词却没在 inited 里声明 actions，走声明校验会直接判空。
      * action 依次尝试 lyric → musicLyric → getLyric。
+     *
+     * 超时比取流短：歌词是「有更好、没有也能接受」的内容，
+     * 而取流慢会直接卡住播放。三个 action 各等 [timeoutMs]，
+     * 最坏 18 秒；脚本明确回「不支持该 action」时会立刻返回，不会耗满。
      */
     suspend fun requestLyric(
         platform: LxPlatform,
         musicInfo: LxMusicInfo,
-        timeoutMs: Long = 12_000,
+        timeoutMs: Long = LYRIC_ACTION_TIMEOUT_MS,
     ): LxResult<String> = withContext(jsDispatcher) {
         val ctx = ctxRef.get() ?: return@withContext LxResult.Err("no_ctx", "runtime not inited")
         if (!hasUsableHandler(ctx)) {
@@ -651,8 +664,8 @@ class LxRuntime(
         }
         // 洛雪 handler 期望 info 里既带 musicInfo，也把 musicInfo 的字段平铺进来
         val info = JSONObject()
-        .put("musicInfo", musicInfo.toJson())
-        .put("type", "lrc")
+            .put("musicInfo", musicInfo.toJson())
+            .put("type", "lrc")
         musicInfo.toJson().let { flat ->
             flat.keys().forEach { key ->
                 if (key != "musicInfo" && key != "type") {
@@ -660,16 +673,21 @@ class LxRuntime(
                 }
             }
         }
+        // 记住最后一次失败原因：脚本回「不支持该 action」时，调用方要靠它判断
+        // 「这个脚本压根没歌词能力」，避免每一首歌都白等一遍。
+        var lastError: LxResult.Err? = null
         for (action in listOf("lyric", "musicLyric", "getLyric")) {
-            val r = request(action, platform, info, timeoutMs)
-            if (r is LxResult.Ok) {
-                val text = r.value
-                if (text.isNotBlank() && text != "null" && text != "undefined") {
-                    return@withContext r
+            when (val r = request(action, platform, info, timeoutMs)) {
+                is LxResult.Ok -> {
+                    val text = r.value
+                    if (text.isNotBlank() && text != "null" && text != "undefined") {
+                        return@withContext r
+                    }
                 }
+                is LxResult.Err -> lastError = r
             }
         }
-        LxResult.Err("no_result", "脚本没有返回歌词")
+        lastError ?: LxResult.Err("no_result", "脚本没有返回歌词")
     }
 
     /**

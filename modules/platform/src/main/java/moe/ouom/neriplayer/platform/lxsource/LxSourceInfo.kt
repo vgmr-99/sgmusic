@@ -221,3 +221,20 @@ sealed interface LxResult<out T> {
     data class Ok<T>(val value: T) : LxResult<T>
     data class Err(val code: String, val message: String) : LxResult<Nothing>
 }
+
+/**
+ * 脚本是不是「压根没有歌词能力」。
+ *
+ * 社区脚本的 request handler 对没实现的 action 会回
+ * `action not support: lyric`（洛雪 / Mint 生态的通用文案）。
+ * 命中这个就说明「不是这首歌没歌词，而是这个脚本不提供歌词」，
+ * 可以把该脚本永久标记为不提供歌词，后续所有歌都直接跳过。
+ */
+fun LxResult.Err.isLyricUnsupported(): Boolean {
+    if (code != "script_error") return false
+    val text = message.trim().lowercase()
+    return text.contains("not support") ||
+        text.contains("not supported") ||
+        text.contains("unsupported action") ||
+        text.contains("action not")
+}

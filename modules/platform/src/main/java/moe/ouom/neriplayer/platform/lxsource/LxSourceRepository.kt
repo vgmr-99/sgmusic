@@ -47,6 +47,14 @@ class LxSourceRepository(
     private val _items = MutableStateFlow<List<LxSourceItem>>(emptyList())
     val items: StateFlow<List<LxSourceItem>> = _items
 
+    /**
+     * 已知「不提供歌词」的脚本 id。
+     *
+     * 社区脚本绝大多数只实现取流（inited 里每个 source 只有 `musicUrl`），
+     * 歌词 action 会被立刻拒绝。不记住的话，每首歌都要白跑一遍三个 action。
+     */
+    private val lyricUnsupportedScriptIds = ConcurrentHashMap.newKeySet<String>()
+
     /** 脚本初始化是否已经开始（冷启动时 init 跑在后台 IO 上） */
     private val initStarted = AtomicBoolean(false)
 
@@ -143,6 +151,8 @@ class LxSourceRepository(
         }
         val runtime = LxRuntime(http, preloadJs)
         runtimes[id] = runtime
+        // 脚本内容变了，之前「不支持歌词」的结论不再作废
+        lyricUnsupportedScriptIds.remove(id)
         when (val r = runtime.init(scriptText, CurrentScriptInfo(name = name))) {
             is LxResult.Ok -> {
                 val okItem = item.copy(state = LxSourceState.OK, info = r.value, error = null)
@@ -317,6 +327,11 @@ class LxSourceRepository(
      * 经脚本取歌词（对齐 Mint 的 getLyricResult 兜底链）。
      *
      * 脚本没实现歌词时返回 Err，调用方自行决定是否回落到平台内置歌词。
+     *
+     * 社区脚本里**只有取流、没有歌词**是常态（脚本的 inited 声明里
+     * 每个 source 只有 `musicUrl` 一个 action）。这类脚本会立刻回
+     * 「action not support」，这里把它记进 [lyricUnsupportedScriptIds]，
+     * 之后所有歌都直接跳过这个脚本，不再每首重试一遍。
      */
     suspend fun requestLyric(
         platform: LxPlatform,
@@ -326,15 +341,83 @@ class LxSourceRepository(
             val item = _items.value.firstOrNull { it.id == id } ?: continue
             if (!item.enabled || item.state != LxSourceState.OK) continue
             if (item.info?.supports(platform) != true) continue
+            if (id in lyricUnsupportedScriptIds) continue
             when (val r = runtime.requestLyric(platform, musicInfo)) {
                 is LxResult.Ok -> {
                     val bundle = LxLyricParser.parse(r.value)
                     if (!bundle.isEmpty) return LxResult.Ok(bundle)
                 }
-                is LxResult.Err -> continue
+                is LxResult.Err -> {
+                    if (r.isLyricUnsupported()) {
+                        lyricUnsupportedScriptIds.add(id)
+                        NPLogger.d(
+                            "LxSource",
+                            "脚本不支持歌词 action，跳过后续请求: name=${item.name} id=$id message=${r.message}"
+                        )
+                    }
+                    continue
+                }
             }
         }
         return LxResult.Err("no_source", "no enabled LX source returned lyric")
+    }
+
+    /**
+     * 当前是否有「可能提供歌词」的脚本。
+     *
+     * 已知不支持歌词的脚本会被排除；调用方可以在没有可用脚本时直接跳过，
+     * 省掉一次跨进程等待。
+     */
+    fun hasLyricCapableSource(): Boolean {
+        if (lyricUnsupportedScriptIds.isEmpty()) return true
+        return _items.value.any { item ->
+            item.enabled && item.state == LxSourceState.OK && item.id !in lyricUnsupportedScriptIds
+        }
+    }
+
+    /**
+     * 按歌曲向脚本要歌词。
+     *
+     * 歌词链路原本只走平台内置接口（网易云 / QQ / 酷狗 / B 站 / AMLL 模糊匹配），
+     * 脚本的 `lyric` action 从来没被调用过 ——
+     * 于是「用 LX 音源播放汽水 / 咪咕这类没有内置歌词接口的平台」时，
+     * 明明脚本能按平台 id 精确查到歌词，界面却一直是「暂无歌词」。
+     *
+     * @return 脚本返回的歌词包；平台不支持或脚本没实现歌词时返回 Err
+     */
+    suspend fun requestLyricForSong(song: SongItem): LxResult<LxLyricBundle> {
+        val platform = LxPlatform.forChannelId(song.channelId)
+            ?: return LxResult.Err(
+                "no_platform",
+                "歌曲来源 ${song.channelId.orEmpty()} 不在 LX 支持的平台里"
+            )
+        val musicInfo = buildLyricMusicInfo(song, platform)
+            ?: return LxResult.Err("no_songmid", "歌曲缺少平台 id")
+        return requestLyric(platform, musicInfo)
+    }
+
+    /**
+     * 歌曲 -> LX 歌词请求参数。
+     *
+     * songmid 取 [SongItem.audioId]（平台原生 id：汽水的 track id、酷狗的 FileHash、
+     * 网易云的歌曲 id），与取流时保持一致；脚本认的就是这些 id。
+     *
+     * @return 请求参数；歌曲缺少可用 id 时返回 null
+     */
+    internal fun buildLyricMusicInfo(song: SongItem, platform: LxPlatform): LxMusicInfo? {
+        val songmid = song.audioId?.takeIf { it.isNotBlank() } ?: song.id.toString()
+        if (songmid.isBlank() || songmid == "0") return null
+        return LxMusicInfo(
+            source = platform.code,
+            songmid = songmid,
+            name = song.name,
+            singer = song.artist,
+            albumName = song.album,
+            durationMs = song.durationMs,
+            types = listOf(LxQuality.Q128),
+            coverUrl = song.coverUrl,
+            extras = platformExtras(platform, songmid)
+        )
     }
 
     /** 经脚本取封面地址（对齐 Mint 的 getPic：musicPic → pic）。 */
@@ -482,6 +565,8 @@ class LxSourceRepository(
             val updated = if (!enabled) {
                 item.copy(enabled = false, state = LxSourceState.DISABLED)
             } else {
+                // 重新启用意味着脚本可能被换过，清掉「不支持歌词」的旧结论
+                lyricUnsupportedScriptIds.remove(item.id)
                 item.copy(enabled = true)
             }
             replace(updated)
