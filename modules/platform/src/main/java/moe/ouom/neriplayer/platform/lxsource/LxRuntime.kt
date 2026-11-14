@@ -497,6 +497,11 @@ class LxRuntime(
         if (v !is String) return v
         val t = v.trim()
         if (t.isEmpty()) return t
+        // 只有 JSON 结构（对象 / 数组 / 字符串字面量）才交给 JSONTokener。
+        // org.json 的 nextValue() 把 '/' 当作分隔符，直接传 "http://host/x.mp3"
+        // 会被截成 "http:"，后续再也不是合法 URL，导致明明拿到直链却判成 empty。
+        val first = t.firstOrNull()
+        if (first != '{' && first != '[' && first != '"' && first != '\'') return t
         return try {
             JSONTokener(t).nextValue()
         } catch (_: Exception) {
@@ -506,6 +511,11 @@ class LxRuntime(
 
     private fun findUrl(v: Any?, depth: Int): String {
         if (v == null || depth > 8) return ""
+        // 明文直链先原样判定，不要先过 JSONTokener（'/' 会被当分隔符截断）
+        if (v is String) {
+            val direct = v.trim()
+            if (direct.startsWith("http://") || direct.startsWith("https://")) return direct
+        }
         val value = parseLoose(v)
         if (value is String) {
             val t = value.trim()

@@ -165,18 +165,43 @@ class LxSourceRepository(
         platform: LxPlatform,
         quality: LxQuality,
     ): LxResult<LxMusicUrl> {
+        NPLogger.d(
+            "LxSource",
+            "resolve start: song=${song.name} platform=${platform.code} " +
+                "quality=${quality.code} runtimes=${runtimes.size} items=${_items.value.size}"
+        )
         for ((id, runtime) in runtimes) {
-            val item = _items.value.firstOrNull { it.id == id } ?: continue
+            val item = _items.value.firstOrNull { it.id == id }
+            if (item == null) {
+                NPLogger.w("LxSource", "resolve skip runtime id=$id: no matching item")
+                continue
+            }
+            NPLogger.d(
+                "LxSource",
+                "resolve candidate: name=${item.name} enabled=${item.enabled} state=${item.state} " +
+                    "supports=${item.info?.supports(platform)} sources=${item.info?.sources?.keys}"
+            )
             if (!item.enabled || item.state != LxSourceState.OK) continue
             if (item.info?.supports(platform) != true) continue
-            val musicInfo = resolveMusicInfo(runtime, song, platform, quality) ?: continue
+            val musicInfo = resolveMusicInfo(runtime, song, platform, quality)
+            if (musicInfo == null) {
+                NPLogger.w("LxSource", "resolve skip: musicInfo 定位失败 platform=${platform.code}")
+                continue
+            }
             val declaredQualities = item.info.qualities(platform)
+            val chain = qualityChain(quality, declaredQualities)
+            NPLogger.d(
+                "LxSource",
+                "resolve chain: songmid=${musicInfo.songmid} declared=$declaredQualities " +
+                    "chain=${chain.map { it.code }}"
+            )
             // 音质降级链：对齐 Mint 的 _qualityFallbackChain（只向下），
             // 脚本只支持更低档时自动降级，而不是直接判定取流失败。
-            for (q in qualityChain(quality, declaredQualities)) {
+            for (q in chain) {
                 val info = if (q == quality) musicInfo else musicInfo.withQuality(q)
                 when (val r = runtime.requestMusicUrl(info, platform, q)) {
                     is LxResult.Ok -> {
+                        NPLogger.d("LxSource", "resolve probe ok: q=${q.code} url=${r.value.url.take(120)}")
                         // 酷我提示音（试听片段）不是真正的歌曲地址，直接换下一档音质
                         if (isPromptUrl(platform, r.value.url)) {
                             NPLogger.w("LxSource", "拒绝酷我提示音地址: ${r.value.url}")
@@ -184,10 +209,14 @@ class LxSourceRepository(
                         }
                         return r
                     }
-                    is LxResult.Err -> continue
+                    is LxResult.Err -> {
+                        NPLogger.w("LxSource", "resolve probe fail: q=${q.code} code=${r.code} message=${r.message}")
+                        continue
+                    }
                 }
             }
         }
+        NPLogger.w("LxSource", "resolve failed: no enabled LX source matched song=${song.name}")
         return LxResult.Err("no_source", "no enabled LX source matched")
     }
 

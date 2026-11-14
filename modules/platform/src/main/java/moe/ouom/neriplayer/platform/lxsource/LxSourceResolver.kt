@@ -72,7 +72,10 @@ class LxSourceResolver(
                     cacheKeyOverride = "lx-${effectivePlatform.code}-${song.name}-${quality.code}",
                 )
             }
-            is LxResult.Err -> null
+            is LxResult.Err -> {
+                NPLogger.w("LxSource", "resolve err: song=${song.name} code=${r.code} message=${r.message}")
+                null
+            }
         }
     }
 
