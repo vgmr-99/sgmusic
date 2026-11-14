@@ -26,6 +26,8 @@
     <string name="explore_platform_browse_empty">This platform has no public playlist or chart recommendations yet.</string>
     <string name="explore_platform_browse_loading">Loading playlists and charts…</string>
     <string name="explore_platform_browse_retry">Failed to load. Tap to retry</string>
+    <string name="explore_platform_browse_tracks_empty">This playlist\'s track list is unavailable right now.</string>
+    <string name="explore_platform_browse_open_web">Open on the official page</string>
     <string name="explore_search_source_qq_music">QQ Music</string>
     <string name="explore_search_source_kugou">KuGou</string>
     <string name="explore_search_source_migu">Migu</string>

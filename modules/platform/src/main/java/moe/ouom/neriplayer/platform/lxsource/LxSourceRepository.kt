@@ -22,12 +22,15 @@ package moe.ouom.neriplayer.platform.lxsource
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import moe.ouom.neriplayer.common.logging.NPLogger
 import moe.ouom.neriplayer.data.model.SongItem
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 多脚本管理：启停 / 状态三态 / 并行 runtime
@@ -43,6 +46,12 @@ class LxSourceRepository(
     private val runtimes = ConcurrentHashMap<String, LxRuntime>()
     private val _items = MutableStateFlow<List<LxSourceItem>>(emptyList())
     val items: StateFlow<List<LxSourceItem>> = _items
+
+    /** 脚本初始化是否已经开始（冷启动时 init 跑在后台 IO 上） */
+    private val initStarted = AtomicBoolean(false)
+
+    /** 脚本初始化是否已经结束（成功或失败都算） */
+    private val initFinished = AtomicBoolean(false)
     /**
      * init 与 import 共用同一把锁：冷启动时 Application 里的 init() 往往与外部 Intent
      * 触发的 importScript() 并发，两者都往 _items 与 lx_sources.json 写，
@@ -51,27 +60,51 @@ class LxSourceRepository(
     private val mutationLock = Mutex()
 
     suspend fun init() {
-        mutationLock.withLock {
-            val loaded = store.loadAll()
-            NPLogger.d("LxSource", "init start: scripts=${loaded.size}")
-            _items.value = loaded
-            loaded.filter { it.enabled }.forEach { item ->
-                val runtime = LxRuntime(http, preloadJs)
-                runtimes[item.id] = runtime
-                NPLogger.d("LxSource", "init script=${item.name} id=${item.id}")
-                when (val r = runtime.init(item.scriptText, CurrentScriptInfo(name = item.name))) {
-                    is LxResult.Ok -> {
-                        NPLogger.d("LxSource", "init OK script=${item.name} sources=${r.value.sources.keys}")
-                        val ok = item.copy(state = LxSourceState.OK, info = r.value, error = null)
-                        replace(ok)
-                    }
-                    is LxResult.Err -> {
-                        NPLogger.w("LxSource", "init FAIL script=${item.name} code=${r.code} message=${r.message}")
-                        val fail = item.copy(state = LxSourceState.FAIL, error = "${r.code}:${r.message}")
-                        replace(fail)
+        initStarted.set(true)
+        try {
+            mutationLock.withLock {
+                val loaded = store.loadAll()
+                NPLogger.d("LxSource", "init start: scripts=${loaded.size}")
+                _items.value = loaded
+                loaded.filter { it.enabled }.forEach { item ->
+                    val runtime = LxRuntime(http, preloadJs)
+                    runtimes[item.id] = runtime
+                    NPLogger.d("LxSource", "init script=${item.name} id=${item.id}")
+                    when (val r = runtime.init(item.scriptText, CurrentScriptInfo(name = item.name))) {
+                        is LxResult.Ok -> {
+                            NPLogger.d("LxSource", "init OK script=${item.name} sources=${r.value.sources.keys}")
+                            val ok = item.copy(state = LxSourceState.OK, info = r.value, error = null)
+                            replace(ok)
+                        }
+                        is LxResult.Err -> {
+                            NPLogger.w("LxSource", "init FAIL script=${item.name} code=${r.code} message=${r.message}")
+                            val fail = item.copy(state = LxSourceState.FAIL, error = "${r.code}:${r.message}")
+                            replace(fail)
+                        }
                     }
                 }
             }
+        } finally {
+            initFinished.set(true)
+        }
+    }
+
+    /**
+     * 等待脚本就绪。
+     *
+     * 冷启动时 QuickJS 求值大脚本要十几秒，这期间点歌必然解析失败
+     * （`no enabled LX source matched`）；脚本已经在加载的话就等它加载完再试，
+     * 最多等 [timeoutMs]。
+     *
+     * 没有配置脚本、或脚本已经加载完但没有可用源时不等待，直接失败。
+     */
+    suspend fun awaitRuntimeReady(timeoutMs: Long = LX_READY_WAIT_TIMEOUT_MS) {
+        if (runtimes.isNotEmpty()) return
+        if (!initStarted.get()) return
+        if (initFinished.get() && _items.value.none { it.state == LxSourceState.OK }) return
+        NPLogger.d("LxSource", "await runtime ready (timeout=${timeoutMs}ms)")
+        withTimeoutOrNull(timeoutMs) {
+            items.first { list -> list.any { it.state == LxSourceState.OK } }
         }
     }
 
@@ -165,6 +198,8 @@ class LxSourceRepository(
         platform: LxPlatform,
         quality: LxQuality,
     ): LxResult<LxMusicUrl> {
+        // 脚本还在加载就等它加载完，否则冷启动后第一时间点歌必然取不到地址
+        awaitRuntimeReady()
         NPLogger.d(
             "LxSource",
             "resolve start: song=${song.name} platform=${platform.code} " +
@@ -476,5 +511,15 @@ class LxSourceRepository(
 
     private fun replace(item: LxSourceItem) {
         _items.value = _items.value.filterNot { it.id == item.id } + item
+    }
+
+    private companion object {
+        /**
+         * 等脚本就绪的上限。
+         *
+         * 1.4MB 量级的社区脚本用 QuickJS 求值要十几秒，给到这个量级才够；
+         * 再久就没意义了，用户宁可看到失败提示。
+         */
+        const val LX_READY_WAIT_TIMEOUT_MS = 20_000L
     }
 }

@@ -63,6 +63,8 @@ import moe.ouom.neriplayer.platform.search.api.HotSearchEntry
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchApi
 import moe.ouom.neriplayer.platform.search.api.PlatformBrowseApi
 import moe.ouom.neriplayer.platform.search.api.PlatformBrowseCard
+import moe.ouom.neriplayer.platform.search.api.PlatformBrowseSupport
+import moe.ouom.neriplayer.platform.search.api.PlatformSearchProvider
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchResult
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchType
 import moe.ouom.neriplayer.platform.search.api.stablePlatformSongId
@@ -231,7 +233,14 @@ sealed class ExploreSearchResult {
         val playlist: PlaylistSummary,
         val sourceTag: String = "netease",
         val webUrl: String? = null,
-        val owner: String = ""
+        val owner: String = "",
+        /**
+         * 平台内的原始歌单 id。
+         *
+         * [playlist.id] 是给列表 key 用的哈希值，反推不出平台 id；
+         * 汽水这类没有取流接口的平台要靠它去拉歌单曲目，所以得单独留一份。
+         */
+        val rawId: String? = null
     ) : ExploreSearchResult() {
         override val stableKey: String = "$sourceTag|playlist|${playlist.id}"
     }
@@ -307,7 +316,14 @@ data class ExploreUiState(
     /** 展开中的榜单及其曲目 */
     val platformBrowseTracks: List<PlatformSearchResult> = emptyList(),
     val platformBrowseTracksLoading: Boolean = false,
-    val platformBrowseTrackTitle: String = ""
+    val platformBrowseTrackTitle: String = "",
+    /**
+     * 展开中歌单的官方页面链接。
+     *
+     * 正常情况下点歌单就能在站内展开曲目；只有接口读不到时，
+     * 才用它兜底给一个「去官方页面看」的入口。
+     */
+    val platformBrowseTrackWebUrl: String? = null
 )
 
 /**
@@ -535,6 +551,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             platformBrowseTracks = emptyList(),
             platformBrowseTracksLoading = false,
             platformBrowseTrackTitle = "",
+            platformBrowseTrackWebUrl = null,
             // 各平台开放的分类不一样，切源时把分类落到该平台支持的第一项
             selectedPlatformSearchType = supportedSearchTypes(source)
                 .firstOrNull { it == _uiState.value.selectedPlatformSearchType }
@@ -1020,7 +1037,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 platformBrowseCategories = categories,
                 platformBrowseCards = cachedCards,
                 platformBrowseTracks = emptyList(),
-                platformBrowseTrackTitle = ""
+                platformBrowseTrackTitle = "",
+                platformBrowseTrackWebUrl = null
             )
             // 缓存命中也顺手在后台补分类，下次进来标签栏就是完整的
             refreshBrowseCategories(source, api)
@@ -1035,7 +1053,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             platformBrowseCategories = categories,
             platformBrowseCards = emptyList(),
             platformBrowseTracks = emptyList(),
-            platformBrowseTrackTitle = ""
+            platformBrowseTrackTitle = "",
+            platformBrowseTrackWebUrl = null
         )
         // 分类刷新不再挡卡片：两个任务并行发出
         refreshBrowseCategories(source, api)
@@ -1130,7 +1149,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         _uiState.value = _uiState.value.copy(
             platformBrowseTracksLoading = true,
             platformBrowseTracks = emptyList(),
-            platformBrowseTrackTitle = card.title
+            platformBrowseTrackTitle = card.title,
+            platformBrowseTrackWebUrl = card.webUrl
         )
         viewModelScope.launch {
             try {
@@ -1158,7 +1178,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         _uiState.value = _uiState.value.copy(
             platformBrowseTracks = emptyList(),
             platformBrowseTrackTitle = "",
-            platformBrowseTracksLoading = false
+            platformBrowseTracksLoading = false,
+            platformBrowseTrackWebUrl = null
         )
     }
 
@@ -1170,6 +1191,46 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         SearchSource.KUWO -> AppContainer.mintKuwoBrowseApi
         SearchSource.MIGU -> AppContainer.mintMiguBrowseApi
         else -> null
+    }
+
+    /**
+     * 搜索结果里的歌单 -> 浏览卡片。
+     *
+     * 只有声明了 [PlatformBrowseApi.supportsSearchPlaylistTracks] 的平台才返回卡片，
+     * 也就是确认能用同一套 id 读到曲目的平台（目前是汽水）；
+     * 其它平台返回 null，由界面退回「跳官方页面」，避免出现空面板死路。
+     */
+    fun searchPlaylistToBrowseCard(
+        sourceTag: String,
+        rawId: String?,
+        title: String,
+        coverUrl: String?,
+        trackCount: Int,
+        webUrl: String?
+    ): PlatformBrowseCard? {
+        val provider = PlatformSearchProvider.fromChannel(sourceTag) ?: return null
+        val api = provider.toSearchSource()?.let { platformBrowseApiFor(it) } ?: return null
+        if (!api.supportsSearchPlaylistTracks) return null
+        val raw = rawId?.trim().orEmpty()
+        if (raw.isEmpty()) return null
+        return PlatformBrowseCard(
+            id = PlatformBrowseSupport.qualifyId(provider, raw),
+            title = title,
+            coverUrl = coverUrl?.takeIf { it.isNotBlank() },
+            trackCount = trackCount,
+            webUrl = webUrl,
+            provider = provider
+        )
+    }
+
+    /** 平台枚举 -> 探索页的平台来源 */
+    private fun PlatformSearchProvider.toSearchSource(): SearchSource? = when (this) {
+        PlatformSearchProvider.NETEASE -> SearchSource.NETEASE
+        PlatformSearchProvider.QQ -> SearchSource.QQ_MUSIC
+        PlatformSearchProvider.KUGOU -> SearchSource.KUGOU
+        PlatformSearchProvider.QISHUI -> SearchSource.QISHUI
+        PlatformSearchProvider.KUWO -> SearchSource.KUWO
+        PlatformSearchProvider.MIGU -> SearchSource.MIGU
     }
 
     /**
@@ -1849,7 +1910,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 ),
                 sourceTag = providerCode,
                 webUrl = webUrl,
-                owner = subtitle
+                owner = subtitle,
+                rawId = id
             )
             PlatformSearchType.ARTIST -> ExploreSearchResult.Artist(
                 result = NeteaseSearchArtistResult(

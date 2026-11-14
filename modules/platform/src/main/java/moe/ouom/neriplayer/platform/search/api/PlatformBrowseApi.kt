@@ -104,6 +104,17 @@ interface PlatformBrowseApi {
     /** 某个分类下的歌单 / 榜单 */
     suspend fun browse(category: String): List<PlatformBrowseCard>
 
+    /**
+     * 搜索结果里的歌单能否在站内直接展开曲目。
+     *
+     * 浏览页的歌单和搜索结果的歌单 id 语义不一定相同
+     * （酷我的浏览 id 是「id-digest」组合串，搜索结果只有 id），
+     * 所以这个能力单独标记：只有确认能读到曲目的平台才在搜索态打开站内展开，
+     * 其它平台维持「跳官方页面」的既有行为。
+     */
+    val supportsSearchPlaylistTracks: Boolean
+        get() = false
+
     /** 某个卡片下的曲目 */
     suspend fun tracks(card: PlatformBrowseCard): List<PlatformSearchResult>
 }

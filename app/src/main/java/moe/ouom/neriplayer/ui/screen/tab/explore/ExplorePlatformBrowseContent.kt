@@ -66,6 +66,10 @@ import moe.ouom.neriplayer.platform.search.api.stablePlatformSongId
 import moe.ouom.neriplayer.ui.navigation.LocalMiniPlayerHeight
 import moe.ouom.neriplayer.ui.screen.tab.home.PlaylistCard
 import moe.ouom.neriplayer.ui.viewmodel.tab.PlaylistSummary
+import moe.ouom.neriplayer.util.platform.tryStartActivity
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 
 /**
  * 平台浏览页状态。
@@ -81,7 +85,14 @@ internal data class PlatformBrowseState(
     val selectedCategory: String = "",
     val trackTitle: String = "",
     val tracks: List<PlatformSearchResult> = emptyList(),
-    val tracksLoading: Boolean = false
+    val tracksLoading: Boolean = false,
+    /**
+     * 展开中歌单的官方页面链接。
+     *
+     * 正常点开就能在站内展开曲目；只有接口读不到时才用它兜底，
+     * 给一个「去官方页面看」的出口。
+     */
+    val trackWebUrl: String? = null
 )
 
 /**
@@ -266,7 +277,7 @@ private fun PlatformBrowseCardGrid(
 }
 
 @Composable
-private fun PlatformBrowseTrackList(
+internal fun PlatformBrowseTrackList(
     browse: PlatformBrowseState,
     onTrackClick: (PlatformSearchResult) -> Unit,
     onCloseTracks: () -> Unit,
@@ -319,12 +330,30 @@ private fun PlatformBrowseTrackList(
             }
         } else if (browse.tracks.isEmpty()) {
             item(key = "platform_browse_track_empty") {
-                Text(
-                    text = stringResource(CoreCommonR.string.explore_platform_browse_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 24.dp)
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = stringResource(CoreCommonR.string.explore_platform_browse_tracks_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    val webUrl = browse.trackWebUrl
+                    if (!webUrl.isNullOrBlank()) {
+                        Text(
+                            text = stringResource(CoreCommonR.string.explore_platform_browse_open_web),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { openPlatformWebPage(context, webUrl) }
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        )
+                    }
+                }
             }
         } else {
             itemsIndexedCompat(songs) { index, song ->
@@ -377,3 +406,10 @@ internal fun PlatformSearchResult.toSongItem(): SongItem = SongItem(
     channelId = provider.code,
     audioId = id
 )
+
+/** 在浏览器里打开平台页面（站内读不到内容时的兜底出口） */
+internal fun openPlatformWebPage(context: Context, url: String) {
+    if (url.isBlank()) return
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+    context.tryStartActivity(intent)
+}

@@ -3,6 +3,9 @@ package moe.ouom.neriplayer.platform.search.api.client
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
+import moe.ouom.neriplayer.platform.search.api.PlatformBrowseCard
+import moe.ouom.neriplayer.platform.search.api.PlatformBrowseSupport
+import moe.ouom.neriplayer.platform.search.api.PlatformSearchProvider
 import moe.ouom.neriplayer.platform.search.api.client.mint.collectPages
 import moe.ouom.neriplayer.platform.search.api.client.mint.decodeHtmlEntities
 import okhttp3.OkHttpClient
@@ -228,7 +231,91 @@ class PlatformBrowseContentTest {
         // 不做二次解码，避免 &amp;#38; 被误转成 &
         assertEquals("&#38;", decodeHtmlEntities("&amp;#38;"))
     }
-}
+
+    @Test
+    fun `qishui card id keeps the raw playlist id after stripping the source prefix`() {
+        val raw = "7200303561195061287"
+        val card = PlatformBrowseCard(
+            id = PlatformBrowseSupport.qualifyId(PlatformSearchProvider.QISHUI, raw),
+            title = "2026抖音爆款热歌",
+            provider = PlatformSearchProvider.QISHUI
+        )
+        assertEquals("qs_$raw", card.id)
+        // tracks() 靠它还原出平台的 playlist id
+        assertEquals(raw, PlatformBrowseSupport.stripProviderPrefix(card.id))
+    }
+
+    @Test
+    fun `qishui playlist tracks are parsed from media resources`() = runTest {
+        responseBody = """
+            {"playlist":{"id":"7200303561195061287","title":"2026抖音爆款热歌","count_tracks":2},
+             "has_more":false,"next_cursor":"2",
+             "media_resources":[
+               {"id":"7654496187366426641","type":"track","index":0,
+                "entity":{"track_wrapper":{"track":{
+                  "id":"7654496187366426641",
+                  "name":"梦的翅膀受了伤（SouMix Remix）",
+                  "duration":133594,
+                  "artists":[{"id":"6795393014723250177","name":"蒋雪儿Snow.J"}],
+                  "album":{"id":"7654496373500364817","name":"梦的翅膀受了伤（SouMix Remix）",
+                    "url_cover":{"uri":"tos-cn-v-2774c002/abc",
+                      "urls":["https://p3-luna.douyinpic.com/img/"],"template_prefix":"tplv-b829550vbb"}}
+                }}}},
+               {"id":"7436998767289845777","type":"track","index":1,
+                "entity":{"track_wrapper":{"track":{
+                  "id":"7436998767289845777","name":"恋人","duration":275913,
+                  "artists":[{"id":"1","name":"李荣浩"},{"id":"2","name":"黑马"}],
+                  "album":{"id":"2","name":"黑马",
+                    "url_cover":{"uri":"u2","urls":["https://p3-luna.douyinpic.com/img/"],
+                      "template_prefix":"tplv-x"}}
+                }}}}
+             ]}
+        """.trimIndent()
+
+        val card = PlatformBrowseCard(
+            id = PlatformBrowseSupport.qualifyId(
+                PlatformSearchProvider.QISHUI,
+                "7200303561195061287"
+            ),
+            title = "2026抖音爆款热歌",
+            trackCount = 2,
+            provider = PlatformSearchProvider.QISHUI
+        )
+
+        val tracks = QishuiBrowseApi(client).tracks(card)
+
+        assertEquals(2, tracks.size)
+        val first = tracks.first()
+        assertEquals("7654496187366426641", first.id)
+        assertEquals("梦的翅膀受了伤（SouMix Remix）", first.name)
+        assertEquals("蒋雪儿Snow.J", first.subtitle)
+        assertEquals(133594L, first.durationMs)
+        assertEquals("梦的翅膀受了伤（SouMix Remix）", first.album)
+        assertTrue(first.coverUrl.orEmpty().contains("p3-luna.douyinpic.com"))
+        // 多歌手用 / 连接
+        assertEquals("李荣浩/黑马", tracks[1].subtitle)
+
+        val request = requests.first()
+        assertTrue(request.url.encodedPath.contains("playlist/detail"))
+        assertEquals(
+            "7200303561195061287",
+            request.url.queryParameter("playlist_id")
+        )
+    }
+
+    @Test
+    fun `qishui playlist tracks stay empty when the playlist has no media`() = runTest {
+        responseBody = """{"playlist":{"id":"1","title":"空歌单","count_tracks":0},"has_more":false}"""
+
+        val card = PlatformBrowseCard(
+            id = PlatformBrowseSupport.qualifyId(PlatformSearchProvider.QISHUI, "1"),
+            title = "空歌单",
+            provider = PlatformSearchProvider.QISHUI
+        )
+
+        val tracks = QishuiBrowseApi(client).tracks(card)
+        assertEquals(emptyList<Any>(), tracks)
+    }}
 
 /**
  * 分页聚合的取消语义。
@@ -271,4 +358,5 @@ class MintCollectPagesCancellationTest {
         }
         assertEquals(emptyList<String>(), items)
     }
+
 }

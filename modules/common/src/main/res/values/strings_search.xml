@@ -26,6 +26,8 @@
     <string name="explore_platform_browse_empty">该平台暂未开放歌单与排行榜推荐。</string>
     <string name="explore_platform_browse_loading">正在加载歌单与排行榜…</string>
     <string name="explore_platform_browse_retry">加载失败，点我重试</string>
+    <string name="explore_platform_browse_tracks_empty">暂时读不到这个歌单的曲目。</string>
+    <string name="explore_platform_browse_open_web">在官方页面打开</string>
     <string name="explore_search_source_qq_music">QQ音乐</string>
     <string name="explore_search_source_kugou">酷狗</string>
     <string name="explore_search_source_migu">咪咕</string>

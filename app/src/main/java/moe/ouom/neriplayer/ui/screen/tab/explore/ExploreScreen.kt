@@ -38,9 +38,6 @@ import moe.ouom.neriplayer.data.identity.stableKey
 import moe.ouom.neriplayer.data.sync.mapping.toSongItem
 import moe.ouom.neriplayer.util.platform.tryStartActivity
 import android.app.Application
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -337,13 +334,6 @@ internal fun ExploreSearchResultsList(
 internal fun shouldShowBiliPartsPicker(song: SongItem): Boolean {
     return song.album == PlayerManager.BILI_SOURCE_TAG ||
         song.album.startsWith("${PlayerManager.BILI_SOURCE_TAG}|")
-}
-
-/** 在浏览器里打开平台页面（免登录平台的歌单/歌手没有取流接口，只能跳官网） */
-private fun openPlatformWebPage(context: Context, url: String) {
-    if (url.isBlank()) return
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-    context.tryStartActivity(intent)
 }
 
 @Composable
@@ -988,6 +978,28 @@ fun ExploreScreen(
                                 ) { Text(stringResource(CoreCommonR.string.search_no_result)) }
                             }
                             else -> {
+                                // 搜索态下点开歌单：直接在站内展开曲目；
+                                // 没展开时才显示搜索结果列表
+                                if (ui.platformBrowseTrackTitle.isNotEmpty()) {
+                                    PlatformBrowseTrackList(
+                                        browse = PlatformBrowseState(
+                                            trackTitle = ui.platformBrowseTrackTitle,
+                                            tracks = ui.platformBrowseTracks,
+                                            tracksLoading = ui.platformBrowseTracksLoading,
+                                            trackWebUrl = ui.platformBrowseTrackWebUrl
+                                        ),
+                                        onTrackClick = { track ->
+                                            onSongClick(
+                                                ui.platformBrowseTracks.map { it.toSongItem() },
+                                                ui.platformBrowseTracks.indexOf(track)
+                                            )
+                                        },
+                                        onCloseTracks = { vm.closePlatformBrowseTracks() },
+                                        onPlayTrackNow = { track ->
+                                            onSongPlayPreservingQueue(track.toSongItem())
+                                        }
+                                    )
+                                } else {
                                 ExploreSearchResultsList(
                                     state = searchListState,
                                     isTabletLayout = isTabletLayout,
@@ -1113,10 +1125,23 @@ fun ExploreScreen(
                                                     owner = item.owner,
                                                     offlineMode = offlineMode,
                                                     onClick = {
-                                                        // 免登录平台的歌单没有取流接口，改成打开官方页面
-                                                        val webUrl = item.webUrl
-                                                        if (webUrl != null) {
-                                                            openPlatformWebPage(context, webUrl)
+                                                        // 免登录平台（汽水等）也能读歌单曲目，
+                                                        // 先在站内展开；读不到才退回官方页面
+                                                        val card = vm.searchPlaylistToBrowseCard(
+                                                            sourceTag = item.sourceTag,
+                                                            rawId = item.rawId,
+                                                            title = item.playlist.name,
+                                                            coverUrl = item.playlist.picUrl,
+                                                            trackCount = item.playlist.trackCount,
+                                                            webUrl = item.webUrl
+                                                        )
+                                                        if (card != null) {
+                                                            vm.loadPlatformBrowseTracks(card)
+                                                        } else {
+                                                            val webUrl = item.webUrl
+                                                            if (webUrl != null) {
+                                                                openPlatformWebPage(context, webUrl)
+                                                            }
                                                         }
                                                     }
                                                 )
@@ -1191,6 +1216,7 @@ fun ExploreScreen(
                                     }
                                 }
                                 }
+                                }
                             }
                         }
                     } else {
@@ -1218,16 +1244,13 @@ fun ExploreScreen(
                                     selectedCategory = ui.platformBrowseCategory,
                                     trackTitle = ui.platformBrowseTrackTitle,
                                     tracks = ui.platformBrowseTracks,
-                                    tracksLoading = ui.platformBrowseTracksLoading
+                                    tracksLoading = ui.platformBrowseTracksLoading,
+                                    trackWebUrl = ui.platformBrowseTrackWebUrl
                                 ),
                                 onCardClick = { card ->
-                                    val webUrl = card.webUrl
-                                    if (webUrl != null) {
-                                        // 该集合没有公开的曲目接口，直接跳平台官方页
-                                        openPlatformWebPage(context, webUrl)
-                                    } else {
-                                        vm.loadPlatformBrowseTracks(card)
-                                    }
+                                    // 各平台歌单都能直接展开曲目并播放；
+                                    // 读不到曲目时曲目面板会给出「去官方页面」的兜底入口
+                                    vm.loadPlatformBrowseTracks(card)
                                 },
                                 onCategoryClick = { category ->
                                     vm.loadPlatformBrowse(currentSource, category)
