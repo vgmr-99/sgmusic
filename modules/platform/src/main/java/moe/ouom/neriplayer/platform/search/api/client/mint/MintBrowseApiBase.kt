@@ -111,14 +111,36 @@ internal fun formatPlayCount(value: Long, strictGreater: Boolean = false): Strin
     else -> value.toString()
 }
 
-/** HTML 实体解码：接口里的歌名、歌单名经常带着 `&amp;` 这类实体。 */
-internal fun decodeHtmlEntities(text: String): String = text
-    .replace("&amp;", "&")
-    .replace("&lt;", "<")
-    .replace("&gt;", ">")
-    .replace("&quot;", "\"")
-    .replace("&apos;", "'")
-    .replace("&nbsp;", " ")
+/** 数字实体：`&#127769;` / `&#x1F319;`。先处理它们，避免与命名实体互相二次解码。 */
+private val NUMERIC_HTML_ENTITY = Regex("&#(x[0-9a-fA-F]+|[0-9]+);")
+
+/**
+ * HTML 实体解码：接口里的歌名、歌单名经常带着 `&amp;` 这类命名实体，
+ * 汽水等平台还会直接塞 `&#127769;` 这样的 emoji 数字实体，不解码会原样显示成乱码串。
+ */
+internal fun decodeHtmlEntities(text: String): String {
+    val numericDecoded = NUMERIC_HTML_ENTITY.replace(text) { match ->
+        val raw = match.groupValues[1]
+        val codePoint = try {
+            if (raw.startsWith("x", ignoreCase = true)) raw.substring(1).toInt(16) else raw.toInt()
+        } catch (_: NumberFormatException) {
+            return@replace match.value
+        }
+        // 代理区不能单独成字符，超范围的码点也原样保留
+        if (codePoint in 0..0x10FFFF && codePoint !in 0xD800..0xDFFF) {
+            String(Character.toChars(codePoint))
+        } else {
+            match.value
+        }
+    }
+    return numericDecoded
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&nbsp;", " ")
+}
 
 /** 把卡片 id 里的源前缀去掉，只留下平台侧的真实 id。 */
 internal fun rawCardId(card: PlatformBrowseCard): String =

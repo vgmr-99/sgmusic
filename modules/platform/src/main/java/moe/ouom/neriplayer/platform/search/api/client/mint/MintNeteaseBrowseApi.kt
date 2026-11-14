@@ -212,6 +212,9 @@ class MintNeteaseBrowseApi(
                         title = title,
                         subtitle = MintJson.string(item, "updateFrequency").orEmpty(),
                         coverUrl = normalizeCoverUrl(MintJson.string(item, "coverImgUrl")),
+                        // toplist 接口带 trackCount 时展示真实歌曲数；不带则保持 0，
+                        // 由 UI 层省略「0首」，不再显示误导性的数字。
+                        trackCount = MintJson.int(item, "trackCount"),
                         playCount = PlatformBrowseSupport.parsePlayCount(
                             formatPlayCount(MintJson.long(item, "playCount"))
                         ),

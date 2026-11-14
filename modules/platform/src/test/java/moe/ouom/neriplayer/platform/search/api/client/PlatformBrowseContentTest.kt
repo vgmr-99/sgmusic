@@ -2,6 +2,7 @@ package moe.ouom.neriplayer.platform.search.api.client
 
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.test.runTest
+import moe.ouom.neriplayer.platform.search.api.client.mint.decodeHtmlEntities
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Request
@@ -210,5 +211,19 @@ class PlatformBrowseContentTest {
         assertEquals("60054701923", tracks[0].id)
         assertEquals("晴天", tracks[0].name)
         assertEquals("60054701923", tracks[0].extras["copyrightId"])
+    }
+
+    @Test
+    fun `html entities are decoded including numeric emoji entities`() {
+        // 命名实体保持原有行为
+        assertEquals("A & B <C>", decodeHtmlEntities("A &amp; B &lt;C&gt;"))
+        // 汽水歌单标题里的十进制 / 十六进制 emoji 实体
+        assertEquals("轻音乐100首🌙", decodeHtmlEntities("轻音乐100首&#127769;"))
+        assertEquals("夜🌙", decodeHtmlEntities("夜&#x1F319;"))
+        // 非法或越界的实体原样保留，不抛异常
+        assertEquals("literal &#;", decodeHtmlEntities("literal &#;"))
+        assertEquals("bad &#99999999999;", decodeHtmlEntities("bad &#99999999999;"))
+        // 不做二次解码，避免 &amp;#38; 被误转成 &
+        assertEquals("&#38;", decodeHtmlEntities("&amp;#38;"))
     }
 }

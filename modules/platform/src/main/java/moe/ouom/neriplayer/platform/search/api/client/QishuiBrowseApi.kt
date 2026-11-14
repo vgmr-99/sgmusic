@@ -31,6 +31,7 @@ import moe.ouom.neriplayer.platform.search.api.PlatformBrowseCard
 import moe.ouom.neriplayer.platform.search.api.PlatformBrowseSupport
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchProvider
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchResult
+import moe.ouom.neriplayer.platform.search.api.client.mint.decodeHtmlEntities
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -69,8 +70,10 @@ class QishuiBrowseApi(
                     add(
                         PlatformBrowseCard(
                             id = PlatformBrowseSupport.qualifyId(provider, id),
-                            title = title,
-                            subtitle = playlist.optJSONObject("owner")?.optString("nickname", "").orEmpty(),
+                            title = decodeHtmlEntities(title),
+                            subtitle = decodeHtmlEntities(
+                                playlist.optJSONObject("owner")?.optString("nickname", "").orEmpty()
+                            ),
                             coverUrl = playlistCoverUrl(playlist),
                             trackCount = playlist.optLong("count_tracks", 0L).toInt(),
                             webUrl = "https://www.qishui.com/playlist/$id",

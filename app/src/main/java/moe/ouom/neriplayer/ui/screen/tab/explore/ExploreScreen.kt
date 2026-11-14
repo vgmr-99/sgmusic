@@ -547,16 +547,22 @@ fun ExploreScreen(
         if (currentSource == SearchSource.YOUTUBE_MUSIC && ui.ytMusicPlaylists.isEmpty()) {
             vm.loadYtMusicPlaylists()
         }
-        // 平台源切到默认页时加载浏览内容（歌单 / 榜单），和网易云保持一致
-        if (currentSource == SearchSource.QQ_MUSIC ||
-            currentSource == SearchSource.KUGOU ||
-            currentSource == SearchSource.QISHUI ||
-            currentSource == SearchSource.KUWO ||
-            currentSource == SearchSource.MIGU
-        ) {
-            if (ui.platformBrowseCards.isEmpty() && !ui.platformBrowseLoading) {
-                vm.loadPlatformBrowse(currentSource)
-            }
+    }
+
+    // 浏览页按「当前选中的平台」加载，六个浏览源（含网易云）一视同仁。
+    // 只以 selectedSearchSource 为 key：切 tab 一定重载，点分类 chip 不会重载；
+    // 5 分钟缓存命中时由 ViewModel 直接回填，不产生额外网络请求。
+    // 旧逻辑用 platformBrowseCards.isEmpty() 做守卫，只要网易云加载过一次，
+    // 切到任何平台都不会再拉数据，导致所有 tab 都显示网易云的四个榜单。
+    LaunchedEffect(ui.selectedSearchSource) {
+        when (ui.selectedSearchSource) {
+            SearchSource.NETEASE,
+            SearchSource.QQ_MUSIC,
+            SearchSource.KUGOU,
+            SearchSource.QISHUI,
+            SearchSource.KUWO,
+            SearchSource.MIGU -> vm.loadPlatformBrowse(ui.selectedSearchSource)
+            else -> Unit
         }
     }
 

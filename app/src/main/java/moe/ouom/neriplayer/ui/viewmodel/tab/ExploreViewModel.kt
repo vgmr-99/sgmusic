@@ -240,6 +240,8 @@ data class ExploreUiState(
     val hotSearchLoading: Boolean = false,
     /** 平台浏览页（默认页）的歌单 / 榜单卡片 */
     val platformBrowseCards: List<PlatformBrowseCard> = emptyList(),
+    /** 当前卡片属于哪个平台，切源时用来判断是否需要重新加载，避免串台显示上一个平台的数据 */
+    val platformBrowseSource: SearchSource? = null,
     val platformBrowseLoading: Boolean = false,
     val platformBrowseError: UiText? = null,
     val platformBrowseCategory: String = "",
@@ -452,9 +454,20 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         NPLogger.d(TAG, "setSearchSource: ${_uiState.value.selectedSearchSource} -> $source")
         searchJob?.cancel()
         searchMoreJob?.cancel()
+        // 浏览页按平台隔离：取消在途请求并清掉上一个平台的卡片/分类/曲目，
+        // 否则切换 tab 时会一直显示旧平台（通常是网易云）的榜单。
+        platformBrowseJob?.cancel()
         invalidateSearchRequest()
         _uiState.value = _uiState.value.copy(
             selectedSearchSource = source,
+            platformBrowseCards = emptyList(),
+            platformBrowseSource = null,
+            platformBrowseLoading = false,
+            platformBrowseError = null,
+            platformBrowseCategory = "",
+            platformBrowseTracks = emptyList(),
+            platformBrowseTracksLoading = false,
+            platformBrowseTrackTitle = "",
             // 各平台开放的分类不一样，切源时把分类落到该平台支持的第一项
             selectedPlatformSearchType = supportedSearchTypes(source)
                 .firstOrNull { it == _uiState.value.selectedPlatformSearchType }
@@ -494,7 +507,12 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         hotSearchJob?.cancel()
         _uiState.value = _uiState.value.copy(hotSearchLoading = true)
         hotSearchJob = viewModelScope.launch {
-            val entries = runCatching { chartApi.hotSearch() }.getOrElse { error ->
+            val entries = try {
+                chartApi.hotSearch()
+            } catch (e: CancellationException) {
+                // 快速切换 tab 时旧任务被取消属正常行为，不要记成「加载失败」
+                throw e
+            } catch (error: Exception) {
                 NPLogger.w(TAG, "加载热搜榜失败: ${error.message.orEmpty()}")
                 emptyList()
             }
@@ -903,11 +921,17 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         } else {
             requested
         }
-        if (platformBrowseJob?.isActive == true && realCategory == _uiState.value.platformBrowseCategory) return
+        val sameTarget = _uiState.value.platformBrowseSource == source &&
+            realCategory == _uiState.value.platformBrowseCategory
+        // 同一平台同一分类且正在加载时不重复发起；跨平台的在途任务必须先取消，
+        // 否则旧平台的异步结果会覆盖新平台的卡片。
+        if (sameTarget && platformBrowseJob?.isActive == true) return
+        platformBrowseJob?.cancel()
         val cacheKey = "${source.name}|$realCategory"
         val cached = platformBrowseCache[cacheKey]
         if (cached != null && System.currentTimeMillis() - cached.timestamp < PLATFORM_BROWSE_CACHE_TTL_MS) {
             _uiState.value = _uiState.value.copy(
+                platformBrowseSource = source,
                 platformBrowseLoading = false,
                 platformBrowseError = null,
                 platformBrowseCategory = realCategory,
@@ -918,6 +942,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             return
         }
         _uiState.value = _uiState.value.copy(
+            platformBrowseSource = source,
             platformBrowseLoading = true,
             platformBrowseError = null,
             platformBrowseCategory = realCategory,
@@ -942,6 +967,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                     System.currentTimeMillis() - effectiveCached.timestamp < PLATFORM_BROWSE_CACHE_TTL_MS
                 ) {
                     _uiState.value = _uiState.value.copy(
+                        platformBrowseSource = source,
                         platformBrowseLoading = false,
                         platformBrowseError = null,
                         platformBrowseCategory = effectiveCategory,
@@ -957,6 +983,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                     cards = cards
                 )
                 _uiState.value = _uiState.value.copy(
+                    platformBrowseSource = source,
                     platformBrowseLoading = false,
                     platformBrowseError = null,
                     platformBrowseCategory = effectiveCategory,
@@ -966,6 +993,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
+                    platformBrowseSource = source,
                     platformBrowseLoading = false,
                     platformBrowseError = feedbackText(
                         CoreCommonR.string.error_load_playlist,
