@@ -71,6 +71,8 @@ import moe.ouom.neriplayer.platform.youtube.media.isYouTubeMusicSong
 import moe.ouom.neriplayer.data.model.lyrics.LyricEntry
 import moe.ouom.neriplayer.lyrics.parser.parseNeteaseLyricsAuto
 import moe.ouom.neriplayer.lyrics.parser.alignSubtitleLyrics
+import moe.ouom.neriplayer.lyrics.parser.isPlaceholderLyricContent
+import moe.ouom.neriplayer.lyrics.parser.isPlaceholderLyricLine
 import moe.ouom.neriplayer.lyrics.parser.parseEmbeddedPhoneticLyrics
 import moe.ouom.neriplayer.lyrics.parser.resolveStoredLyricText
 import moe.ouom.neriplayer.data.model.SongItem
@@ -106,6 +108,43 @@ internal fun extractRomanizedNeteaseLyricContent(rawResponse: String): String {
     return normalizeLegacyLrcTimestamps(
         payload.optJSONObject("romalrc")?.optString("lyric").orEmpty()
     )
+}
+
+/**
+ * 网易云返回的「这首歌没有收录歌词」占位响应。
+ *
+ * 真机实测（汽水歌《枪火（相对那就针锋相对）》）：
+ * `{"uncollected":true,"sgc":false,"sfy":false,"qfy":false,"needDesc":true,
+ *   "lrc":{"version":1,"lyric":"[00:00.00]暂无歌词"},"code":200,"briefDesc":null}`
+ *
+ * 这里要用网易云自己的 id 去查才有这个占位语；用别的平台的 id 去查，
+ * 网易云会当成「不存在的歌」返回同一份占位内容。
+ */
+internal fun isNeteaseUncollectedLyricResponse(rawResponse: String): Boolean {
+    val payload = runCatching { JSONObject(rawResponse) }.getOrNull() ?: return false
+    val lrc = payload.optJSONObject("lrc")?.optString("lyric").orEmpty()
+    val yrc = payload.optJSONObject("yrc")?.optString("lyric").orEmpty()
+    val content = yrc.ifBlank { lrc }
+    if (content.isBlank()) return false
+    return payload.optBoolean("uncollected", false) || isPlaceholderLyricContent(content)
+}
+
+/**
+ * 平台内置歌词要用的网易云 songId。
+ *
+ * 只有「这首歌本身就是网易云的」或「已经匹配到网易云歌曲」时才有意义。
+ * 汽水 / 咪咕 / 酷我 / QQ 的 song.id 是平台内部 id，拿去查网易云只会命中
+ * 「[00:00.00]暂无歌词」占位语（网易云把不存在的歌当成「未收录歌词」），
+ * 运气差还会拿到另一首歌的歌词；这种情况必须留给后面的兜底链路。
+ */
+internal fun resolvePlatformLyricNeteaseSongId(song: SongItem): Long? {
+    when (song.matchedLyricSource) {
+        MusicPlatform.QQ_MUSIC -> return null
+        MusicPlatform.CLOUD_MUSIC ->
+            return song.matchedSongId?.toLongOrNull()?.takeIf { it > 0L }
+        null -> Unit
+    }
+    return song.id.takeIf { it > 0L && song.isNeteaseOriginSong() }
 }
 
 data class NeteaseLyricsCacheEntry(
@@ -590,6 +629,22 @@ object PlayerLyricsProvider {
     }
 
     internal fun buildNeteaseLyricsCacheEntry(rawResponse: String): NeteaseLyricsCacheEntry {
+        if (isNeteaseUncollectedLyricResponse(rawResponse)) {
+            // 网易云对「没有收录歌词」的歌曲会返回占位歌词
+            // （{"uncollected":true,...,"lrc":{"lyric":"[00:00.00]暂无歌词"}}）。
+            // 必须当成「没有歌词」：当成真歌词会把「暂无歌词」这一行画到播放页，
+            // 还会因为「平台歌词非空」而挡住 LX 脚本与多源高置信兜底，
+            // 于是「用 LX 音源播放汽水 / 咪咕这类平台的歌」永远读不到歌词。
+            return NeteaseLyricsCacheEntry(
+                preferredLyricText = "",
+                translatedLyricText = "",
+                romanizedLyricText = "",
+                preferredLyricEntries = emptyList(),
+                translatedLyricEntries = emptyList(),
+                romanizedLyricEntries = emptyList(),
+                rawResponse = rawResponse
+            )
+        }
         val preferredLyric = extractPreferredNeteaseLyricContent(rawResponse)
         val translatedLyric = extractTranslatedNeteaseLyricContent(rawResponse)
         val romanizedLyric = extractRomanizedNeteaseLyricContent(rawResponse)
@@ -1346,12 +1401,14 @@ object PlayerLyricsProvider {
                     } else {
                         emptyList()
                     }
-                song.matchedLyricSource == MusicPlatform.QQ_MUSIC -> emptyList()
-                song.matchedLyricSource == MusicPlatform.CLOUD_MUSIC -> {
-                    val matchedId = song.matchedSongId?.toLongOrNull() ?: song.id
-                    getNeteaseLyrics(matchedId, neteaseClient, neteaseLyricsCache)
+                else -> {
+                    val neteaseId = resolvePlatformLyricNeteaseSongId(song)
+                    if (neteaseId == null) {
+                        emptyList()
+                    } else {
+                        getNeteaseLyrics(neteaseId, neteaseClient, neteaseLyricsCache)
+                    }
                 }
-                else -> getNeteaseLyrics(song.id, neteaseClient, neteaseLyricsCache)
             }
 
             // 平台内置歌词读不到时的两条兜底，按「精确度」排序：

@@ -62,11 +62,14 @@ fun isNeteaseYrc(content: String): Boolean = content.contains(NeteaseYrcLineRege
 fun isTtmlLyrics(content: String): Boolean = TtmlTagRegex.containsMatchIn(content)
 
 fun parseNeteaseLyricsAuto(content: String): List<LyricEntry> {
-    return when {
+    val parsed = when {
         isTtmlLyrics(content) -> parseTtmlLyrics(content)
         isNeteaseYrc(content) -> runCatching { parseNeteaseYrc(content) }.getOrDefault(emptyList())
         else -> parseNeteaseLrc(content)
     }
+    // 「[00:00.00]暂无歌词」这类占位语不是真歌词，必须丢掉，
+    // 否则播放页会把它当歌词画出来，而且平台歌词非空会挡住所有兜底链路。
+    return parsed.filterNot { isPlaceholderLyricLine(it.text) }
 }
 
 fun parseTtmlLyrics(content: String): List<LyricEntry> {

@@ -142,6 +142,7 @@ class PlayerLyricsProviderExternalFallbackTest {
     fun `automatic mode does not query external sources when the platform already has lyrics`() = runTest {
         val fixture = Fixture(
             id = 70_004L,
+            channelId = "netease",
             neteasePayload = """{"code":200,"lrc":{"lyric":"[00:01.00]平台自带歌词"}}""",
             matcherAnswers = mapOf(
                 EditableLyricMatchSource.KUGOU to listOf(
@@ -161,6 +162,63 @@ class PlayerLyricsProviderExternalFallbackTest {
 
             assertEquals(listOf("平台自带歌词"), lyrics.map { it.text })
             assertTrue(fixture.queriedSources.isEmpty())
+        }
+    }
+
+    @Test
+    fun `netease placeholder lyric counts as no lyrics and falls back to external sources`() = runTest {
+        // 网易云对「没有收录歌词」的歌曲返回 [00:00.00]暂无歌词，
+        // 这不是真歌词，必须继续往下走兜底链路。
+        val fixture = Fixture(
+            id = 70_006L,
+            channelId = "netease",
+            neteasePayload = """{"uncollected":true,"code":200,"lrc":{"version":1,"lyric":"[00:00.00]暂无歌词"}}""",
+            matcherAnswers = mapOf(
+                EditableLyricMatchSource.KUGOU to listOf(
+                    rankedCandidate(
+                        source = EditableLyricMatchSource.KUGOU,
+                        title = TITLE,
+                        artist = ARTIST,
+                        durationMs = DURATION_MS,
+                        lyrics = "[00:01.00]兜底歌词"
+                    )
+                )
+            )
+        )
+
+        fixture.withEnvironment {
+            val lyrics = fixture.original()
+
+            assertEquals(listOf("兜底歌词"), lyrics.map { it.text })
+            assertEquals(listOf(EditableLyricMatchSource.KUGOU), fixture.queriedSources)
+        }
+    }
+
+    @Test
+    fun `songs from other platforms never query netease lyrics with their own id`() = runTest {
+        // 汽水 / 咪咕 / 酷我的 song.id 是平台内部 id，拿去查网易云只会命中
+        // 「[00:00.00]暂无歌词」占位语，运气差还会拿到别的歌的歌词。
+        val fixture = Fixture(
+            id = 89_386_085_287_488_145_86L,
+            channelId = "qishui",
+            neteasePayload = """{"code":200,"lrc":{"lyric":"[00:01.00]别的歌的歌词"}}""",
+            matcherAnswers = mapOf(
+                EditableLyricMatchSource.KUGOU to listOf(
+                    rankedCandidate(
+                        source = EditableLyricMatchSource.KUGOU,
+                        title = TITLE,
+                        artist = ARTIST,
+                        durationMs = DURATION_MS,
+                        lyrics = "[00:01.00]汽水歌的兜底歌词"
+                    )
+                )
+            )
+        )
+
+        fixture.withEnvironment {
+            val lyrics = fixture.original()
+
+            assertEquals(listOf("汽水歌的兜底歌词"), lyrics.map { it.text })
         }
     }
 
@@ -192,6 +250,7 @@ class PlayerLyricsProviderExternalFallbackTest {
 
     private class Fixture(
         val id: Long,
+        val channelId: String = "qishui",
         val neteasePayload: String = """{"code":200,"nolyric":true,"lrc":{"lyric":""},"tlyric":{"lyric":""}}""",
         val matcherAnswers: Map<EditableLyricMatchSource, List<RankedEditableLyricMatch>> = emptyMap()
     ) {
@@ -204,7 +263,7 @@ class PlayerLyricsProviderExternalFallbackTest {
             durationMs = DURATION_MS,
             coverUrl = null,
             mediaUri = "https://example.com/audio.mp3",
-            channelId = "qishui",
+            channelId = channelId,
             audioId = "7675915828206094352"
         )
         val queriedSources = mutableListOf<EditableLyricMatchSource>()

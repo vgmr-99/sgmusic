@@ -225,7 +225,7 @@ fun isReliableLyricMatchIdentity(
             hasCollaboratorLyricMatchArtistSuffix(candidateArtistName, expectedPrimaryArtist)
     }
     return primaryArtistMatches &&
-        canonicalLyricMatchTitle(expectedTitle) == canonicalLyricMatchTitle(candidateTitle) &&
+        coreLyricMatchTitle(expectedTitle) == coreLyricMatchTitle(candidateTitle) &&
         scoreLyricMatchTitle(expectedTitle, candidateTitle) >= MIN_RELIABLE_LYRIC_TITLE_SCORE &&
         scoreLyricMatchArtist(expectedArtist, candidateArtist) >= MIN_RELIABLE_LYRIC_ARTIST_SCORE
 }
@@ -307,6 +307,44 @@ private fun canonicalLyricMatchTitle(value: String): String {
         .replace(lyricVersionModifierRegex, " ")
         .replace(lyricMatchWhitespaceRegex, " ")
         .trim()
+}
+
+/** 歌名尾部的括号补充说明，例如「枪火（相对那就针锋相对）」。 */
+private val lyricTrailingBracketedSuffixRegex =
+    Regex("""\s*[(（\[【]([^)）\]】]{1,60})[)）\]】]\s*$""")
+
+/**
+ * 括号里是版本信息时不能剥掉，否则会把不同版本当成同一首歌。
+ *
+ * 括号里是别名 / 副标题（汽水《枪火（相对那就针锋相对）》在网易云叫《枪火》，
+ * 别名是「相对那就针锋相对」）时必须剥掉，否则正确的歌词会被判成身份不一致。
+ */
+private val lyricBracketedVersionMarkerRegex = Regex(
+    """(?<![a-z0-9])(?:remaster(?:ed)?|remix|live|acoustic|instrumental|karaoke|demo|cover|rework|slowed|sped\s+up|version|edit|extended|radio|clean|explicit|dj|mix|feat|ft|featuring)(?![a-z0-9])""" +
+        """|伴奏|纯音乐|純音樂|钢琴版|吉他版|鼓版|弦乐版|电子版|原版|官方版|官方音源|高音质|无损|母带|现场版|录音室""",
+    RegexOption.IGNORE_CASE
+)
+
+/**
+ * 核心歌名：剥掉尾部括号里的补充说明之后的歌名。
+ *
+ * 各平台对同一首歌的命名不一致：汽水《枪火（相对那就针锋相对）》在网易云
+ * 叫《枪火》（别名「相对那就针锋相对」），QQ 又可能叫《枪火 - 相对那就针锋相对》。
+ * 不做这层归一的话，正确版本的歌词会被当成「身份不一致」丢掉，
+ * 表现为「用 LX 音源播放汽水的歌一直读不到歌词」。
+ *
+ * 版本信息由 lyricVersionSignature 单独把关，这里不能把 Live / Remix / 伴奏
+ * 这类内容也剥掉，否则会把不同版本当成同一首。
+ */
+private fun coreLyricMatchTitle(value: String): String {
+    val trimmed = value.trim()
+    val match = lyricTrailingBracketedSuffixRegex.find(trimmed)
+        ?: return canonicalLyricMatchTitle(trimmed)
+    val suffix = match.groupValues[1]
+    if (lyricBracketedVersionMarkerRegex.containsMatchIn(suffix)) {
+        return canonicalLyricMatchTitle(trimmed)
+    }
+    return canonicalLyricMatchTitle(trimmed.substring(0, match.range.first))
 }
 
 private val lyricVersionModifierRegex = Regex(
