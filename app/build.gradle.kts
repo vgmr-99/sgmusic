@@ -6,6 +6,7 @@ import com.android.build.api.variant.ScopedArtifacts
 import org.gradle.api.tasks.testing.Test
 import org.gradle.testing.jacoco.tasks.JacocoReport
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+import java.time.Duration
 import java.util.UUID
 
 plugins {
@@ -281,6 +282,8 @@ tasks.withType<Test>().configureEach {
         excludes = listOf("jdk.internal.*")
     }
     maxHeapSize = "3g"
+    // 单测卡死时不能让整轮构建无限期挂着：到点强制中断并把任务标记为失败
+    timeout.set(Duration.ofMinutes(30))
     // Android 单元测试中的 Context 可能没有真实文件目录，临时文件统一放到任务临时目录
     systemProperty("java.io.tmpdir", temporaryDir.absolutePath)
     systemProperty(
