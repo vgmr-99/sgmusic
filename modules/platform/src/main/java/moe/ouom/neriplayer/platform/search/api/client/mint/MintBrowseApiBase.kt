@@ -23,6 +23,7 @@ package moe.ouom.neriplayer.platform.search.api.client.mint
  * Created: 2026/11/13
  */
 
+import kotlinx.coroutines.CancellationException
 import moe.ouom.neriplayer.platform.search.api.PlatformBrowseCard
 import moe.ouom.neriplayer.platform.search.api.PlatformBrowseSupport
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchProvider
@@ -79,6 +80,9 @@ abstract class MintBrowseApiBase(
  *
  * 浏览页的接口没有分页参数（[MintPlatformBrowseApi.browse] 只收分类），
  * 所以这里在内部把前 [pages] 页拉下来拼在一起，某页为空就提前结束。
+ *
+ * 注意：不能用 `runCatching` 包挂起调用 —— 它会把 [kotlinx.coroutines.CancellationException]
+ * 也吞掉，导致上游超时/取消后请求继续跑完，界面一直转圈。这里显式把取消异常抛回去。
  */
 internal suspend fun <T> collectPages(
     pages: Int,
@@ -86,7 +90,13 @@ internal suspend fun <T> collectPages(
 ): List<T> {
     val collected = ArrayList<T>()
     for (page in 1..pages) {
-        val items = runCatching { fetch(page) }.getOrDefault(emptyList())
+        val items = try {
+            fetch(page)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
         if (items.isEmpty()) break
         collected.addAll(items)
     }

@@ -1,7 +1,9 @@
 package moe.ouom.neriplayer.platform.search.api.client
 
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
+import moe.ouom.neriplayer.platform.search.api.client.mint.collectPages
 import moe.ouom.neriplayer.platform.search.api.client.mint.decodeHtmlEntities
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -225,5 +227,48 @@ class PlatformBrowseContentTest {
         assertEquals("bad &#99999999999;", decodeHtmlEntities("bad &#99999999999;"))
         // 不做二次解码，避免 &amp;#38; 被误转成 &
         assertEquals("&#38;", decodeHtmlEntities("&amp;#38;"))
+    }
+}
+
+/**
+ * 分页聚合的取消语义。
+ *
+ * 浏览页整体超时靠协程取消实现，如果这里把 CancellationException 吞掉，
+ * 超时后请求还会继续跑完，界面就会一直转圈。
+ */
+class MintCollectPagesCancellationTest {
+
+    @Test
+    fun `collectPages propagates cancellation instead of swallowing it`() = runTest {
+        var cancelled = false
+        try {
+            collectPages(3) { page ->
+                if (page == 1) throw CancellationException("upstream timeout")
+                emptyList<String>()
+            }
+        } catch (e: CancellationException) {
+            cancelled = true
+        }
+        assertTrue(cancelled)
+    }
+
+    @Test
+    fun `collectPages stops at first empty page and keeps collected items`() = runTest {
+        val visited = mutableListOf<Int>()
+        val items = collectPages(5) { page ->
+            visited += page
+            if (page == 1) listOf("a", "b") else emptyList()
+        }
+        assertEquals(listOf("a", "b"), items)
+        assertEquals(listOf(1, 2), visited)
+    }
+
+    @Test
+    fun `collectPages treats ordinary failure as an empty page`() = runTest {
+        val items = collectPages(3) { page ->
+            if (page == 1) throw IllegalStateException("boom")
+            listOf("x")
+        }
+        assertEquals(emptyList<String>(), items)
     }
 }

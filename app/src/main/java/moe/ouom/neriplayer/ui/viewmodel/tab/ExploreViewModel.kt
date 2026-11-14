@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.data.model.bilibili.collection.FavFolder
 import moe.ouom.neriplayer.data.model.bilibili.search.SearchVideoItem
@@ -79,10 +80,61 @@ private const val NETEASE_SEARCH_PAGE_SIZE = 30
 /** 浏览页缓存有效期：5 分钟 */
 private const val PLATFORM_BROWSE_CACHE_TTL_MS = 5 * 60 * 1000L
 
+/**
+ * 浏览卡片的整体超时。
+ *
+ * 底层 OkHttp 只设了 connect 15s / read 30s，且 browse() 内部还有多层串行兜底
+ * （直连失败退代理、热门歌单空了再试标签、多页拼接），最坏能挂好几分钟。
+ * 这里给整条链加一个硬上限，超时就落到「加载失败 + 点我重试」，不再无限转圈。
+ */
+private const val PLATFORM_BROWSE_TIMEOUT_MS = 12_000L
+
+/** 分类标签刷新是非关键路径，超时更短，失败也不影响卡片展示。 */
+private const val PLATFORM_CATEGORY_TIMEOUT_MS = 8_000L
+
 private data class PlatformBrowseCacheEntry(
     val timestamp: Long,
     val cards: List<PlatformBrowseCard>
 )
+
+/**
+ * 探索页各平台真实支持的能力。
+ *
+ * 不支持的能力不渲染入口，避免用户点进去才看到「暂不支持」的死路：
+ * - 咪咕只有浏览（歌单/排行榜），没有搜索接口；
+ * - 热搜榜只有网易云 / QQ音乐 / 酷狗有数据；
+ * - B站 / YouTube Music 只有搜索，没有可浏览的歌单广场。
+ */
+internal enum class ExploreCapability { SEARCH, BROWSE, HOT_SEARCH }
+
+internal fun exploreSourceCapabilities(source: SearchSource): Set<ExploreCapability> = when (source) {
+    SearchSource.NETEASE,
+    SearchSource.QQ_MUSIC,
+    SearchSource.KUGOU -> setOf(
+        ExploreCapability.SEARCH,
+        ExploreCapability.BROWSE,
+        ExploreCapability.HOT_SEARCH
+    )
+    SearchSource.QISHUI,
+    SearchSource.KUWO -> setOf(ExploreCapability.SEARCH, ExploreCapability.BROWSE)
+    SearchSource.MIGU -> setOf(ExploreCapability.BROWSE)
+    SearchSource.BILIBILI,
+    SearchSource.YOUTUBE_MUSIC -> setOf(ExploreCapability.SEARCH)
+    // 链接识别是独立的粘贴入口，输入框要保留，但不属于常规搜索
+    SearchSource.LINK_RECOGNITION -> setOf(ExploreCapability.SEARCH)
+}
+
+internal fun exploreSourceSupports(source: SearchSource, capability: ExploreCapability): Boolean =
+    capability in exploreSourceCapabilities(source)
+
+/**
+ * 热搜榜去重。
+ *
+ * 上游偶尔返回同名条目（实测酷狗「慌啥子嘛」出现两次），
+ * 不去掉会让 LazyRow 的 key 冲突直接抛异常。UI 侧 key 也带 index 做第二层保险。
+ */
+internal fun dedupeHotSearchEntries(entries: List<HotSearchEntry>): List<HotSearchEntry> =
+    entries.distinctBy { "${it.source.name}|${it.title}" }
 private const val PLATFORM_SEARCH_PAGE_SIZE = 20
 private const val YOUTUBE_MUSIC_SEARCH_LIMIT = 30
 private const val BILI_RESOURCE_TYPE_COLLECTION = 21
@@ -245,6 +297,13 @@ data class ExploreUiState(
     val platformBrowseLoading: Boolean = false,
     val platformBrowseError: UiText? = null,
     val platformBrowseCategory: String = "",
+    /**
+     * 当前平台的分类标签。
+     *
+     * 标签是异步刷回来的，放在 state 里 Compose 才能感知变化；
+     * 之前用 remember(selectedSearchSource) 只取一次，线上标签永远不显示。
+     */
+    val platformBrowseCategories: List<String> = emptyList(),
     /** 展开中的榜单及其曲目 */
     val platformBrowseTracks: List<PlatformSearchResult> = emptyList(),
     val platformBrowseTracksLoading: Boolean = false,
@@ -409,6 +468,11 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
      * 上游本来就随时可能改版，短 TTL 既省流量也少踩接口抖动。
      */
     private val platformBrowseCache = mutableMapOf<String, PlatformBrowseCacheEntry>()
+
+    /** 分类标签按平台缓存：刷新成功一次就复用，切 tab 不再重复打线上分类接口。 */
+    private val platformBrowseCategoriesCache = mutableMapOf<SearchSource, List<String>>()
+    private val categoryRefreshInFlight = mutableSetOf<SearchSource>()
+
     private var highQualityLoadCookies: Map<String, String>? = null
     private var searchJob: Job? = null
     private var searchMoreJob: Job? = null
@@ -465,6 +529,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             platformBrowseLoading = false,
             platformBrowseError = null,
             platformBrowseCategory = "",
+            // 先用已缓存/内置的标签把分类栏画出来，线上标签异步补齐
+            platformBrowseCategories = platformBrowseCategoriesCache[source]
+                ?: platformBrowseApiFor(source)?.categories.orEmpty(),
             platformBrowseTracks = emptyList(),
             platformBrowseTracksLoading = false,
             platformBrowseTrackTitle = "",
@@ -494,21 +561,30 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
      */
     fun loadHotSearch() {
         val source = _uiState.value.selectedSearchSource
-        val chartApi = when (source) {
-            SearchSource.NETEASE -> AppContainer.cloudMusicChartApi
-            SearchSource.QQ_MUSIC -> AppContainer.qqMusicChartApi
-            SearchSource.KUGOU -> AppContainer.kugouChartApi
-            else -> null
+        val chartApi = if (exploreSourceSupports(source, ExploreCapability.HOT_SEARCH)) {
+            when (source) {
+                SearchSource.NETEASE -> AppContainer.cloudMusicChartApi
+                SearchSource.QQ_MUSIC -> AppContainer.qqMusicChartApi
+                SearchSource.KUGOU -> AppContainer.kugouChartApi
+                else -> null
+            }
+        } else {
+            null
         }
         if (chartApi == null) {
+            // 不支持热搜榜的平台直接清空，不发请求也不留旧平台的数据
+            hotSearchJob?.cancel()
             _uiState.value = _uiState.value.copy(hotSearchEntries = emptyList(), hotSearchLoading = false)
             return
         }
         hotSearchJob?.cancel()
         _uiState.value = _uiState.value.copy(hotSearchLoading = true)
+        val requestedSource = source
         hotSearchJob = viewModelScope.launch {
             val entries = try {
-                chartApi.hotSearch()
+                // 上游会返回同名条目（实测酷狗「慌啥子嘛」重复），
+                // 去重后再交给 LazyRow，避免 key 冲突崩溃和无意义的重复 chip。
+                dedupeHotSearchEntries(chartApi.hotSearch())
             } catch (e: CancellationException) {
                 // 快速切换 tab 时旧任务被取消属正常行为，不要记成「加载失败」
                 throw e
@@ -516,6 +592,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 NPLogger.w(TAG, "加载热搜榜失败: ${error.message.orEmpty()}")
                 emptyList()
             }
+            if (requestedSource != _uiState.value.selectedSearchSource) return@launch
             _uiState.value = _uiState.value.copy(
                 hotSearchEntries = entries,
                 hotSearchLoading = false
@@ -909,89 +986,97 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     /**
      * 加载平台浏览页（默认页）的歌单 / 榜单。
      *
-     * 五个平台（网易云 / 酷狗 / 酷我 / QQ音乐 / 咪咕）走同一套浏览接口，
-     * 语义上都是"一组可浏览的集合"，界面才能共用同一套渲染。
+     * 三个约束：
+     * - 切平台一律落回该平台的默认分类（热门歌单 / 排行榜），打开就有内容，不用再点一次；
+     * - 分类标签走独立的后台任务，与卡片加载并行，不再串行挡住首屏；
+     * - 整条卡片链路有硬超时，超时落到可重试的错误态，杜绝无限转圈。
      */
     fun loadPlatformBrowse(source: SearchSource, category: String? = null) {
         val api = platformBrowseApiFor(source) ?: return
-        val requested = category ?: _uiState.value.platformBrowseCategory
-        // 首次进入时用第一个分类，和分类栏里默认选中的那一项保持一致
-        val realCategory = if (requested.isBlank() && api.categories.isNotEmpty()) {
-            api.categories.first()
-        } else {
-            requested
-        }
+        val realCategory = category?.takeIf { it.isNotBlank() } ?: api.defaultCategory
+        val categories = platformBrowseCategoriesCache[source] ?: api.categories
+
         val sameTarget = _uiState.value.platformBrowseSource == source &&
             realCategory == _uiState.value.platformBrowseCategory
         // 同一平台同一分类且正在加载时不重复发起；跨平台的在途任务必须先取消，
         // 否则旧平台的异步结果会覆盖新平台的卡片。
         if (sameTarget && platformBrowseJob?.isActive == true) return
         platformBrowseJob?.cancel()
+
         val cacheKey = "${source.name}|$realCategory"
-        val cached = platformBrowseCache[cacheKey]
-        if (cached != null && System.currentTimeMillis() - cached.timestamp < PLATFORM_BROWSE_CACHE_TTL_MS) {
+        val cachedCards = platformBrowseCache[cacheKey]
+            ?.takeIf { System.currentTimeMillis() - it.timestamp < PLATFORM_BROWSE_CACHE_TTL_MS }
+            ?.cards
+        if (cachedCards != null) {
+            NPLogger.d(
+                TAG,
+                "platform browse cache hit: $source/$realCategory cards=${cachedCards.size}"
+            )
             _uiState.value = _uiState.value.copy(
                 platformBrowseSource = source,
                 platformBrowseLoading = false,
                 platformBrowseError = null,
                 platformBrowseCategory = realCategory,
-                platformBrowseCards = cached.cards,
+                platformBrowseCategories = categories,
+                platformBrowseCards = cachedCards,
                 platformBrowseTracks = emptyList(),
                 platformBrowseTrackTitle = ""
             )
+            // 缓存命中也顺手在后台补分类，下次进来标签栏就是完整的
+            refreshBrowseCategories(source, api)
             return
         }
+
         _uiState.value = _uiState.value.copy(
             platformBrowseSource = source,
             platformBrowseLoading = true,
             platformBrowseError = null,
             platformBrowseCategory = realCategory,
+            platformBrowseCategories = categories,
             platformBrowseCards = emptyList(),
             platformBrowseTracks = emptyList(),
             platformBrowseTrackTitle = ""
         )
+        // 分类刷新不再挡卡片：两个任务并行发出
+        refreshBrowseCategories(source, api)
         platformBrowseJob = viewModelScope.launch {
+            val startedAt = System.currentTimeMillis()
             try {
-                // Mint 的分类标签是异步缓存的：首次拿到 categories 时只有
-                // 「热门歌单 + 排行榜」，真实标签要调线上接口才有。
-                // 所以先刷新一次分类，再按刷新后的顺序取默认分类。
-                api.refreshCategories()
-                val effectiveCategory = if (requested.isBlank() && api.categories.isNotEmpty()) {
-                    api.categories.first()
-                } else {
-                    realCategory
+                val cards = withTimeoutOrNull(PLATFORM_BROWSE_TIMEOUT_MS) {
+                    api.browse(realCategory)
                 }
-                val effectiveCacheKey = "${source.name}|$effectiveCategory"
-                val effectiveCached = platformBrowseCache[effectiveCacheKey]
-                if (effectiveCached != null &&
-                    System.currentTimeMillis() - effectiveCached.timestamp < PLATFORM_BROWSE_CACHE_TTL_MS
-                ) {
+                if (_uiState.value.selectedSearchSource != source) return@launch
+                if (cards == null) {
+                    NPLogger.w(TAG, "platform browse timeout: $source/$realCategory")
                     _uiState.value = _uiState.value.copy(
                         platformBrowseSource = source,
                         platformBrowseLoading = false,
-                        platformBrowseError = null,
-                        platformBrowseCategory = effectiveCategory,
-                        platformBrowseCards = effectiveCached.cards,
-                        platformBrowseTracks = emptyList(),
-                        platformBrowseTrackTitle = ""
+                        platformBrowseError = feedbackText(
+                            CoreCommonR.string.error_load_playlist,
+                            feedbackText(CoreCommonR.string.github_sync_failed_message)
+                        )
                     )
                     return@launch
                 }
-                val cards = api.browse(effectiveCategory)
-                platformBrowseCache[effectiveCacheKey] = PlatformBrowseCacheEntry(
+                platformBrowseCache[cacheKey] = PlatformBrowseCacheEntry(
                     timestamp = System.currentTimeMillis(),
                     cards = cards
+                )
+                NPLogger.d(
+                    TAG,
+                    "platform browse ready: $source/$realCategory cards=${cards.size} in ${System.currentTimeMillis() - startedAt}ms"
                 )
                 _uiState.value = _uiState.value.copy(
                     platformBrowseSource = source,
                     platformBrowseLoading = false,
                     platformBrowseError = null,
-                    platformBrowseCategory = effectiveCategory,
+                    platformBrowseCategory = realCategory,
                     platformBrowseCards = cards
                 )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (_uiState.value.selectedSearchSource != source) return@launch
                 _uiState.value = _uiState.value.copy(
                     platformBrowseSource = source,
                     platformBrowseLoading = false,
@@ -1000,6 +1085,40 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                         e.message ?: feedbackText(CoreCommonR.string.github_sync_failed_message)
                     )
                 )
+            }
+        }
+    }
+
+    /**
+     * 后台刷新分类标签。
+     *
+     * 每个平台成功一次就缓存复用，切 tab 不再重复打线上分类接口；失败允许下次重试。
+     * 结果写进 state，Compose 才会把线上标签补进分类栏（原先 remember 只取一次，永远补不上）。
+     */
+    private fun refreshBrowseCategories(source: SearchSource, api: PlatformBrowseApi) {
+        if (platformBrowseCategoriesCache.containsKey(source)) return
+        if (!categoryRefreshInFlight.add(source)) return
+        viewModelScope.launch {
+            try {
+                val refreshed = withTimeoutOrNull(PLATFORM_CATEGORY_TIMEOUT_MS) {
+                    api.refreshCategories()
+                }
+                if (!refreshed.isNullOrEmpty()) {
+                    platformBrowseCategoriesCache[source] = refreshed
+                    if (_uiState.value.selectedSearchSource == source) {
+                        _uiState.value = _uiState.value.copy(
+                            platformBrowseCategories = refreshed,
+                            platformBrowseCategory = _uiState.value.platformBrowseCategory
+                                .ifBlank { api.defaultCategory }
+                        )
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                NPLogger.d(TAG, "browse categories refresh failed: $source ${e.message.orEmpty()}")
+            } finally {
+                categoryRefreshInFlight.remove(source)
             }
         }
     }
@@ -1053,9 +1172,18 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         else -> null
     }
 
-    /** 平台浏览页的分类标签 */
+    /**
+     * 平台浏览页的分类标签。
+     *
+     * UI 直接读 `uiState.platformBrowseCategories`（异步刷新会推进 state）；
+     * 这里保留给其它调用方，优先返回已刷新的结果，没刷新时退回内置标签。
+     */
     fun platformBrowseCategories(source: SearchSource): List<String> =
-        platformBrowseApiFor(source)?.categories.orEmpty()
+        platformBrowseCategoriesCache[source]
+            ?: _uiState.value.platformBrowseCategories.takeIf {
+                it.isNotEmpty() && _uiState.value.platformBrowseSource == source
+            }
+            ?: platformBrowseApiFor(source)?.categories.orEmpty()
 
     /**
      * 平台浏览页的分类标签展示名。

@@ -23,6 +23,7 @@ package moe.ouom.neriplayer.platform.search.api.client.mint
  * Created: 2026/11/13
  */
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType
@@ -117,8 +118,16 @@ class MintHttp(
     ): String? = withContext(Dispatchers.IO) {
         var attempt = 0
         while (attempt <= options.retryCount) {
-            val result = runCatching { execute(url, method, body, headers, jsonBody) }
-            if (result.getOrNull() != null) return@withContext result.getOrNull()
+            // 不用 runCatching：它会连 CancellationException 一起吞掉，
+            // 上游超时/切 tab 取消后重试循环还会继续跑。
+            val text = try {
+                execute(url, method, body, headers, jsonBody)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            if (text != null) return@withContext text
             if (attempt == options.retryCount) break
             val backoff = options.retryBackoffMillis.getOrElse(attempt) { 1000L * (attempt + 1) }
             kotlinx.coroutines.delay(backoff)

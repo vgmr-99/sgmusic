@@ -26,6 +26,7 @@ package moe.ouom.neriplayer.ui.screen.tab.explore
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -94,6 +95,8 @@ internal fun PlatformBrowseContent(
     browse: PlatformBrowseState,
     onCardClick: (PlatformBrowseCard) -> Unit,
     onCategoryClick: (String) -> Unit,
+    /** 加载超时/失败后的重试入口，避免用户只能对着转圈或死文案干等 */
+    onRetry: () -> Unit = {},
     onTrackClick: (PlatformSearchResult) -> Unit,
     onCloseTracks: () -> Unit,
     onPlayTrackNow: (PlatformSearchResult) -> Unit,
@@ -122,6 +125,7 @@ internal fun PlatformBrowseContent(
         browse = browse,
         onCardClick = onCardClick,
         onCategoryClick = onCategoryClick,
+        onRetry = onRetry,
         categoryLabel = categoryLabel,
         tagChipSelectedAlpha = tagChipSelectedAlpha,
         tagChipUnselectedAlpha = tagChipUnselectedAlpha,
@@ -135,6 +139,7 @@ private fun PlatformBrowseCardGrid(
     browse: PlatformBrowseState,
     onCardClick: (PlatformBrowseCard) -> Unit,
     onCategoryClick: (String) -> Unit,
+    onRetry: () -> Unit,
     categoryLabel: (String) -> String,
     tagChipSelectedAlpha: Float,
     tagChipUnselectedAlpha: Float,
@@ -196,21 +201,47 @@ private fun PlatformBrowseCardGrid(
         }
         when {
             browse.loading -> item(span = { GridItemSpan(maxLineSpan) }) {
-                Box(
+                // 光一个转圈容易让人以为卡死，带上文案说明正在做什么
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) { CircularProgressIndicator() }
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                    Text(
+                        text = stringResource(CoreCommonR.string.explore_platform_browse_loading),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 10.dp)
+                    )
+                }
             }
 
             browse.error != null -> item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(
-                    text = browse.error,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 24.dp)
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = browse.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        text = stringResource(CoreCommonR.string.explore_platform_browse_retry),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onRetry() }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                }
             }
 
             browse.cards.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {

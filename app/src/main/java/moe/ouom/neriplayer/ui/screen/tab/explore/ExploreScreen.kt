@@ -173,8 +173,10 @@ import moe.ouom.neriplayer.ui.component.sheet.bottomSheetScrollGuard
 import moe.ouom.neriplayer.ui.feedback.NeriSnackbarHost
 import moe.ouom.neriplayer.ui.feedback.showNeriSnackbar
 import moe.ouom.neriplayer.data.model.SongItem
+import moe.ouom.neriplayer.ui.viewmodel.tab.ExploreCapability
 import moe.ouom.neriplayer.ui.viewmodel.tab.ExploreSearchResult
 import moe.ouom.neriplayer.ui.viewmodel.tab.ExploreViewModel
+import moe.ouom.neriplayer.ui.viewmodel.tab.exploreSourceSupports
 import moe.ouom.neriplayer.ui.viewmodel.tab.BiliPlaylist
 import moe.ouom.neriplayer.ui.viewmodel.tab.NeteaseExploreSearchType
 import moe.ouom.neriplayer.ui.viewmodel.tab.PlaylistSummary
@@ -488,10 +490,14 @@ fun ExploreScreen(
     val platformSearchTypes = remember(ui.selectedSearchSource) {
         vm.supportedSearchTypes(ui.selectedSearchSource)
     }
-    // 浏览页的分类标签（汽水有场景歌单，酷狗/QQ 的榜单没有分类）
-    val platformBrowseCategories = remember(ui.selectedSearchSource) {
-        vm.platformBrowseCategories(ui.selectedSearchSource)
-    }
+    // 不支持搜索的平台（咪咕）不渲染搜索框、搜索历史和搜索分类，避免点了才提示「暂不支持」
+    val searchCapable = exploreSourceSupports(
+        ui.selectedSearchSource,
+        ExploreCapability.SEARCH
+    )
+    // 分类标签从 state 读：线上标签是异步刷回来的，用 remember(selectedSearchSource)
+    // 只取一次的话，刷新结果永远补不进标签栏。
+    val platformBrowseCategories = ui.platformBrowseCategories
     // 分类 key 是稳定 id（数字、组合串），界面上要显示中文名。
     // 标签是异步拉取的，所以 key 列表变化时也要跟着重新取展示名。
     val platformBrowseCategoryLabel: (String) -> String = remember(ui.selectedSearchSource, platformBrowseCategories) {
@@ -780,6 +786,7 @@ fun ExploreScreen(
                     .fillMaxWidth()
                     .padding(horizontal = searchPanelHorizontalPadding, vertical = 8.dp)
             ) {
+                    if (searchCapable) {
                     val cleanSearchField = NeriDesign.isClean
                     val searchFieldLabel = stringResource(
                         if (ui.selectedSearchSource == SearchSource.LINK_RECOGNITION) {
@@ -836,11 +843,12 @@ fun ExploreScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     }
+                    } // 不支持搜索的平台不显示搜索框
                     // only the search field stays pinned; everything below scrolls with the list
                     Column(Modifier.fillMaxWidth().exploreCollapsingHeader(collapsingHeader)) {
                     ExploreSearchHistoryRow(
                         history = visibleSearchHistory,
-                        visible = shouldShowSearchHistory,
+                        visible = shouldShowSearchHistory && searchCapable,
                         query = searchQuery,
                         onHistoryClick = { item -> submitExploreSearch(item) },
                         onRemoveHistory = { item ->
@@ -856,7 +864,7 @@ fun ExploreScreen(
                     )
                     ExploreHotSearchRow(
                         entries = ui.hotSearchEntries,
-                        visible = ui.searchKeyword.isBlank(),
+                        visible = ui.searchKeyword.isBlank() && searchCapable,
                         onEntryClick = { entry -> submitExploreSearch(entry.title) }
                     )
                     if (ui.selectedSearchSource == SearchSource.NETEASE && !ui.isNeteaseLoggedIn) {
@@ -918,8 +926,9 @@ fun ExploreScreen(
                             }
                         }
                     }
-                    // 搜索分类只影响搜索结果；没有搜索词时展示它会让人以为能切换浏览内容
-                    if (searchQuery.isNotBlank()) {
+                    // 搜索分类只影响搜索结果；没有搜索词时展示它会让人以为能切换浏览内容。
+                    // 不支持搜索的平台连分类栏一起隐藏。
+                    if (searchQuery.isNotBlank() && searchCapable) {
                         ExploreSearchTypeBar(
                             source = searchTypeBarSource,
                             selectedNeteaseSearchType = ui.selectedNeteaseSearchType,
@@ -944,7 +953,12 @@ fun ExploreScreen(
                     .fillMaxWidth()
             ) { page ->
                 val currentSource = orderedSearchSources[page]
-                if (searchQuery.isNotEmpty()) {
+                // pager 会预渲染相邻页，按当前页各自的平台能力判断，不共用全局选中源
+                val pageSearchCapable = exploreSourceSupports(
+                    currentSource,
+                    ExploreCapability.SEARCH
+                )
+                if (searchQuery.isNotEmpty() && pageSearchCapable) {
                     if (shouldRenderExploreSearchResults(page, pagerState.currentPage)) {
                         when {
                             ui.searching -> {
@@ -1217,6 +1231,9 @@ fun ExploreScreen(
                                 },
                                 onCategoryClick = { category ->
                                     vm.loadPlatformBrowse(currentSource, category)
+                                },
+                                onRetry = {
+                                    vm.loadPlatformBrowse(currentSource, ui.platformBrowseCategory)
                                 },
                                 onTrackClick = { track ->
                                     onSongClick(
@@ -1572,7 +1589,12 @@ private fun ExploreHotSearchRow(
                     ),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(entries, key = { _, entry -> "${entry.source.name}-${entry.title}" }) { index, entry ->
+                // 上游热搜榜偶尔返回同名条目（实测酷狗「慌啥子嘛」出现两次），
+                // key 只带标题会让 LazyRow 抛 "Key ... was already used" 直接崩。
+                // 加上 index 保证唯一，去重则由 loadHotSearch 在数据层兜住。
+                itemsIndexed(entries, key = { index, entry ->
+                    "${entry.source.name}-$index-${entry.title}"
+                }) { index, entry ->
                     ExploreHotSearchChip(
                         rank = index + 1,
                         entry = entry,

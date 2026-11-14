@@ -73,6 +73,15 @@ interface PlatformBrowseApi {
     val categories: List<String>
 
     /**
+     * 切到该平台时默认展示的分类。
+     *
+     * 各实现都把「热门歌单」放在 [categories] 第一位（没有歌单广场的平台放「排行榜」），
+     * 所以默认打开就是有内容的歌单/榜单，不需要用户再点一次分类。
+     */
+    val defaultCategory: String
+        get() = categories.firstOrNull().orEmpty()
+
+    /**
      * 分类 key 的展示名。
      *
      * [categories] 放的是稳定 key（数字 id 或「id-digest」组合串），不是中文名，
