@@ -59,6 +59,7 @@ globalThis.process = process;
   globalThis.__lx_lastResults = {};
   globalThis.__lx_musicUrlDone = false;
   globalThis.__lx_updateAlert = null;
+  globalThis.__lx_notices = [];
   globalThis.__lx_original_source = globalThis.__lx_original_source || '';
 
   var handlers = {};
@@ -270,22 +271,37 @@ globalThis.process = process;
     return parts.join('&');
   }
 
+  /**
+   * 宿主 HTTP 调用的统一出口。
+   *
+   * 契约对齐 Mint-Music 的 _executeHttpRequest：
+   * - **网络异常不 reject**，而是 resolve 一个 500（超时 408）的响应对象。
+   *   洛雪脚本普遍写成 `lx.request(...).then(res => { if (res.statusCode !== 200) ... })`，
+   *   一旦 reject，脚本的取流主流程会被打断，表现就是「音源取不到地址」。
+   * - body 若是 JSON 会被解析成**对象**（洛雪 desktop 契约里 body 就是对象，
+   *   脚本常直接读 `res.body.data` / `res.body.list`），
+   *   同时保留 bodyText（原始文本）与 bodyBase64（二进制安全）。
+   */
   function callNativeHttp(options) {
-    return new Promise(function (resolve, reject) {
+    return new Promise(function (resolve) {
       try {
         var headers = {};
         var rawHeaders = options.headers || {};
         for (var k in rawHeaders) headers[k] = rawHeaders[k];
 
         var body = '';
+        var hasBody = false;
         if (options.form) {
           body = encodeForm(options.form);
+          hasBody = true;
           if (!hasHeader(headers, 'Content-Type')) headers['Content-Type'] = 'application/x-www-form-urlencoded';
         } else if (options.formData !== undefined && options.formData !== null) {
           body = typeof options.formData === 'string' ? options.formData : JSON.stringify(options.formData);
+          hasBody = true;
         } else if (options.body !== undefined && options.body !== null) {
           body = typeof options.body === 'string' ? options.body
             : (typeof options.body === 'object' ? JSON.stringify(options.body) : String(options.body));
+          hasBody = true;
           if (!hasHeader(headers, 'Content-Type')) headers['Content-Type'] = 'application/json';
         }
 
@@ -293,19 +309,116 @@ globalThis.process = process;
           method: options.method || 'GET',
           url: options.url || '',
           headers: headers,
-          body: body,
+          body: hasBody ? body : '',
+          form: options.form || null,
           timeoutMs: options.timeout || 20000,
+          followRedirects: options.follow_redirects !== false,
+          maxRedirects: options.follow_max || options.maxRedirects || 5,
         });
         var raw = globalThis.__lx_native_http.request(payload);
         var res = JSON.parse(raw);
-        resolve({
-          statusCode: res.statusCode,
-          headers: res.headers || {},
-          body: res.body || '',
-        });
+        resolve(normalizeHttpResponse(res));
       } catch (e) {
-        reject(e);
+        resolve({
+          statusCode: 500,
+          status: 500,
+          statusMessage: 'RequestError',
+          headers: {},
+          body: { error: 'RequestError', message: String((e && e.message) || e) },
+          bodyText: '',
+          bodyBase64: '',
+          bytes: 0,
+          raw: [],
+          isError: true,
+          error: String((e && e.message) || e),
+        });
       }
+    });
+  }
+
+  /** 把 Kotlin 桥返回的原始响应归一化成 Mint 契约的响应对象。 */
+  function normalizeHttpResponse(res) {
+    var text = (res && typeof res.body === 'string') ? res.body : '';
+    var parsed = text;
+    if (text) {
+      try { parsed = JSON.parse(text); } catch (e) { parsed = text; }
+    }
+    var rawBytes = base64ToBytes((res && res.bodyBase64) || '');
+    var code = (res && res.statusCode) || 0;
+    var errorText = (res && res.error) || '';
+    if (!code) {
+      // 网络层失败：Mint 用 500 / 408 表达，而不是 reject
+      var timeout = !!(res && res.isTimeout);
+      code = timeout ? 408 : 500;
+      parsed = {
+        error: timeout ? 'TimeoutError' : 'RequestError',
+        message: errorText || (timeout ? 'Request timeout' : 'Request failed')
+      };
+      text = '';
+    }
+    return {
+      statusCode: code,
+      status: code,
+      statusMessage: String(code),
+      headers: (res && res.headers) || {},
+      body: parsed,
+      bodyText: text,
+      bodyBase64: (res && res.bodyBase64) || '',
+      bytes: rawBytes.length,
+      raw: rawBytes,
+      isError: !!errorText,
+      error: errorText,
+    };
+  }
+
+  /**
+   * cerumusic.request（澜音 / CeruMusic 风格脚本直接调的全局 API）。
+   *
+   * 社区里相当一部分音源脚本写的是 `cerumusic.request(url, opts, cb)`，
+   * 宿主不提供 cerumusic 全局，脚本在取流瞬间抛 ReferenceError，
+   * 用户侧表现就是「脚本识别成功但一直取不到地址」。
+   */
+  function cerumusicRequest(url, options, callback) {
+    if (typeof options === 'function') {
+      callback = options;
+      options = { method: 'GET' };
+    }
+    options = options || {};
+    var headers = {};
+    var rawHeaders = options.headers || {};
+    for (var k in rawHeaders) headers[k] = rawHeaders[k];
+    var body = options.body;
+    if (options.form) {
+      if (!hasHeader(headers, 'Content-Type')) {
+        headers['Content-Type'] = 'application/x-www-form-urlencoded;charset=UTF-8';
+      }
+      body = encodeForm(options.form);
+    } else if (options.formData !== undefined && options.formData !== null && body == null) {
+      body = options.formData;
+    }
+    var opts = {
+      method: options.method || 'GET',
+      url: url,
+      headers: headers,
+      body: body,
+      form: options.form,
+      formData: options.formData,
+      timeout: options.timeout || 20000,
+      follow_redirects: options.follow_redirects,
+      follow_max: options.follow_max,
+    };
+    return callNativeHttp(opts).then(function (res) {
+      var result = {
+        body: res.body,
+        statusCode: res.statusCode,
+        headers: res.headers || {},
+        bodyBase64: res.bodyBase64 || '',
+      };
+      if (typeof callback === 'function') {
+        try { callback(null, result); } catch (_) {}
+        return undefined;
+      }
+      return result;
     });
   }
 
@@ -340,25 +453,28 @@ globalThis.process = process;
       form: options.form,
       formData: options.formData,
       timeout: options.timeout || 20000,
+      follow_redirects: options.follow_redirects,
+      follow_max: options.follow_max,
+      maxRedirects: options.maxRedirects,
     };
     var promise = callNativeHttp(opts).then(function (res) {
+      // 对齐 Mint 的 __lxRequest 返回体：body 是解析后的对象（洛雪 desktop 契约），
+      // 同时保留 raw / bytes / bodyBase64 供需要二进制的脚本使用。
       var resp = {
         statusCode: res.statusCode,
         status: res.statusCode,
-        statusMessage: String(res.statusCode),
+        statusMessage: res.statusMessage,
         headers: res.headers || {},
-        body: res.body || '',
+        bytes: res.bytes || 0,
+        raw: res.raw || [],
+        body: res.body,
+        bodyText: res.bodyText,
+        bodyBase64: res.bodyBase64 || '',
       };
       if (callback) {
-        try { callback(null, resp, resp.body); } catch (_) {}
+        try { callback(null, resp, res.body); } catch (_) {}
       }
       return resp;
-    }, function (err) {
-      if (callback) {
-        try { callback(err, null, null); } catch (_) {}
-        return null;
-      }
-      throw err;
     });
     // desktop 约定：带 callback 时返回一个取消函数；Promise 仍保留给 await 用法
     if (callback) return function () {};
@@ -590,6 +706,30 @@ globalThis.process = process;
     return globalThis.Buffer.from(typeof res === 'string' ? res : '', 'base64');
   }
 
+  /**
+   * 把 crypto / zlib 的结果包成「既是 Promise、又能当 Buffer 用」的对象。
+   *
+   * 现实里两种写法都存在：
+   * - Mint 的 `cerumusic.utils.crypto.*` 一律返回 Promise（脚本写 `await` / `.then`）
+   * - 洛雪 desktop 脚本习惯同步用（`.toString('hex')`、`Buffer.from(result)`）
+   *
+   * 合成一个对象两种写法都能走：
+   * - await / .then 走 Promise 语义，最终拿到 Buffer
+   * - .toString() / length / 下标访问走 Buffer 语义
+   */
+  function makeHybridResult(buffer) {
+    var promise = Promise.resolve(buffer);
+    try {
+      promise.length = buffer.length;
+      for (var i = 0; i < buffer.length; i++) promise[i] = buffer[i];
+      promise.toString = function (enc) { return buffer.toString(enc); };
+      promise.toJSON = function () { return buffer.toJSON(); };
+      promise.isBuffer = true;
+    } catch (e) {}
+    return promise;
+  }
+  globalThis.__lx_makeHybridResult = makeHybridResult;
+
   // ---- 安装 lx ----
   function install() {
     var lxObject = {
@@ -668,28 +808,28 @@ globalThis.process = process;
           aesEncrypt: function (a, b, c, d) {
             var p = cryptoArgPack(a, b, c, d);
             var fn = cryptoBridge().aesEncrypt;
-            return bufferFromBridgeResult(fn ? fn(p.data, p.key, p.iv, p.mode) : '');
+            return makeHybridResult(bufferFromBridgeResult(fn ? fn(p.data, p.key, p.iv, p.mode) : ''));
           },
           aesDecrypt: function (a, b, c, d) {
             var p = cryptoArgPack(a, b, c, d);
             var fn = cryptoBridge().aesDecrypt;
-            return bufferFromBridgeResult(fn ? fn(p.data, p.key, p.iv, p.mode) : '');
+            return makeHybridResult(bufferFromBridgeResult(fn ? fn(p.data, p.key, p.iv, p.mode) : ''));
           },
           // 旧别名：现有 mobile 脚本里的 aesCipher(s) 是 1 参调用，这里兼容任意参数个数
           aesCipher: function (a, b, c) {
             var p = cryptoArgPack(a, b, c, null);
             var fn = cryptoBridge().aesDecrypt;
-            return bufferFromBridgeResult(fn ? fn(p.data, p.key, p.iv, p.mode) : '');
+            return makeHybridResult(bufferFromBridgeResult(fn ? fn(p.data, p.key, p.iv, p.mode) : ''));
           },
           rsaEncrypt: function (s, k) {
             var fn = cryptoBridge().rsaEncrypt;
-            return bufferFromBridgeResult(fn ? fn(asBase64(s), String(k == null ? '' : k)) : '');
+            return makeHybridResult(bufferFromBridgeResult(fn ? fn(asBase64(s), String(k == null ? '' : k)) : ''));
           },
           randomBytes: function (n) {
             var size = parseInt(n, 10);
             if (!isFinite(size) || size < 0) size = 16;
             var fn = cryptoBridge().randomBytes;
-            return bufferFromBridgeResult(fn ? fn(size) : '');
+            return makeHybridResult(bufferFromBridgeResult(fn ? fn(size) : ''));
           },
         },
         zlib: {
@@ -698,14 +838,14 @@ globalThis.process = process;
             try {
               var fn = zlibBridge().inflate;
               if (!fn) return Promise.reject(new Error('zlib.inflate unsupported'));
-              return Promise.resolve(bufferFromBridgeResult(fn(asBase64(buf))));
+              return makeHybridResult(bufferFromBridgeResult(fn(asBase64(buf))));
             } catch (e) { return Promise.reject(e); }
           },
           deflate: function (data) {
             try {
               var fn = zlibBridge().deflate;
               if (!fn) return Promise.reject(new Error('zlib.deflate unsupported'));
-              return Promise.resolve(bufferFromBridgeResult(fn(asBase64(data))));
+              return makeHybridResult(bufferFromBridgeResult(fn(asBase64(data))));
             } catch (e) { return Promise.reject(e); }
           },
         },
@@ -719,6 +859,55 @@ globalThis.process = process;
     globalThis.lx = lxObject;
     globalThis.window = globalThis;
     globalThis.self = globalThis;
+
+    // ---- cerumusic 全局（对齐 Mint-Music 的 injectCeruMusicApi）----
+    // 「澜音 / CeruMusic」风格音源脚本直接用 cerumusic.request 取流，
+    // 宿主不提供这个全局，脚本在取流瞬间抛 ReferenceError，
+    // 用户侧表现就是「脚本识别成功、但播放时提示拿不到播放地址」。
+    globalThis.cerumusic = {
+      env: 'nodejs',
+      version: '1.0.3',
+      utils: {
+        buffer: {
+          from: function (v, enc) { return globalThis.Buffer.from(v, enc); },
+          bufToString: function (buf, enc) {
+            return globalThis.Buffer.from(buf).toString(enc || 'utf8');
+          },
+        },
+        crypto: {
+          aesEncrypt: function (data, mode, key, iv) {
+            return Promise.resolve(lxObject.utils.crypto.aesEncrypt(data, mode, key, iv));
+          },
+          md5: function (s) {
+            return Promise.resolve(lxObject.utils.crypto.md5(s));
+          },
+          randomBytes: function (n) {
+            return Promise.resolve(lxObject.utils.crypto.randomBytes(n));
+          },
+          rsaEncrypt: function (data, key) {
+            return Promise.resolve(lxObject.utils.crypto.rsaEncrypt(data, key));
+          },
+        },
+        zlib: {
+          inflate: function (buf) { return lxObject.utils.zlib.inflate(buf); },
+          deflate: function (data) { return lxObject.utils.zlib.deflate(data); },
+        },
+      },
+      request: function (url, options, callback) {
+        return cerumusicRequest(url, options, callback);
+      },
+      NoticeCenter: function (type, data) {
+        try {
+          if (!globalThis.__lx_notices) globalThis.__lx_notices = [];
+          globalThis.__lx_notices.push({
+            type: String(type == null ? '' : type),
+            data: data === undefined ? null : data,
+            time: Date.now(),
+          });
+          if (String(type) === 'update') globalThis.__lx_updateAlert = data;
+        } catch (e) {}
+      },
+    };
 
     // setTimeout 在 QuickJS 环境里可能不存在 —— 用 JS 侧自研队列实现，绝不能兜成空函数：
     // VM 状态机靠它们驱动推进。由 Kotlin 的 pump 循环每 ~120ms 调 __lx_tickTimers 触发。

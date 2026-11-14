@@ -142,9 +142,18 @@ class LxSourceTester(
                 )
             }
             val info = (init as LxResult.Ok).value
-            val platforms = info.sources.keys
+            val declaredPlatforms = info.sources.keys
                 .mapNotNull { code -> LxPlatform.entries.firstOrNull { it.code == code } }
                 .filter { it != LxPlatform.LOCAL }
+            // 脚本没声明 sources 但注册了 request handler（对齐 Mint 的行为）：
+            // 认为五个平台都可用，逐个平台检测，否则一个探针都不会跑。
+            val platforms = declaredPlatforms.ifEmpty {
+                if (info.fallbackAllSources) {
+                    listOf(LxPlatform.WY, LxPlatform.KG, LxPlatform.KW, LxPlatform.TX, LxPlatform.MG)
+                } else {
+                    emptyList()
+                }
+            }
 
             val probes = mutableListOf<LxQualityProbe>()
             for (platform in platforms) {
@@ -216,7 +225,11 @@ class LxSourceTester(
                 sourceName = sourceName,
                 initialized = true,
                 hasRequestHandler = runtime.hasRequestHandler(),
-                declaredSources = info.sources.keys.toList(),
+                declaredSources = if (info.sources.isEmpty() && info.fallbackAllSources) {
+                    platforms.map { it.code }
+                } else {
+                    info.sources.keys.toList()
+                },
                 probes = probes,
                 timedOut = timedOut,
                 cancelled = cancelled

@@ -435,6 +435,7 @@ private fun lxQualityLabel(quality: LxQuality): String = stringResource(
         LxQuality.Q320 -> CoreCommonR.string.settings_lx_quality_320
         LxQuality.FLAC -> CoreCommonR.string.settings_lx_quality_flac
         LxQuality.FLAC24 -> CoreCommonR.string.settings_lx_quality_flac24
+        else -> CoreCommonR.string.settings_lx_quality_320
     }
 )
 

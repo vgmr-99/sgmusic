@@ -87,13 +87,27 @@ enum class LxPlatform(val code: String) {
 
 enum class LxQuality(val code: String) {
     Q128("128k"),
+    Q192("192k"),
     Q320("320k"),
     FLAC("flac"),
-    FLAC24("flac24bit");
+    FLAC24("flac24bit"),
+    HIRES("hires"),
+    ATMOS("atmos"),
+    MASTER("master");
 
     companion object {
         /** 界面展示顺序固定：128k -> 320k -> 无损 -> 母带 */
         val STANDARD_ORDER: List<LxQuality> = listOf(Q128, Q320, FLAC, FLAC24)
+
+        /**
+         * 完整音质序（对齐 Mint-Music 的 `_qualityFallbackChain`）。
+         *
+         * 取流失败时按这个顺序**只向下**降级：
+         * 128k → 192k → 320k → flac → flac24bit → hires → atmos → master
+         */
+        val FALLBACK_ORDER: List<LxQuality> = listOf(
+            Q128, Q192, Q320, FLAC, FLAC24, HIRES, ATMOS, MASTER,
+        )
     }
 }
 
@@ -122,13 +136,36 @@ data class LxSourceInfo(
     /** 全局 actions（旧形态：inited 顶层声明） */
     val actions: List<String> = emptyList(),
     val alert: String? = null,
+    /**
+     * 脚本注册了 `lx.on('request', handler)`（具备取流能力）。
+     *
+     * 这是 Mint 判定「脚本是可用音源」的**首要**条件：
+     * Mint 的 `__lxEnsureReady` 只要求 handler 存在 + init 完成，
+     * 不要求脚本发过 `lx.send('inited')`。
+     */
+    val hasRequestHandler: Boolean = false,
+    /** 脚本自己导出了 `module.exports.musicUrl`（desktop / CeruMusic 风格） */
+    val hasScriptMusicUrl: Boolean = false,
+    /**
+     * 脚本可用（能取流）但**没有声明 sources**。
+     *
+     * 这时认为所有平台都可用 —— 与 Mint 一致：Mint 把 sources 拍平成列表后，
+     * 即使拿不到 source key，只要注册了 request handler 依然能取流。
+     */
+    val fallbackAllSources: Boolean = false,
 ) {
-    /** 平台是否被脚本声明为可用音源（按 sources 的 key 匹配，大小写不敏感） */
-    fun supports(platform: LxPlatform): Boolean = sourceKey(platform) != null
+    /**
+     * 平台是否被脚本声明为可用音源。
+     *
+     * 优先按 sources 的 key 精确匹配（大小写不敏感）；
+     * 脚本没声明 sources 但注册了 handler 时（[fallbackAllSources]）一律认。
+     */
+    fun supports(platform: LxPlatform): Boolean = sourceKey(platform) != null || fallbackAllSources
 
     /** 该 source 声明的音质列表 */
     fun qualities(platform: LxPlatform): List<String> =
-        sourceKey(platform)?.let { sources[it] }.orEmpty()
+        sourceKey(platform)?.let { sources[it] }?.takeIf { it.isNotEmpty() }
+            ?: if (fallbackAllSources) DEFAULT_QUALITIES else emptyList()
 
     fun supportsQuality(platform: LxPlatform, quality: LxQuality): Boolean =
         qualities(platform).contains(quality.code)
@@ -140,9 +177,13 @@ data class LxSourceInfo(
      * 没声明 actions 的 source 按洛雪约定只当 musicUrl 可用。
      */
     fun supportsAction(platform: LxPlatform, action: String): Boolean {
-        val key = sourceKey(platform) ?: return false
         val wanted = action.trim().lowercase()
         if (wanted.isEmpty()) return false
+        val key = sourceKey(platform)
+        if (key == null) {
+            // 没声明 sources 的脚本：按洛雪约定只当 musicUrl 可用
+            return fallbackAllSources && wanted == "musicurl"
+        }
         val declared = sourceActions[key]
         if (declared == null) return wanted == "musicurl"
         return declared.any { it.trim().lowercase() == wanted }
@@ -156,6 +197,11 @@ data class LxSourceInfo(
         val code = platform.code
         if (sources.containsKey(code)) return code
         return sources.keys.firstOrNull { it.equals(code, ignoreCase = true) }
+    }
+
+    companion object {
+        /** 脚本没声明音质时的缺省档位（洛雪约定） */
+        val DEFAULT_QUALITIES = listOf("128k", "320k", "flac")
     }
 }
 

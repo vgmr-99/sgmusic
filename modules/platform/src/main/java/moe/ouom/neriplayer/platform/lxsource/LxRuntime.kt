@@ -80,6 +80,9 @@ class LxRuntime(
         private val NESTED_KEYS = listOf("data", "body", "result", "response")
         private val HEADER_KEYS = listOf("requestHeaders", "httpHeaders", "headers")
 
+        /** 搜索结果信封 key 的兼容顺序（对齐 Mint-Music 的 _parsePluginSearchResult） */
+        private val SEARCH_ENVELOPE_KEYS = listOf("list", "songs", "items", "records", "data", "result", "body")
+
         /** 脚本没声明音质时的缺省档位（洛雪约定） */
         private val DEFAULT_QUALITIES = listOf("128k", "320k", "flac")
 
@@ -142,6 +145,14 @@ class LxRuntime(
 
         /** 等音源声明的最长时间：VM 混淆源自举偏慢，冷启动别误判 */
         private const val INIT_TIMEOUT_MS = 60_000L
+
+        /**
+         * 脚本注册了 request handler 但迟迟不发 inited 时的宽限期。
+         *
+         * Mint 的判定条件是「注册了 handler 即视为可用音源」，不发 inited 也能取流；
+         * 这里给它 10 秒补齐 sources 的机会，超时后按 Mint 行为放行。
+         */
+        private const val INIT_FALLBACK_GRACE_MS = 10_000L
     }
 
     private fun createContext(): QuickJSContext {
@@ -195,8 +206,9 @@ class LxRuntime(
 
                 // 轮询等待音源声明：sources 就绪即返回
                 val deadline = System.currentTimeMillis() + INIT_TIMEOUT_MS
+                val start = System.currentTimeMillis()
                 var initedStr = ""
-                var adapterState: JSONObject? = null
+                var capability = ScriptCapability()
                 val pump = "if (globalThis.__lx_tickTimers) globalThis.__lx_tickTimers();"
                 var tick = 0
                 while (System.currentTimeMillis() < deadline) {
@@ -206,37 +218,55 @@ class LxRuntime(
                     val v = evalString(ctx, "JSON.stringify(globalThis.__lx_inited || null)")
                     if (!v.isNullOrBlank() && v != "null") initedStr = v
                     val inited = parseJsonObject(initedStr)
+                    capability = readCapability(ctx)
                     if (hasSources(inited)) {
                         if (!isFallbackInited(inited)) break
                         // 兜底声明只在脚本确实没注册 request handler 时才采用；
                         // 注册了 handler 说明脚本可能稍后才发真正的 inited，继续等。
-                        adapterState = readAdapterState(ctx)
-                        if (adapterState?.optBoolean("hasHandler", false) != true) break
+                        if (!capability.hasHandler) break
+                    } else {
+                        // 脚本还没发 inited：只要它注册了 request handler（或自己导出了
+                        // musicUrl），就已经具备取流能力 —— 与 Mint 的 __lxEnsureReady 一致。
+                        // 再给一段宽限期，等它把 sources 补上；宽限期内补上就按声明走。
+                        if (capability.usable &&
+                            System.currentTimeMillis() - start >= INIT_FALLBACK_GRACE_MS
+                        ) break
                     }
                     pumpSleep(120)
                 }
                 val inited = parseJsonObject(initedStr)
+                var scriptHasHandler = capability.hasHandler
+                var scriptHasMusicUrl = capability.scriptMusicUrl
                 if (!hasSources(inited)) {
-                    val state = adapterState ?: readAdapterState(ctx)
+                    val state = readAdapterState(ctx)
                     val initError = state?.optString("initError", "")?.takeIf { it.isNotBlank() }
-                    if (initError != null) {
-                        return@withContext LxResult.Err("init_fail", "LX 音源初始化失败: $initError")
+                    if (!capability.usable) {
+                        if (initError != null) {
+                            return@withContext LxResult.Err("init_fail", "LX 音源初始化失败: $initError")
+                        }
+                        // 把「为什么脚本没被识别」写进错误里，用户在设置页就能看到，
+                        // 不必抓 logcat 才知道是少了 inited 还是少了 request handler。
+                        val handlerHint = if (capability.hasHandler) {
+                            "；脚本已注册 lx.on('request')，但没收到 lx.send('inited')"
+                        } else {
+                            "；脚本也没有注册 lx.on('request') 事件"
+                        }
+                        return@withContext LxResult.Err(
+                            "no_sources",
+                            "脚本未声明任何可用音源（未收到 lx.send('inited') 或 sources 为空）$handlerHint",
+                        )
                     }
-                    // 把「为什么脚本没被识别」写进错误里，用户在设置页就能看到，
-                    // 不必抓 logcat 才知道是少了 inited 还是少了 request handler。
-                    val handlerHint = if (state?.optBoolean("hasHandler", false) == true) {
-                        "；脚本已注册 lx.on('request')，但没收到 lx.send('inited')"
-                    } else {
-                        "；脚本也没有注册 lx.on('request') 事件"
-                    }
-                    return@withContext LxResult.Err(
-                        "no_sources",
-                        "脚本未声明任何可用音源（未收到 lx.send('inited') 或 sources 为空）$handlerHint",
+                    // 脚本能取流但没声明 sources：按 Mint 的行为放行，
+                    // 识别状态里标记 fallbackAllSources，宿主对所有平台都尝试取流。
+                    NPLogger.w(
+                        "LxRuntime",
+                        "脚本可取流但未声明 sources，按 Mint 行为放行" +
+                            "（handler=${capability.hasHandler}, musicUrl=${capability.scriptMusicUrl}）",
                     )
                 }
                 isInited = true
                 NPLogger.d("LxRuntime", "inited received: ${initedStr.take(200)}")
-                LxResult.Ok(parseInited(initedStr))
+                LxResult.Ok(parseInited(initedStr, scriptHasHandler, scriptHasMusicUrl))
             } catch (e: Exception) {
                 NPLogger.e("LxRuntime", "init fail", e)
                 LxResult.Err("init_fail", (e.message ?: e.toString()))
@@ -263,6 +293,52 @@ class LxRuntime(
         )
         if (raw.isNullOrBlank() || raw == "null") return null
         return parseJsonObject(raw)
+    }
+
+    /**
+     * 脚本的取流能力。
+     *
+     * @param hasHandler 注册了 `lx.on('request', handler)`
+     * @param scriptMusicUrl 脚本自己导出了 `module.exports.musicUrl`
+     */
+    private data class ScriptCapability(
+        val hasHandler: Boolean = false,
+        val scriptMusicUrl: Boolean = false,
+    ) {
+        /** 具备取流能力（对齐 Mint 的 __lxEnsureReady 判定） */
+        val usable: Boolean get() = hasHandler || scriptMusicUrl
+    }
+
+    /**
+     * 读取脚本的取流能力，**同时兼容 adapter 包装过与未包装的脚本**。
+     *
+     * - adapter 包装过：读 `__lxAdapterState()`
+     * - 未包装：读 preload 的 `__lx_hasRequestHandler()`，
+     *   并检查 `module.exports.musicUrl` 是否为脚本自己写的
+     *   （preload 装的是宿主兜底实现，带 __lxIsHostDefault 标记，不算）。
+     */
+    private fun readCapability(ctx: QuickJSContext): ScriptCapability {
+        val state = readAdapterState(ctx)
+        if (state != null) {
+            return ScriptCapability(
+                hasHandler = state.optBoolean("hasHandler", false),
+                scriptMusicUrl = state.optBoolean("scriptMusicUrl", false),
+            )
+        }
+        val hasHandler = evalString(
+            ctx,
+            "globalThis.__lx_hasRequestHandler && globalThis.__lx_hasRequestHandler() ? '1' : '0'",
+        ) == "1"
+        val scriptMusicUrl = evalString(
+            ctx,
+            "(function () {" +
+                "var ex = globalThis.module && globalThis.module.exports;" +
+                "if (!ex || typeof ex.musicUrl !== 'function') return '0';" +
+                "if (ex.musicUrl.__lxIsHostDefault) return '0';" +
+                "return '1';" +
+                "})()",
+        ) == "1"
+        return ScriptCapability(hasHandler = hasHandler, scriptMusicUrl = scriptMusicUrl)
     }
 
     private fun parseJsonObject(text: String?): JSONObject? {
@@ -374,21 +450,7 @@ class LxRuntime(
      *
      * adapter 自己装的兜底 musicUrl 不算（那是桥，不是脚本的实现）。
      */
-    private fun hasUsableHandler(ctx: QuickJSContext): Boolean {
-        val hasHandler = evalString(
-            ctx,
-            "globalThis.__lx_hasRequestHandler && globalThis.__lx_hasRequestHandler() ? '1' : '0'",
-        ) == "1"
-        if (hasHandler) return true
-        val state = readAdapterState(ctx)
-        if (state != null) return state.optBoolean("scriptMusicUrl", false)
-        // 没有 adapter（未包装的脚本）：看脚本自己有没有导出 musicUrl
-        return evalString(
-            ctx,
-            "(globalThis.module && globalThis.module.exports && " +
-                "typeof globalThis.module.exports.musicUrl === 'function') ? '1' : '0'",
-        ) == "1"
-    }
+    private fun hasUsableHandler(ctx: QuickJSContext): Boolean = readCapability(ctx).usable
 
     /** 宽松解析归一化结果：url / headers 都按嵌套 + 数组递归提取。 */
     private fun parseMusicUrlResult(raw: String): LxResult<LxMusicUrl> {
@@ -561,6 +623,73 @@ class LxRuntime(
     }
 
     /**
+     * 请求歌词。
+     *
+     * 对齐 Mint-Music 的 `_getLyricWithHandler`：直接派发 request handler，
+     * **不**走 `module.exports.getLyric` 的 actions 声明校验 ——
+     * 很多脚本实现了歌词却没在 inited 里声明 actions，走声明校验会直接判空。
+     * action 依次尝试 lyric → musicLyric → getLyric。
+     */
+    suspend fun requestLyric(
+        platform: LxPlatform,
+        musicInfo: LxMusicInfo,
+        timeoutMs: Long = 12_000,
+    ): LxResult<String> = withContext(jsDispatcher) {
+        val ctx = ctxRef.get() ?: return@withContext LxResult.Err("no_ctx", "runtime not inited")
+        if (!hasUsableHandler(ctx)) {
+            return@withContext LxResult.Err("no_handler", "LX 音源未注册 request 事件")
+        }
+        // 洛雪 handler 期望 info 里既带 musicInfo，也把 musicInfo 的字段平铺进来
+        val info = JSONObject()
+        .put("musicInfo", musicInfo.toJson())
+        .put("type", "lrc")
+        musicInfo.toJson().let { flat ->
+            flat.keys().forEach { key ->
+                if (key != "musicInfo" && key != "type") {
+                    info.put(key, flat.opt(key))
+                }
+            }
+        }
+        for (action in listOf("lyric", "musicLyric", "getLyric")) {
+            val r = request(action, platform, info, timeoutMs)
+            if (r is LxResult.Ok) {
+                val text = r.value
+                if (text.isNotBlank() && text != "null" && text != "undefined") {
+                    return@withContext r
+                }
+            }
+        }
+        LxResult.Err("no_result", "脚本没有返回歌词")
+    }
+
+    /**
+     * 请求封面。
+     *
+     * 对齐 Mint-Music 的 `getPic`：action 依次尝试 musicPic → pic。
+     */
+    suspend fun requestPic(
+        platform: LxPlatform,
+        musicInfo: LxMusicInfo,
+        timeoutMs: Long = 12_000,
+    ): LxResult<String> = withContext(jsDispatcher) {
+        val ctx = ctxRef.get() ?: return@withContext LxResult.Err("no_ctx", "runtime not inited")
+        if (!hasUsableHandler(ctx)) {
+            return@withContext LxResult.Err("no_handler", "LX 音源未注册 request 事件")
+        }
+        val info = JSONObject().put("musicInfo", musicInfo.toJson())
+        for (action in listOf("musicPic", "pic")) {
+            val r = request(action, platform, info, timeoutMs)
+            if (r is LxResult.Ok) {
+                val text = r.value.trim()
+                if (text.isNotEmpty() && text != "null" && text != "undefined") {
+                    return@withContext r
+                }
+            }
+        }
+        LxResult.Err("no_result", "脚本没有返回封面")
+    }
+
+    /**
      * 按歌名搜索，返回候选列表（供 LxIdMatcher 模糊匹配）。
      * mobile 契约：action "search" + info.searchParam{keyword,page,typePage}。
      * desktop/CeruMusic 契约见 [searchDesktop]，由 LxSourceRepository 依次尝试两种。
@@ -639,37 +768,26 @@ class LxRuntime(
             if (errorMessage.isNotBlank()) {
                 return LxResult.Err("script_error", errorMessage)
             }
-            LxResult.Ok(parseSearchCandidates(last))
+            LxResult.Ok(parseSearchCandidates(last, sourceCode))
         } catch (e: Exception) {
             LxResult.Err("search_fail", (e.message ?: e.toString()))
         }
     }
 
-    private fun parseSearchCandidates(text: String): List<LxIdMatcher.Candidate> {
-        val decoded = parseLoose(text)
-        val obj = when (decoded) {
-            is JSONObject -> decoded
-            is JSONArray -> JSONObject().put("list", decoded)
-            else -> runCatching { JSONObject(text) }.getOrNull() ?: return emptyList()
-        }
-        val dataObj = obj.optJSONObject("data")
-        val list = obj.optJSONArray("list")
-            ?: obj.optJSONArray("lists")
-            ?: obj.optJSONArray("data")
-            ?: dataObj?.optJSONArray("list")
-            ?: dataObj?.optJSONArray("lists")
-            ?: dataObj?.optJSONArray("data")
-            ?: return emptyList()
+    private fun parseSearchCandidates(text: String, sourceCode: String): List<LxIdMatcher.Candidate> {
+        val list = extractResultList(parseLoose(text)) ?: return emptyList()
         val out = mutableListOf<LxIdMatcher.Candidate>()
         for (i in 0 until list.length()) {
             val item = list.optJSONObject(i) ?: continue
-            val songmid = item.optString("songmid", "").ifBlank {
-                item.optString("hash", "").ifBlank { item.optString("rid", "") }
-            }
+            val songmid = extractSongId(item, sourceCode)
             if (songmid.isBlank()) continue
-            val title = item.optString("name", "").ifBlank { item.optString("title", "") }
-            val singerRaw = item.optString("singer", "").ifBlank { item.optString("artist", "") }
-            val singer = singerRaw.split(",", "/", "&", "、").first().trim()
+            val title = firstNonBlank(
+                item.optString("name", ""),
+                item.optString("songname", ""),
+                item.optString("title", ""),
+                item.optString("songName", ""),
+            )
+            val singer = extractArtist(item)
             val durSec = when {
                 item.has("encTime") -> item.optLong("encTime", 0)
                 item.has("duration") -> item.optLong("duration", 0)
@@ -680,10 +798,13 @@ class LxRuntime(
                 durSec < 10_000L -> durSec * 1_000L
                 else -> durSec
             }
-            val picUrl = listOf("picUrl", "albumPic", "cover", "pic", "albumPicUrl", "blurPicUrl")
-                .firstOrNull { item.has(it) }
-                ?.let { item.optString(it).takeIf { p -> p.isNotBlank() } }
-            val album = item.optString("albumName", "").ifBlank { item.optString("album", "") }
+            val picUrl = extractPicUrl(item, sourceCode)
+            val album = firstNonBlank(
+                item.optString("albumName", ""),
+                item.optJSONObject("album")?.optString("name", "").orEmpty(),
+                item.optString("album", ""),
+                item.optString("album_name", ""),
+            )
             out.add(
                 LxIdMatcher.Candidate(
                     songmid = songmid,
@@ -699,6 +820,121 @@ class LxRuntime(
     }
 
     /**
+     * 从返回体里剥出候选列表。
+     *
+     * 信封 key 顺序对齐 Mint-Music 的 `_parsePluginSearchResult`：
+     * list → songs → items → records → data → result → body。
+     * 社区脚本把这几个名字混着用，只认一个必然漏掉一半脚本。
+     */
+    private fun extractResultList(decoded: Any?): JSONArray? {
+        var node: Any? = decoded
+        var guard = 0
+        while (guard++ < 5) {
+            if (node is JSONArray) return node
+            val obj = node as? JSONObject ?: return null
+            var matched = false
+            for (key in SEARCH_ENVELOPE_KEYS) {
+                val value = obj.opt(key)
+                if (value is JSONArray) return value
+                if (value is JSONObject) {
+                    node = value
+                    matched = true
+                    break
+                }
+            }
+            if (!matched) return null
+        }
+        return null
+    }
+
+    /**
+     * 按平台提取歌曲 id。
+     *
+     * 洛雪协议里各平台的 id 落在不同字段，取错字段脚本就换不出地址：
+     * - wy → songId / songmid
+     * - kg → hash（FileHash）
+     * - kw → rid
+     * - tx → mid（strMediaMid）
+     * - mg → copyrightId
+     */
+    private fun extractSongId(item: JSONObject, sourceCode: String): String {
+        fun v(key: String): String = item.optString(key, "").trim()
+        val byPlatform = when (sourceCode.lowercase()) {
+            "wy" -> listOf(v("songmid"), v("songId"), v("id"), v("hash"))
+            "kg" -> listOf(v("hash"), v("FileHash"), v("songmid"), v("id"))
+            "kw" -> listOf(v("rid"), v("songmid"), v("hash"), v("id"))
+            "tx" -> listOf(v("mid"), v("strMediaMid"), v("songmid"), v("id"))
+            "mg" -> listOf(v("copyrightId"), v("songmid"), v("id"), v("songId"))
+            else -> listOf(v("songmid"), v("hash"), v("rid"), v("mid"), v("copyrightId"), v("id"))
+        }
+        return byPlatform.firstOrNull { it.isNotBlank() }.orEmpty()
+    }
+
+    /** 歌手字段兼容：singer > artist（数组用 / 连接）> artists[].name */
+    private fun extractArtist(item: JSONObject): String {
+        fun clean(raw: String): String =
+            raw.split(",", "/", "&", "、").first().trim()
+        val singer = item.optString("singer", "").trim()
+        if (singer.isNotEmpty()) return clean(singer)
+        val artist = item.optString("artist", "").trim()
+        if (artist.isNotEmpty()) return clean(artist)
+        val artists = item.optJSONArray("artists")
+        if (artists != null && artists.length() > 0) {
+            val names = mutableListOf<String>()
+            for (i in 0 until artists.length()) {
+                val name = artists.optJSONObject(i)?.optString("name", "")?.trim().orEmpty()
+                if (name.isNotEmpty()) names.add(name)
+            }
+            if (names.isNotEmpty()) return names.joinToString("/")
+        }
+        return ""
+    }
+
+    /** 封面字段兼容（对齐 Mint 的 _parsePluginSearchResult 条目字段表） */
+    private fun extractPicUrl(item: JSONObject, sourceCode: String): String? {
+        val direct = listOf(
+            "picUrl", "pic", "cover", "img", "albumImg", "coverImg",
+            "pic_id", "img3", "img2", "img1",
+        )
+        for (key in direct) {
+            val value = item.optString(key, "").trim()
+            if (value.isNotEmpty()) {
+                return when {
+                    // 网易云只有 pic_id：拼出标准封面地址
+                    key == "pic_id" -> "https://p3.music.126.net/${value}/${value}_300x300.jpg"
+                    // 咪咕的 img3/img2/img1 是裸文件名
+                    key.startsWith("img") && sourceCode.equals("mg", true) ->
+                        "http://d.musicapp.migu.cn/${value}"
+                    else -> value
+                }
+            }
+        }
+        val album = item.optJSONObject("album")
+        if (album != null) {
+            for (key in listOf("picUrl", "pic", "cover", "img")) {
+                val value = album.optString(key, "").trim()
+                if (value.isNotEmpty()) return value
+            }
+        }
+        val al = item.optJSONObject("al")
+        if (al != null) {
+            val value = al.optString("picUrl", "").trim()
+            if (value.isNotEmpty()) return value
+        }
+        // 酷我：只有 rid，封面要按 artistpicserver 规则拼
+        if (sourceCode.equals("kw", true)) {
+            val rid = item.optString("rid", "").trim()
+            if (rid.isNotEmpty()) {
+                return "http://artistpicserver.kuwo.cn/pic.web?rid=$rid&size=300"
+            }
+        }
+        return null
+    }
+
+    private fun firstNonBlank(vararg values: String): String =
+        values.firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+
+    /**
      * 解析 inited 声明（按洛雪插件契约）：
      * - sources 的 key 原样保留（宿主按 key 匹配平台）
      * - 音质取 qualitys -> qualities -> types，缺省 ['128k','320k','flac']
@@ -706,7 +942,11 @@ class LxRuntime(
      *   缺省 ['musicUrl']，一律转小写（比较时大小写不敏感）
      * - 兼容旧形态 `"kw": ["128k", ...]`
      */
-    private fun parseInited(text: String): LxSourceInfo {
+    private fun parseInited(
+        text: String,
+        hasRequestHandler: Boolean = false,
+        hasScriptMusicUrl: Boolean = false,
+    ): LxSourceInfo {
         val obj = runCatching { JSONObject(text) }.getOrDefault(JSONObject())
         val root = obj.optJSONObject("data")?.takeIf { it.has("sources") } ?: obj
         val globalActions = readStringList(root.optJSONArray("actions") ?: obj.optJSONArray("actions"))
@@ -763,6 +1003,10 @@ class LxRuntime(
             sourceNames = sourceNames,
             actions = globalActions ?: emptyList(),
             alert = if (obj.has("alert") && !obj.isNull("alert")) obj.optString("alert") else null,
+            hasRequestHandler = hasRequestHandler,
+            hasScriptMusicUrl = hasScriptMusicUrl,
+            // 脚本能取流但没声明 sources：对所有平台都放行（对齐 Mint）
+            fallbackAllSources = sources.isEmpty() && (hasRequestHandler || hasScriptMusicUrl),
         )
     }
 
@@ -853,10 +1097,12 @@ class LxRuntime(
         val httpObj = ctx.createNewJSObject()
         httpObj.setProperty("request", JSCallFunction { args ->
             runBlocking {
-                // preload 传 JSON 字符串 {method, url, headers, body, timeoutMs}；旧调用 (method, url) 也兼容理解为两参数
+                // preload 传 JSON 字符串 {method, url, headers, body, form, timeoutMs,
+                // followRedirects, maxRedirects}；旧调用 (method, url) 也兼容理解为两参数
                 val rawOption = readArg(args, 0)
                 val opt = runCatching { JSONObject(rawOption) }.getOrNull()
-                val method = opt?.optString("method", "GET") ?: readArg(args, 0).ifEmpty { "GET" }
+                val method = opt?.optString("method", "GET")?.takeIf { it.isNotBlank() }
+                    ?: readArg(args, 0).ifEmpty { "GET" }
                 val url = opt?.optString("url", "") ?: readArg(args, 1)
                 val headers = mutableMapOf<String, String>()
                 val hObj = opt?.optJSONObject("headers")
@@ -868,13 +1114,41 @@ class LxRuntime(
                     }
                 }
                 val bodyText = opt?.optString("body", "")?.takeIf { it.isNotEmpty() }
-                val r = http.request(method, url, headers, bodyText)
-                JSONObject(mapOf(
-                    "statusCode" to r.statusCode,
-                    "headers" to r.headers,
-                    "body" to (r.body ?: ""),
-                    "error" to (r.error ?: ""),
-                )).toString()
+                // 脚本传的 timeout 必须真的生效：洛雪脚本常用 timeout: 3000 做短超时重试
+                val timeoutMs = opt?.optLong("timeoutMs", 0L)?.takeIf { it > 0L } ?: 20_000L
+                val formObj = opt?.optJSONObject("form")
+                val form = if (formObj != null) {
+                    val map = mutableMapOf<String, String>()
+                    val keys = formObj.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        map[k] = formObj.optString(k)
+                    }
+                    map
+                } else {
+                    null
+                }
+                val followRedirects = opt?.optBoolean("followRedirects", true) ?: true
+                val maxRedirects = opt?.optInt("maxRedirects", 5) ?: 5
+                val r = http.request(
+                    method = method,
+                    url = url,
+                    headers = headers,
+                    body = bodyText,
+                    timeoutMs = timeoutMs,
+                    form = form,
+                    followRedirects = followRedirects,
+                    maxRedirects = maxRedirects,
+                )
+                JSONObject().apply {
+                    put("statusCode", r.statusCode)
+                    put("headers", JSONObject(r.headers))
+                    put("body", r.body ?: "")
+                    put("bodyBase64", r.bodyBase64 ?: "")
+                    put("bytes", r.bodySize)
+                    put("error", r.error ?: "")
+                    put("isTimeout", r.isTimeout)
+                }.toString()
             }
         })
         ctx.getGlobalObject().setProperty("__lx_native_http", httpObj)

@@ -410,7 +410,7 @@ object LxScriptConverter {
             return response.url || response.pic || response.img || data.url || data.pic || data.img || null;
           }
 
-          function __lxEnsureReady(action) {
+          function __lxEnsureReady(action, skipActionCheck) {
             if (!__lxInitDone) throw new Error('LX 音源尚未完成初始化');
             // 有些老脚本先注册 request handler，后面的非关键检查才抛错；
             // 只要 handler 在就继续用（Mint 的兼容行为）。
@@ -418,13 +418,13 @@ object LxScriptConverter {
               throw new Error('LX 音源初始化失败: ' + __lxInitError);
             }
             if (!__lxRequestHandler) throw new Error('LX 音源未注册 request 事件');
-            if (action && action.source && action.action && !__lxHasAction(action.source, action.action)) {
+            if (!skipActionCheck && action && action.source && action.action && !__lxHasAction(action.source, action.action)) {
               throw new Error('LX 音源不支持 ' + action.source + '/' + action.action);
             }
           }
 
-          function __lxCallRequest(payload) {
-            __lxEnsureReady(payload);
+          function __lxCallRequest(payload, skipActionCheck) {
+            __lxEnsureReady(payload, skipActionCheck);
             return Promise.resolve(__lxRequestHandler(payload));
           }
 
@@ -481,6 +481,10 @@ object LxScriptConverter {
                   if (typeof __lxCrypto.aesEncrypt !== 'function') throw new Error('lx.utils.crypto.aesEncrypt unsupported');
                   return __lxCrypto.aesEncrypt(buffer, mode, key, iv);
                 },
+                aesDecrypt: function (buffer, mode, key, iv) {
+                  if (typeof __lxCrypto.aesDecrypt !== 'function') throw new Error('lx.utils.crypto.aesDecrypt unsupported');
+                  return __lxCrypto.aesDecrypt(buffer, mode, key, iv);
+                },
                 rsaEncrypt: function (buffer, key) {
                   if (typeof __lxCrypto.rsaEncrypt !== 'function') throw new Error('lx.utils.crypto.rsaEncrypt unsupported');
                   return __lxCrypto.rsaEncrypt(buffer, key);
@@ -501,7 +505,13 @@ object LxScriptConverter {
                 bufToString: function (buf, format) {
                   if (typeof __lxBufferUtils.bufToString !== 'function') throw new Error('lx.utils.buffer.bufToString unsupported');
                   return __lxBufferUtils.bufToString(buf, format);
-                }
+                },
+                toString: function (buf, format) {
+                  return Buffer.from(buf).toString(format || 'utf8');
+                },
+                alloc: function (n) { return Buffer.alloc(n); },
+                isBuffer: function (v) { return Buffer.isBuffer(v); },
+                concat: function (list) { return Buffer.concat(list); }
               },
               zlib: {
                 inflate: function (buf) {
@@ -512,6 +522,14 @@ object LxScriptConverter {
                   if (typeof __lxZlib.deflate !== 'function') throw new Error('lx.utils.zlib.deflate unsupported');
                   return __lxZlib.deflate(data);
                 }
+              },
+              stringToBase64: function (s) {
+                if (typeof __lxHostUtils.stringToBase64 === 'function') return __lxHostUtils.stringToBase64(s);
+                return Buffer.from(String(s == null ? '' : s)).toString('base64');
+              },
+              base64ToString: function (s) {
+                if (typeof __lxHostUtils.base64ToString === 'function') return __lxHostUtils.base64ToString(s);
+                return Buffer.from(String(s == null ? '' : s), 'base64').toString('utf8');
               }
             },
             currentScriptInfo: {
@@ -566,10 +584,10 @@ object LxScriptConverter {
               action: 'musicSearch',
               info: { keyword: keyword, page: page || 1, limit: limit, pagesize: limit }
             };
-            if (!__lxHasAction(source, 'musicSearch')) {
-              return Promise.resolve({ list: [], total: 0, isEnd: true });
-            }
-            return __lxCallRequest(payload).then(function (result) {
+            // 不按 sources[].actions 的声明拦截：对齐 Mint 的 searchWithHandler ——
+            // 它是直接派发 request handler 的。社区脚本常常实现了搜索，
+            // 却在 inited 里只声明了 musicUrl，按声明拦截会让搜索永远返回空。
+            return __lxCallRequest(payload, true).then(function (result) {
               return __lxNormalizeSearchResult(result, limit);
             }, function () {
               return { list: [], total: 0, isEnd: true };

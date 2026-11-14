@@ -135,9 +135,18 @@ class LxSourceRepository(
             val item = _items.value.firstOrNull { it.id == id } ?: continue
             if (!item.enabled || item.state != LxSourceState.OK) continue
             if (item.info?.supports(platform) != true) continue
-            when (val r = runtime.requestMusicUrl(musicInfo, platform, quality)) {
-                is LxResult.Ok -> return r
-                is LxResult.Err -> continue
+            val declaredQualities = item.info.qualities(platform)
+            // 音质降级链：对齐 Mint 的 _qualityFallbackChain（只向下）
+            for (q in qualityChain(quality, declaredQualities)) {
+                val info = if (q == quality) musicInfo else musicInfo.withQuality(q)
+                when (val r = runtime.requestMusicUrl(info, platform, q)) {
+                    is LxResult.Ok -> {
+                        // 酷我提示音（试听片段）不是真正的歌曲地址，直接换下一档音质
+                        if (isPromptUrl(platform, r.value.url)) continue
+                        return r
+                    }
+                    is LxResult.Err -> continue
+                }
             }
         }
         return LxResult.Err("no_source", "no enabled LX source matched")
@@ -161,12 +170,127 @@ class LxSourceRepository(
             if (!item.enabled || item.state != LxSourceState.OK) continue
             if (item.info?.supports(platform) != true) continue
             val musicInfo = resolveMusicInfo(runtime, song, platform, quality) ?: continue
-            when (val r = runtime.requestMusicUrl(musicInfo, platform, quality)) {
-                is LxResult.Ok -> return r
-                is LxResult.Err -> continue
+            val declaredQualities = item.info.qualities(platform)
+            // 音质降级链：对齐 Mint 的 _qualityFallbackChain（只向下），
+            // 脚本只支持更低档时自动降级，而不是直接判定取流失败。
+            for (q in qualityChain(quality, declaredQualities)) {
+                val info = if (q == quality) musicInfo else musicInfo.withQuality(q)
+                when (val r = runtime.requestMusicUrl(info, platform, q)) {
+                    is LxResult.Ok -> {
+                        // 酷我提示音（试听片段）不是真正的歌曲地址，直接换下一档音质
+                        if (isPromptUrl(platform, r.value.url)) {
+                            NPLogger.w("LxSource", "拒绝酷我提示音地址: ${r.value.url}")
+                            continue
+                        }
+                        return r
+                    }
+                    is LxResult.Err -> continue
+                }
             }
         }
         return LxResult.Err("no_source", "no enabled LX source matched")
+    }
+
+    /**
+     * 音质降级链（对齐 Mint-Music 的 `_qualityFallbackChain`）。
+     *
+     * 规则：
+     * - 以请求音质为起点，按 [LxQuality.FALLBACK_ORDER] **只向下**取（请求档 + 更低档）
+     * - 脚本声明了音质时，只在声明范围内取（脚本不支持的档位给了也是白给）
+     * - 请求音质不在标准序里（脚本用了自定义档）时，退回 320k → 128k
+     */
+    private fun qualityChain(requested: LxQuality, supported: List<String>): List<LxQuality> {
+        val supportedCodes = supported.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+        val order = LxQuality.FALLBACK_ORDER
+        val index = order.indexOf(requested)
+        val base = if (index < 0) {
+            listOf(LxQuality.Q320, LxQuality.Q128)
+        } else {
+            order.subList(0, index + 1).reversed()
+        }
+        val filtered = if (supportedCodes.isEmpty()) {
+            base
+        } else {
+            base.filter { qualityCodeMatches(it.code, supportedCodes) }
+        }
+        // 脚本声明的档位与标准序对不上时，至少保证请求档本身被尝试一次
+        if (filtered.isEmpty()) {
+            val requestedSupported = supportedCodes.any { qualityCodeMatches(requested.code, setOf(it)) }
+            return if (requestedSupported) listOf(requested) else emptyList()
+        }
+        return filtered
+    }
+
+    /** 音质码比较：flac24bit / 24bit 视为同一档。 */
+    private fun qualityCodeMatches(code: String, supported: Set<String>): Boolean {
+        if (supported.contains(code)) return true
+        val alias = when (code) {
+            "flac24bit" -> "24bit"
+            "24bit" -> "flac24bit"
+            else -> null
+        }
+        return alias != null && supported.contains(alias)
+    }
+
+    /**
+     * 是不是「提示音 / 试听片段」地址。
+     *
+     * 对齐 Mint-Music 的 `_isKuwoPromptUrl`：酷我音源常返回 10~30 秒的试听片段，
+     * 拿它当歌曲播放会表现为「能播但只有几秒」。
+     */
+    private fun isPromptUrl(platform: LxPlatform, url: String): Boolean {
+        if (platform != LxPlatform.KW) return false
+        val lower = url.lowercase()
+        val markers = listOf(
+            "kw_promo", "kuwo_promo", "/promo/", "permission_prompt", "trial",
+        )
+        if (markers.any { lower.contains(it) }) return true
+        val path = lower.substringBefore('?').substringBefore('#')
+        return path.endsWith(".mflac") || path.endsWith(".mgg")
+    }
+
+    /**
+     * 经脚本取歌词（对齐 Mint 的 getLyricResult 兜底链）。
+     *
+     * 脚本没实现歌词时返回 Err，调用方自行决定是否回落到平台内置歌词。
+     */
+    suspend fun requestLyric(
+        platform: LxPlatform,
+        musicInfo: LxMusicInfo,
+    ): LxResult<LxLyricBundle> {
+        for ((id, runtime) in runtimes) {
+            val item = _items.value.firstOrNull { it.id == id } ?: continue
+            if (!item.enabled || item.state != LxSourceState.OK) continue
+            if (item.info?.supports(platform) != true) continue
+            when (val r = runtime.requestLyric(platform, musicInfo)) {
+                is LxResult.Ok -> {
+                    val bundle = LxLyricParser.parse(r.value)
+                    if (!bundle.isEmpty) return LxResult.Ok(bundle)
+                }
+                is LxResult.Err -> continue
+            }
+        }
+        return LxResult.Err("no_source", "no enabled LX source returned lyric")
+    }
+
+    /** 经脚本取封面地址（对齐 Mint 的 getPic：musicPic → pic）。 */
+    suspend fun requestPic(
+        platform: LxPlatform,
+        musicInfo: LxMusicInfo,
+    ): LxResult<String> {
+        for ((id, runtime) in runtimes) {
+            val item = _items.value.firstOrNull { it.id == id } ?: continue
+            if (!item.enabled || item.state != LxSourceState.OK) continue
+            if (item.info?.supports(platform) != true) continue
+            when (val r = runtime.requestPic(platform, musicInfo)) {
+                is LxResult.Ok -> {
+                    val url = r.value.trim().trim('"')
+                    if (url.isNotEmpty() && url != "null") return LxResult.Ok(url)
+                }
+                is LxResult.Err -> continue
+            }
+        }
+        return LxResult.Err("no_source", "no enabled LX source returned pic")
     }
 
     private suspend fun resolveMusicInfo(
