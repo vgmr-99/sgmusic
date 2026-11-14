@@ -323,8 +323,27 @@ data class ExploreUiState(
      * 正常情况下点歌单就能在站内展开曲目；只有接口读不到时，
      * 才用它兜底给一个「去官方页面看」的入口。
      */
-    val platformBrowseTrackWebUrl: String? = null
+    val platformBrowseTrackWebUrl: String? = null,
+    /**
+     * 展开中的曲目面板属于哪个入口。
+     *
+     * 浏览页和搜索页共用同一套曲目状态，不区分的话，
+     * 浏览页展开的歌单会残留到搜索页，把搜索结果整个挡住。
+     */
+    val platformBrowseTrackScope: PlatformBrowseTrackScope = PlatformBrowseTrackScope.NONE
 )
+
+/** 展开中的曲目面板属于哪个入口 */
+enum class PlatformBrowseTrackScope {
+    /** 没有展开任何歌单 */
+    NONE,
+
+    /** 浏览页（分类歌单 / 榜单）展开的 */
+    BROWSE,
+
+    /** 搜索结果里的歌单展开的 */
+    SEARCH
+}
 
 /**
  * 网易云搜索不再要求登录。
@@ -552,6 +571,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             platformBrowseTracksLoading = false,
             platformBrowseTrackTitle = "",
             platformBrowseTrackWebUrl = null,
+            platformBrowseTrackScope = PlatformBrowseTrackScope.NONE,
             // 各平台开放的分类不一样，切源时把分类落到该平台支持的第一项
             selectedPlatformSearchType = supportedSearchTypes(source)
                 .firstOrNull { it == _uiState.value.selectedPlatformSearchType }
@@ -663,7 +683,13 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             searchLoadMoreError = null,
             searchPage = 0,
             searchKeyword = "",
-            searchDisplayQuery = ""
+            searchDisplayQuery = "",
+            // 换分类等于换了一批结果，之前展开的歌单要收起来
+            platformBrowseTracks = emptyList(),
+            platformBrowseTrackTitle = "",
+            platformBrowseTracksLoading = false,
+            platformBrowseTrackWebUrl = null,
+            platformBrowseTrackScope = PlatformBrowseTrackScope.NONE
         )
     }
 
@@ -725,6 +751,9 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         }
         val source = _uiState.value.selectedSearchSource
         val requestVersion = beginSearchRequest(apiKeyword, matchQuery)
+        // 新一轮搜索等于换了一批结果，之前展开的歌单要收起来，
+        // 否则展开的曲目面板会一直挡在搜索结果上面。
+        closePlatformBrowseTracks()
         NPLogger.d(
             TAG,
             "search start: source=$source, request=$requestVersion, keyword=$apiKeyword, display=$matchQuery"
@@ -1038,7 +1067,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 platformBrowseCards = cachedCards,
                 platformBrowseTracks = emptyList(),
                 platformBrowseTrackTitle = "",
-                platformBrowseTrackWebUrl = null
+                platformBrowseTrackWebUrl = null,
+                platformBrowseTrackScope = PlatformBrowseTrackScope.NONE
             )
             // 缓存命中也顺手在后台补分类，下次进来标签栏就是完整的
             refreshBrowseCategories(source, api)
@@ -1054,7 +1084,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             platformBrowseCards = emptyList(),
             platformBrowseTracks = emptyList(),
             platformBrowseTrackTitle = "",
-            platformBrowseTrackWebUrl = null
+            platformBrowseTrackWebUrl = null,
+            platformBrowseTrackScope = PlatformBrowseTrackScope.NONE
         )
         // 分类刷新不再挡卡片：两个任务并行发出
         refreshBrowseCategories(source, api)
@@ -1077,10 +1108,14 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                     )
                     return@launch
                 }
-                platformBrowseCache[cacheKey] = PlatformBrowseCacheEntry(
-                    timestamp = System.currentTimeMillis(),
-                    cards = cards
-                )
+                // 空结果不写缓存：接口偶发返回空（随机 device_id 被风控）时，
+                // 缓存下来会让用户在 TTL 内一直看到空页，重试也没用
+                if (cards.isNotEmpty()) {
+                    platformBrowseCache[cacheKey] = PlatformBrowseCacheEntry(
+                        timestamp = System.currentTimeMillis(),
+                        cards = cards
+                    )
+                }
                 NPLogger.d(
                     TAG,
                     "platform browse ready: $source/$realCategory cards=${cards.size} in ${System.currentTimeMillis() - startedAt}ms"
@@ -1142,15 +1177,24 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** 展开某个榜单的曲目 */
-    fun loadPlatformBrowseTracks(card: PlatformBrowseCard) {
+    /**
+     * 展开某个榜单 / 歌单的曲目。
+     *
+     * [scope] 区分这个面板属于浏览页还是搜索页：
+     * 两处共用同一份曲目状态，不区分的话浏览页展开的歌单会残留到搜索页。
+     */
+    fun loadPlatformBrowseTracks(
+        card: PlatformBrowseCard,
+        scope: PlatformBrowseTrackScope = PlatformBrowseTrackScope.BROWSE
+    ) {
         val api = platformBrowseApiFor(_uiState.value.selectedSearchSource) ?: return
         if (_uiState.value.platformBrowseTracksLoading) return
         _uiState.value = _uiState.value.copy(
             platformBrowseTracksLoading = true,
             platformBrowseTracks = emptyList(),
             platformBrowseTrackTitle = card.title,
-            platformBrowseTrackWebUrl = card.webUrl
+            platformBrowseTrackWebUrl = card.webUrl,
+            platformBrowseTrackScope = scope
         )
         viewModelScope.launch {
             try {
@@ -1179,7 +1223,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
             platformBrowseTracks = emptyList(),
             platformBrowseTrackTitle = "",
             platformBrowseTracksLoading = false,
-            platformBrowseTrackWebUrl = null
+            platformBrowseTrackWebUrl = null,
+            platformBrowseTrackScope = PlatformBrowseTrackScope.NONE
         )
     }
 

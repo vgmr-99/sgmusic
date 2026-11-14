@@ -66,6 +66,7 @@ import moe.ouom.neriplayer.platform.search.api.stablePlatformSongId
 import moe.ouom.neriplayer.ui.navigation.LocalMiniPlayerHeight
 import moe.ouom.neriplayer.ui.screen.tab.home.PlaylistCard
 import moe.ouom.neriplayer.ui.viewmodel.tab.PlaylistSummary
+import moe.ouom.neriplayer.ui.viewmodel.tab.PlatformBrowseTrackScope
 import moe.ouom.neriplayer.util.platform.tryStartActivity
 import android.content.Context
 import android.content.Intent
@@ -76,6 +77,7 @@ import android.net.Uri
  *
  * @param cards 歌单 / 榜单卡片
  * @param trackTitle 展开中的榜单标题；非空表示当前展示的是榜单曲目
+ * @param trackScope 展开中曲目属于哪个入口；浏览页只认 BROWSE，搜索页只认 SEARCH
  */
 internal data class PlatformBrowseState(
     val cards: List<PlatformBrowseCard> = emptyList(),
@@ -92,7 +94,14 @@ internal data class PlatformBrowseState(
      * 正常点开就能在站内展开曲目；只有接口读不到时才用它兜底，
      * 给一个「去官方页面看」的出口。
      */
-    val trackWebUrl: String? = null
+    val trackWebUrl: String? = null,
+    /**
+     * 展开中曲目属于哪个入口。
+     *
+     * 浏览页和搜索页共用同一份曲目状态，不区分的话，
+     * 浏览页展开的歌单会残留到搜索页，把搜索结果整个挡住。
+     */
+    val trackScope: PlatformBrowseTrackScope = PlatformBrowseTrackScope.NONE
 )
 
 /**
@@ -123,7 +132,7 @@ internal fun PlatformBrowseContent(
     tagChipBorderAlpha: Float = 1f,
     isTabletLayout: Boolean = false
 ) {
-    if (browse.trackTitle.isNotEmpty()) {
+    if (browse.trackTitle.isNotEmpty() && browse.trackScope == PlatformBrowseTrackScope.BROWSE) {
         PlatformBrowseTrackList(
             browse = browse,
             onTrackClick = onTrackClick,
@@ -256,12 +265,27 @@ private fun PlatformBrowseCardGrid(
             }
 
             browse.cards.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(
-                    text = stringResource(CoreCommonR.string.explore_platform_browse_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 24.dp)
-                )
+                Column(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.Start
+                ) {
+                    Text(
+                        text = stringResource(CoreCommonR.string.explore_platform_browse_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    // 接口偶发返回空时给一个手动重试的口子，
+                    // 否则用户只能看着「暂未开放」干等
+                    Text(
+                        text = stringResource(CoreCommonR.string.explore_platform_browse_retry),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onRetry() }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                }
             }
 
             else -> items(browse.cards, key = { it.provider.code + "-" + it.id }) { card ->

@@ -176,6 +176,7 @@ import moe.ouom.neriplayer.ui.viewmodel.tab.ExploreViewModel
 import moe.ouom.neriplayer.ui.viewmodel.tab.exploreSourceSupports
 import moe.ouom.neriplayer.ui.viewmodel.tab.BiliPlaylist
 import moe.ouom.neriplayer.ui.viewmodel.tab.NeteaseExploreSearchType
+import moe.ouom.neriplayer.ui.viewmodel.tab.PlatformBrowseTrackScope
 import moe.ouom.neriplayer.ui.viewmodel.tab.PlaylistSummary
 import moe.ouom.neriplayer.ui.viewmodel.tab.SearchSource
 import moe.ouom.neriplayer.ui.viewmodel.tab.YouTubeExploreSearchType
@@ -980,13 +981,16 @@ fun ExploreScreen(
                             else -> {
                                 // 搜索态下点开歌单：直接在站内展开曲目；
                                 // 没展开时才显示搜索结果列表
-                                if (ui.platformBrowseTrackTitle.isNotEmpty()) {
+                                if (ui.platformBrowseTrackTitle.isNotEmpty() &&
+                                    ui.platformBrowseTrackScope == PlatformBrowseTrackScope.SEARCH
+                                ) {
                                     PlatformBrowseTrackList(
                                         browse = PlatformBrowseState(
                                             trackTitle = ui.platformBrowseTrackTitle,
                                             tracks = ui.platformBrowseTracks,
                                             tracksLoading = ui.platformBrowseTracksLoading,
-                                            trackWebUrl = ui.platformBrowseTrackWebUrl
+                                            trackWebUrl = ui.platformBrowseTrackWebUrl,
+                                            trackScope = ui.platformBrowseTrackScope
                                         ),
                                         onTrackClick = { track ->
                                             onSongClick(
@@ -1136,7 +1140,10 @@ fun ExploreScreen(
                                                             webUrl = item.webUrl
                                                         )
                                                         if (card != null) {
-                                                            vm.loadPlatformBrowseTracks(card)
+                                                            vm.loadPlatformBrowseTracks(
+                                                                card,
+                                                                PlatformBrowseTrackScope.SEARCH
+                                                            )
                                                         } else {
                                                             val webUrl = item.webUrl
                                                             if (webUrl != null) {
@@ -1245,12 +1252,16 @@ fun ExploreScreen(
                                     trackTitle = ui.platformBrowseTrackTitle,
                                     tracks = ui.platformBrowseTracks,
                                     tracksLoading = ui.platformBrowseTracksLoading,
-                                    trackWebUrl = ui.platformBrowseTrackWebUrl
+                                    trackWebUrl = ui.platformBrowseTrackWebUrl,
+                                    trackScope = ui.platformBrowseTrackScope
                                 ),
                                 onCardClick = { card ->
                                     // 各平台歌单都能直接展开曲目并播放；
                                     // 读不到曲目时曲目面板会给出「去官方页面」的兜底入口
-                                    vm.loadPlatformBrowseTracks(card)
+                                    vm.loadPlatformBrowseTracks(
+                                        card,
+                                        PlatformBrowseTrackScope.BROWSE
+                                    )
                                 },
                                 onCategoryClick = { category ->
                                     vm.loadPlatformBrowse(currentSource, category)
