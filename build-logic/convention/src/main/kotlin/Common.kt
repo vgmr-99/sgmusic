@@ -51,5 +51,17 @@ object Common {
     fun getBuildVersionName(project: Project): String {
         return "${getShortGitRevision()}.${getCurrentDate(project)}"
     }
+
+    /**
+     * 对外展示的语义化版本号，来自 gradle.properties 的 appVersion（默认 1.4.0）。
+     * 规则：大更新改第二位数，小更新改第三位数。
+     */
+    fun getAppVersion(project: Project): String {
+        val configured = project.findProperty("appVersion") as String?
+        if (!configured.isNullOrBlank()) return configured.trim()
+        return DEFAULT_APP_VERSION
+    }
+
+    private const val DEFAULT_APP_VERSION = "1.4.0"
 }
 
