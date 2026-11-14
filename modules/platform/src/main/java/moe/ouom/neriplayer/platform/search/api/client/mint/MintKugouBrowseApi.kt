@@ -23,6 +23,10 @@ package moe.ouom.neriplayer.platform.search.api.client.mint
  * Created: 2026/11/13
  */
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import moe.ouom.neriplayer.platform.search.api.PlatformBrowseCard
 import moe.ouom.neriplayer.platform.search.api.PlatformBrowseKind
 import moe.ouom.neriplayer.platform.search.api.PlatformBrowseSupport
@@ -42,7 +46,7 @@ import org.json.JSONObject
  * - 歌单广场 `GET http://www2.kugou.kugou.com/yueku/v9/special/getSpecial`
  * - 排行榜   `GET http://mobilecdnbj.kugou.com/api/v5/rank/list`
  * - 榜单详情 `GET http://mobilecdnbj.kugou.com/api/v3/rank/song`
- * - 歌单详情 `GET http://m.kugou.com/plist/list/{specialid}`
+ * - 歌单详情 `GET http://mobileservice.kugou.com/api/v5/special/song`
  */
 class MintKugouBrowseApi(
     http: MintHttp = MintHttp()
@@ -255,33 +259,34 @@ class MintKugouBrowseApi(
 
     // ── 歌单详情 ────────────────────────────────────────────────
 
+    /**
+     * 歌单曲目。
+     *
+     * 原来的 `m.kugou.com/plist/list/{id}?json=true` 已经下线，
+     * 现在返回的是一个错误模板页（`__Tpl=outsidetpl.htm`），
+     * 取不到 `list.info.members`，所以所有歌单都读不出曲目。
+     *
+     * 改用 App 自己在用的这个接口：游客态可读，一次一页。
+     */
     private suspend fun playlistTracks(specialId: String): List<PlatformSearchResult> {
-        val url = "$PLIST_DETAIL_URL/$specialId?json=true"
-        val root = MintJson.parseObject(http.get(url)) ?: return emptyList()
-        val info = MintJson.obj(MintJson.obj(root, "list"), "info") ?: return emptyList()
-        val members = info.optJSONArray("members") ?: return emptyList()
-        return buildList {
-            for (index in 0 until members.length()) {
-                val item = members.optJSONObject(index) ?: continue
-                val hash = MintJson.stringOf(item, "hash", "FileHash", "audio_id") ?: continue
-                val title = MintJson.stringOf(item, "songname", "filename", "SongName") ?: continue
-                add(
-                    PlatformSearchResult(
-                        type = PlatformSearchType.SONG,
-                        id = hash,
-                        name = decodeHtmlEntities(title),
-                        subtitle = decodeHtmlEntities(MintJson.string(item, "singername").orEmpty()),
-                        album = decodeHtmlEntities(MintJson.string(item, "album_name").orEmpty()),
-                        durationMs = parseDurationMillis(item),
-                        coverUrl = normalizeImage(MintJson.string(item, "album_img"), SONG_COVER_SIZE),
-                        extraCount = 0L,
-                        webUrl = null,
-                        extras = mapOf("hash" to hash),
-                        provider = cardProvider
-                    )
-                )
-            }
+        val pages = coroutineScope {
+            (1..TRACK_PAGE_COUNT).map { page ->
+                async(Dispatchers.IO) { specialSongPage(specialId, page) }
+            }.awaitAll()
         }
+        return pages.flatten().distinctBy { it.id }
+    }
+
+    /** 歌单曲目的一页。 */
+    private suspend fun specialSongPage(specialId: String, page: Int): List<PlatformSearchResult> {
+        val url = StringBuilder(SPECIAL_SONG_URL)
+            .append("?specialid=").append(specialId)
+            .append("&page=").append(page)
+            .append("&pagesize=").append(TRACK_PAGE_SIZE)
+            .toString()
+        val root = MintJson.parseObject(http.get(url)) ?: return emptyList()
+        val list = MintJson.array(root, "info") ?: return emptyList()
+        return parseSongs(list)
     }
 
     // ── 曲目解析 ────────────────────────────────────────────────
@@ -291,25 +296,26 @@ class MintKugouBrowseApi(
             val item = list.optJSONObject(index) ?: continue
             val audioInfo = item.optJSONObject("audio_info")
             val albumInfo = item.optJSONObject("album_info")
-            val hash = item.opt("FileHash")?.toString()
-                ?: item.opt("hash")?.toString()
-                ?: audioInfo?.opt("hash")?.toString()
-                ?: item.opt("audio_id")?.toString()
+            val hash = MintJson.stringOf(item, "FileHash", "hash", "audio_id")
+                ?: audioInfo?.let { MintJson.string(it, "hash") }
                 ?: continue
             if (hash.isEmpty()) continue
-            val title = item.opt("SongName")?.toString()
-                ?: item.opt("songname")?.toString()
-                ?: item.opt("songname_original")?.toString()
-                ?: item.opt("filename")?.toString()
-                ?: item.opt("FileName")?.toString()
-                ?: continue
-            val artist = item.opt("SingerName")?.toString()
-                ?: item.opt("singername")?.toString()
-                ?: item.opt("AuthorName")?.toString()
-                ?: item.opt("author_name")?.toString()
-                ?: ""
-            val album = item.opt("AlbumName")?.toString()
-                ?: item.opt("album_name")?.toString()
+            // 歌单接口只给 `filename`（"歌手 - 歌名"），没有独立的歌名字段，
+            // 所以先把明确的歌名字段取完，取不到再用 filename 拆。
+            val filename = MintJson.string(item, "filename").orEmpty()
+            val split = splitFilename(filename)
+            val title = MintJson.stringOf(item, "SongName", "songname", "songname_original")
+                ?: split?.song
+                ?: filename
+            if (title.isEmpty()) continue
+            val artist = MintJson.stringOf(
+                item,
+                "SingerName",
+                "singername",
+                "AuthorName",
+                "author_name"
+            ) ?: split?.artist.orEmpty()
+            val album = MintJson.stringOf(item, "AlbumName", "album_name")
                 ?: albumInfo?.opt("album_name")?.toString()
                 ?: ""
             add(
@@ -328,6 +334,25 @@ class MintKugouBrowseApi(
                 )
             )
         }
+    }
+
+    /** 酷狗的 `filename` 形如「孙燕姿 - 我不难过」。 */
+    private data class FilenameParts(val artist: String, val song: String)
+
+    /**
+     * 拆 `filename` 里的歌手与歌名。
+     *
+     * 只按第一个 ` - ` 拆：歌名本身带 ` - ` 的情况极少，
+     * 一刀切按最后一个拆反而容易把歌手名切坏。
+     */
+    private fun splitFilename(filename: String): FilenameParts? {
+        if (filename.isEmpty()) return null
+        val index = filename.indexOf(SEPARATOR)
+        if (index <= 0 || index + SEPARATOR.length >= filename.length) return null
+        return FilenameParts(
+            artist = filename.substring(0, index).trim(),
+            song = filename.substring(index + SEPARATOR.length).trim()
+        )
     }
 
     /**
@@ -353,12 +378,15 @@ class MintKugouBrowseApi(
         albumInfo: JSONObject?,
         hash: String
     ): String? {
+        // 歌单接口的封面藏在 trans_param.union_cover 里，带 {size} 占位符
+        val transParam = item.optJSONObject("trans_param")
         val candidates = listOf(
             item.opt("sizable_cover")?.toString(),
             item.opt("album_sizable_cover")?.toString(),
             albumInfo?.opt("sizable_cover")?.toString(),
             albumInfo?.opt("album_img")?.toString(),
             albumInfo?.opt("img")?.toString(),
+            transParam?.opt("union_cover")?.toString(),
             item.opt("img")?.toString(),
             item.opt("pic")?.toString(),
             item.opt("Image")?.toString(),
@@ -387,7 +415,18 @@ class MintKugouBrowseApi(
         const val RANK_LIST_URL =
             "http://mobilecdnbj.kugou.com/api/v5/rank/list?version=9108&plat=0&showtype=2&parentid=0&apiver=6&area_code=1&withsong=1"
         const val RANK_SONG_URL = "http://mobilecdnbj.kugou.com/api/v3/rank/song"
-        const val PLIST_DETAIL_URL = "http://m.kugou.com/plist/list"
+
+        /** 歌单曲目：原来的 m.kugou.com/plist/list 已经下线，换成这个 App 自己用的接口。 */
+        const val SPECIAL_SONG_URL = "http://mobileservice.kugou.com/api/v5/special/song"
+
+        /** 歌名与歌手之间的分隔符。 */
+        const val SEPARATOR = " - "
+
+        /** 歌单曲目一页拉多少首。 */
+        const val TRACK_PAGE_SIZE = 50
+
+        /** 歌单曲目并发拉几页（最多 150 首）。 */
+        const val TRACK_PAGE_COUNT = 3
 
         /** getSpecial 的排序码：5=推荐 6=热门 7=最新。 */
         const val SORT_RECOMMEND = "5"

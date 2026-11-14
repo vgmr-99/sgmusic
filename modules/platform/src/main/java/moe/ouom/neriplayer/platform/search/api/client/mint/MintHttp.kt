@@ -108,6 +108,10 @@ class MintHttp(
      *
      * 第一次失败后等 1 秒重试，第二次还失败再等 2 秒重试，之后放弃。
      * HTTP 状态码错误（4xx / 5xx）同样算失败。
+     *
+     * 空响应体不算「网络抖动」：那是服务端明确拒绝（网易云 weapi 游客态就会回
+     * 一个 HTTP 200 + 空 body），再试几次结果一样，只是白白多等好几秒。
+     * 所以空响应直接放弃，只有真正的网络错误才重试。
      */
     private suspend fun request(
         url: String,
@@ -120,20 +124,32 @@ class MintHttp(
         while (attempt <= options.retryCount) {
             // 不用 runCatching：它会连 CancellationException 一起吞掉，
             // 上游超时/切 tab 取消后重试循环还会继续跑。
-            val text = try {
+            val outcome = try {
                 execute(url, method, body, headers, jsonBody)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                null
+                Outcome.Failed
             }
-            if (text != null) return@withContext text
+            when (outcome) {
+                is Outcome.Body -> return@withContext outcome.text
+                // 空响应：服务端明确拒绝，重试没有意义
+                Outcome.Empty -> return@withContext null
+                Outcome.Failed -> Unit
+            }
             if (attempt == options.retryCount) break
             val backoff = options.retryBackoffMillis.getOrElse(attempt) { 1000L * (attempt + 1) }
             kotlinx.coroutines.delay(backoff)
             attempt++
         }
         null
+    }
+
+    /** 一次请求的结果。空响应与网络失败要分开：前者不重试，后者才重试。 */
+    private sealed interface Outcome {
+        data class Body(val text: String) : Outcome
+        data object Empty : Outcome
+        data object Failed : Outcome
     }
 
     /** 把表单字段拼成 `application/x-www-form-urlencoded` 的请求体。 */
@@ -148,7 +164,7 @@ class MintHttp(
         body: String?,
         headers: Map<String, String>,
         jsonBody: Boolean
-    ): String? {
+    ): Outcome {
         val requestBuilder = Request.Builder()
             .url(url)
             .header("User-Agent", options.userAgent)
@@ -170,10 +186,10 @@ class MintHttp(
         }
 
         return httpClient.newCall(requestBuilder.build()).execute().use { response ->
-            if (!response.isSuccessful) return@use null
-            val bytes = response.body?.bytes() ?: return@use null
-            if (bytes.isEmpty()) return@use null
-            String(bytes, Charsets.UTF_8)
+            if (!response.isSuccessful) return@use Outcome.Failed
+            val bytes = response.body.bytes()
+            if (bytes.isEmpty()) return@use Outcome.Empty
+            Outcome.Body(String(bytes, Charsets.UTF_8))
         }
     }
 

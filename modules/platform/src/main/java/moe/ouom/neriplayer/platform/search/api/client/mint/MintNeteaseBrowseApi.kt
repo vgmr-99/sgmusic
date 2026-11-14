@@ -23,6 +23,11 @@ package moe.ouom.neriplayer.platform.search.api.client.mint
  * Created: 2026/11/13
  */
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.supervisorScope
 import moe.ouom.neriplayer.platform.search.api.PlatformBrowseCard
 import moe.ouom.neriplayer.platform.search.api.PlatformBrowseKind
 import moe.ouom.neriplayer.platform.search.api.PlatformBrowseSupport
@@ -79,8 +84,13 @@ class MintNeteaseBrowseApi(
     }
 
     override suspend fun refreshCategories(): List<String> {
-        loadCatalogue()
-        hotTagsCache = loadHotTags()
+        // 分类目录与热门标签互不依赖，并发拉省掉一轮往返
+        supervisorScope {
+            val catalogue = async(Dispatchers.IO) { loadCatalogue() }
+            val hotTags = async(Dispatchers.IO) { loadHotTags() }
+            catalogue.await()
+            hotTagsCache = hotTags.await()
+        }
         return categories
     }
 
@@ -131,14 +141,19 @@ class MintNeteaseBrowseApi(
 
     private suspend fun categoryPlaylists(tagId: String): List<PlatformBrowseCard> {
         val cat = tagId.ifEmpty { ALL_CATEGORY }
-        val merged = collectPages(PAGE_COUNT) { page ->
-            fetchPlaylistList(
-                cat = cat,
-                order = ORDER_HOT,
-                limit = HOT_LIMIT,
-                offset = HOT_LIMIT * (page - 1)
-            )
-        }
+        // 串行拉三页要等三个来回，改成并发后总耗时等于最慢的那一页
+        val merged = coroutineScope {
+            (1..PAGE_COUNT).map { page ->
+                async(Dispatchers.IO) {
+                    fetchPlaylistList(
+                        cat = cat,
+                        order = ORDER_HOT,
+                        limit = HOT_LIMIT,
+                        offset = HOT_LIMIT * (page - 1)
+                    )
+                }
+            }.awaitAll()
+        }.flatten().distinctBy { it.id }
         if (merged.isNotEmpty()) return merged
 
         // 只有「无标签 + 首页 + 热门」这一种情况才有后两层兜底。
@@ -166,7 +181,7 @@ class MintNeteaseBrowseApi(
             "offset" to offset,
             "total" to true
         )
-        val root = weapiRequest(PLAYLIST_LIST_PATH, body) ?: return emptyList()
+        val root = playlistListRequest(body) ?: return emptyList()
         val list = MintJson.array(root, "playlists") ?: MintJson.array(root, "playlist")
         if (list == null) return emptyList()
         return buildList {
@@ -199,7 +214,7 @@ class MintNeteaseBrowseApi(
     // ── 排行榜 ──────────────────────────────────────────────────
 
     private suspend fun leaderboards(): List<PlatformBrowseCard> {
-        val root = weapiRequest(TOPLIST_PATH, emptyMap()) ?: return emptyList()
+        val root = toplistRequest() ?: return emptyList()
         val list = MintJson.array(root, "list") ?: return emptyList()
         return buildList {
             for (index in 0 until list.length()) {
@@ -232,10 +247,12 @@ class MintNeteaseBrowseApi(
     /**
      * 歌单详情。
      *
-     * Mint 对普通歌单用 linuxapi 转发、对榜单用 weapi，
-     * 这里两条都试，最后再退到明文代理，保证同一个卡片总能拿到曲目。
+     * 顺序：明文直连 → linuxapi 转发 → weapi → 明文代理。
+     * 原来把 linuxapi 放在最前面，而它在游客态经常失败，
+     * 每次都要先浪费一轮请求才轮到真正能用的那条路。
      */
     private suspend fun playlistDetail(id: String, preferLinuxApi: Boolean): JSONObject? {
+        plainDetail(id)?.let { return it }
         if (preferLinuxApi) {
             linuxApiDetail(id)?.let { return it }
         }
@@ -245,6 +262,19 @@ class MintNeteaseBrowseApi(
         }
         proxyPlaylistDetail(id)?.let { return it }
         return null
+    }
+
+    /** 明文详情：游客态一次最多给 200 首，够浏览页用了。 */
+    private suspend fun plainDetail(id: String): JSONObject? {
+        val root = plainApiRequest(
+            PLAIN_PLAYLIST_DETAIL_PATH,
+            mapOf(
+                "id" to id,
+                "n" to DETAIL_TRACK_LIMIT.toString(),
+                "s" to "0"
+            )
+        ) ?: return null
+        return MintJson.obj(root, "playlist")
     }
 
     private suspend fun weapiDetail(id: String): JSONObject? {
@@ -333,7 +363,7 @@ class MintNeteaseBrowseApi(
 
     /** 拉取平台真实的分类目录（分组 + 组内标签）。 */
     private suspend fun loadCatalogue() {
-        val root = weapiRequest(CATALOGUE_PATH, emptyMap()) ?: return
+        val root = catalogueRequest() ?: return
         val sub = MintJson.array(root, "sub") ?: return
         val categories = MintJson.obj(root, "categories") ?: return
 
@@ -361,7 +391,7 @@ class MintNeteaseBrowseApi(
 
     /** 拉取热门标签，用于第三层兜底。 */
     private suspend fun loadHotTags(): List<MintTag> {
-        val root = weapiRequest(HOT_TAGS_PATH, emptyMap()) ?: return emptyList()
+        val root = hotTagsRequest() ?: return emptyList()
         val tags = MintJson.array(root, "tags") ?: return emptyList()
         val result = ArrayList<MintTag>()
         for (index in 0 until tags.length()) {
@@ -381,6 +411,59 @@ class MintNeteaseBrowseApi(
     }
 
     // ── 请求 ────────────────────────────────────────────────────
+
+    /**
+     * 明文直连。
+     *
+     * 网易云的 weapi 直连在游客态会返回「HTTP 200 + 空 body」，
+     * 之前当成失败重试两轮（还带 1s / 2s 退避），白白多花 3 秒才退到代理。
+     * 明文的 `/api/` 路径游客态直接可读（实测 0.25 ~ 0.5s），
+     * 所以把它放在第一顺位，weapi 与代理退成兜底。
+     */
+    private suspend fun plainApiRequest(
+        path: String,
+        params: Map<String, String> = emptyMap()
+    ): JSONObject? {
+        val url = StringBuilder(NETEASE_HOST).append(path).append(queryString(params)).toString()
+        val text = http.get(url, NETEASE_HEADERS) ?: return null
+        val root = MintJson.parseObject(text) ?: return null
+        // `/api/playlist/list` 成功时并不带 code 字段，所以只有「带了 code 且不是 200」才算失败
+        if (root.has("code") && MintJson.int(root, "code", 0) != 200) return null
+        return root
+    }
+
+    /** 歌单列表：明文直连 → weapi → 代理。 */
+    private suspend fun playlistListRequest(body: Map<String, Any?>): JSONObject? {
+        plainApiRequest(
+            PLAIN_PLAYLIST_LIST_PATH,
+            mapOf(
+                "cat" to (body["cat"]?.toString() ?: ALL_CATEGORY),
+                "order" to (body["order"]?.toString() ?: ORDER_HOT),
+                "limit" to (body["limit"]?.toString() ?: HOT_LIMIT.toString()),
+                "offset" to (body["offset"]?.toString() ?: "0"),
+                "total" to "true"
+            )
+        )?.let { return it }
+        return weapiRequest(PLAYLIST_LIST_PATH, body)
+    }
+
+    /** 排行榜：明文直连 → weapi → 代理。 */
+    private suspend fun toplistRequest(): JSONObject? {
+        plainApiRequest(PLAIN_TOPLIST_PATH)?.let { return it }
+        return weapiRequest(TOPLIST_PATH, emptyMap())
+    }
+
+    /** 分类目录：明文直连 → weapi → 代理。 */
+    private suspend fun catalogueRequest(): JSONObject? {
+        plainApiRequest(PLAIN_CATALOGUE_PATH)?.let { return it }
+        return weapiRequest(CATALOGUE_PATH, emptyMap())
+    }
+
+    /** 热门标签：明文直连 → weapi → 代理。 */
+    private suspend fun hotTagsRequest(): JSONObject? {
+        plainApiRequest(PLAIN_HOT_TAGS_PATH)?.let { return it }
+        return weapiRequest(HOT_TAGS_PATH, emptyMap())
+    }
 
     /** 直连优先，失败退到明文代理。 */
     private suspend fun weapiRequest(path: String, body: Map<String, Any?>): JSONObject? {
@@ -466,6 +549,13 @@ class MintNeteaseBrowseApi(
         const val PLAYLIST_LIST_PATH = "/weapi/playlist/list"
         const val TOPLIST_PATH = "/weapi/toplist"
         const val PLAYLIST_DETAIL_PATH = "/weapi/v3/playlist/detail"
+
+        /** 明文直连路径：游客态可用，且不用做 weapi 加密。 */
+        const val PLAIN_CATALOGUE_PATH = "/api/playlist/catalogue"
+        const val PLAIN_HOT_TAGS_PATH = "/api/playlist/hottags"
+        const val PLAIN_PLAYLIST_LIST_PATH = "/api/playlist/list"
+        const val PLAIN_TOPLIST_PATH = "/api/toplist"
+        const val PLAIN_PLAYLIST_DETAIL_PATH = "/api/v3/playlist/detail"
 
         /** 明文代理：主代理与备用代理。 */
         val PROXY_BASES = listOf(
