@@ -26,7 +26,9 @@ package moe.ouom.neriplayer.ui.screen.tab.settings.component.playback
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import moe.ouom.neriplayer.platform.lxsource.CurrentScriptInfo
 import moe.ouom.neriplayer.platform.lxsource.LxHttpClient
+import moe.ouom.neriplayer.platform.lxsource.LxScriptConverter
 import moe.ouom.neriplayer.platform.lxsource.LxSourceItem
 import moe.ouom.neriplayer.platform.lxsource.LxSourceRepository
 import moe.ouom.neriplayer.platform.lxsource.LxSourceState
@@ -97,7 +99,13 @@ internal object LxScriptImporter {
         scriptText: String,
     ): LxScriptImportResult {
         val replaced = repository.hasScriptNamed(name)
-        val item = repository.importScriptReplacingSameName(name = name, scriptText = scriptText)
+        // desktop/CeruMusic 风格脚本经 converter 包装后再存：补 CommonJS 环境、桥接
+        // module.exports.musicUrl。原稿由 converter 保留：
+        //  - 原生导出 musicUrl 的脚本直接返回原文，原文即原稿
+        //  - 需要包装时原稿写进 adapter 的 __lx_original_source，随 scriptText 一起持久化
+        // 这样不必改动 FileLxSourceStore 的 DTO，也不必给 import 增加 Context 参数。
+        val wrapped = LxScriptConverter.convert(scriptText, CurrentScriptInfo(name = name))
+        val item = repository.importScriptReplacingSameName(name = name, scriptText = wrapped)
         return LxScriptImportResult(item = item, replaced = replaced)
     }
 

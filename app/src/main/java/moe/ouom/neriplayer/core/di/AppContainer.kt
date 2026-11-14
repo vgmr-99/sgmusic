@@ -70,11 +70,20 @@ import moe.ouom.neriplayer.platform.search.api.client.QQMusicChartApi
 import moe.ouom.neriplayer.platform.search.api.client.QQMusicSearchApi
 import moe.ouom.neriplayer.platform.search.api.client.QQPlatformSearchApi
 import moe.ouom.neriplayer.platform.search.api.client.KugouSearchApi
+import moe.ouom.neriplayer.platform.search.api.client.KuwoSearchApi
 import moe.ouom.neriplayer.platform.search.api.client.QishuiSearchApi
 import moe.ouom.neriplayer.platform.search.api.client.KugouChartApi
 import moe.ouom.neriplayer.platform.search.api.client.KugouBrowseApi
+import moe.ouom.neriplayer.platform.search.api.client.KuwoBrowseApi
+import moe.ouom.neriplayer.platform.search.api.client.MiguBrowseApi
 import moe.ouom.neriplayer.platform.search.api.client.QqBrowseApi
 import moe.ouom.neriplayer.platform.search.api.client.QishuiBrowseApi
+import moe.ouom.neriplayer.platform.search.api.client.mint.MintHttp
+import moe.ouom.neriplayer.platform.search.api.client.mint.MintKugouBrowseApi
+import moe.ouom.neriplayer.platform.search.api.client.mint.MintKuwoBrowseApi
+import moe.ouom.neriplayer.platform.search.api.client.mint.MintMiguBrowseApi
+import moe.ouom.neriplayer.platform.search.api.client.mint.MintNeteaseBrowseApi
+import moe.ouom.neriplayer.platform.search.api.client.mint.MintQqBrowseApi
 import moe.ouom.neriplayer.platform.lyrics.search.SearchManager
 import moe.ouom.neriplayer.platform.youtube.api.client.YouTubeMusicClient
 import moe.ouom.neriplayer.platform.youtube.api.client.YouTubeAccountProfileClient
@@ -550,7 +559,8 @@ object AppContainer {
     val qqPlatformSearchApi by lazy { QQPlatformSearchApi(sharedOkHttpClient) }
     val kugouSearchApi by lazy { KugouSearchApi(sharedOkHttpClient) }
     val qishuiSearchApi by lazy { QishuiSearchApi(sharedOkHttpClient) }
-    // 平台浏览页（默认页）：酷狗/QQ 的榜单网格
+    val kuwoSearchApi by lazy { KuwoSearchApi(sharedOkHttpClient) }
+    // 平台浏览页（默认页）：酷狗/QQ/汽水/酷我/咪咕的歌单与榜单网格
     val kugouBrowseApi by lazy { KugouBrowseApi(sharedOkHttpClient) }
     val qqBrowseApi by lazy {
         QqBrowseApi(sharedOkHttpClient) { keyword ->
@@ -561,6 +571,17 @@ object AppContainer {
         }
     }
     val qishuiBrowseApi by lazy { QishuiBrowseApi(sharedOkHttpClient) }
+    val kuwoBrowseApi by lazy { KuwoBrowseApi(sharedOkHttpClient) }
+    val miguBrowseApi by lazy { MiguBrowseApi(sharedOkHttpClient) }
+    // Mint 发现页数据源：网易云/酷狗/酷我/QQ音乐/咪咕五源平权。
+    // 复用共享 OkHttp（代理选择器、拦截器与既有平台一致），
+    // MintHttp 自身的 UA、超时与重试语义仍然生效。
+    private val mintHttp by lazy { MintHttp(client = sharedOkHttpClient) }
+    val mintNeteaseBrowseApi by lazy { MintNeteaseBrowseApi(mintHttp) }
+    val mintKugouBrowseApi by lazy { MintKugouBrowseApi(mintHttp) }
+    val mintKuwoBrowseApi by lazy { MintKuwoBrowseApi(mintHttp) }
+    val mintQqBrowseApi by lazy { MintQqBrowseApi(mintHttp) }
+    val mintMiguBrowseApi by lazy { MintMiguBrowseApi(mintHttp) }
     val lrcLibClient by lazy { LrcLibLyricsRepository(LrcLibClient(sharedOkHttpClient)) }
     val amllTtmlClient by lazy { AmllLyricsRepository(AmllTtmlClient(sharedOkHttpClient)) }
     val kugouLyricsClient by lazy { KugouLyricsRepository(KugouLyricsClient(sharedOkHttpClient)) }

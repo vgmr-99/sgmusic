@@ -24,6 +24,17 @@ package moe.ouom.neriplayer.platform.search.api
  */
 
 /**
+ * 卡片对应的集合类型。
+ *
+ * 歌单 id 和榜单 id 有时都是数字（QQ 歌单 tid、酷狗榜单 id），
+ * 靠 id 形状没法区分，详情分发只能靠这个显式标记。
+ */
+enum class PlatformBrowseKind {
+    PLAYLIST,
+    CHART
+}
+
+/**
  * 浏览页的一张卡片（歌单或榜单）。
  *
  * @param id 平台内的 id
@@ -42,6 +53,7 @@ data class PlatformBrowseCard(
     val playCount: Long = 0L,
     /** 有值表示该集合没有公开的曲目接口，点击时改为打开平台官方页面 */
     val webUrl: String? = null,
+    val kind: PlatformBrowseKind = PlatformBrowseKind.PLAYLIST,
     val provider: PlatformSearchProvider
 )
 
@@ -60,8 +72,48 @@ interface PlatformBrowseApi {
     /** 顶部分类标签；为空表示该平台没有分类，不显示标签栏 */
     val categories: List<String>
 
+    /**
+     * 切到该平台时默认展示的分类。
+     *
+     * 各实现都把「热门歌单」放在 [categories] 第一位（没有歌单广场的平台放「排行榜」），
+     * 所以默认打开就是有内容的歌单/榜单，不需要用户再点一次分类。
+     */
+    val defaultCategory: String
+        get() = categories.firstOrNull().orEmpty()
+
+    /**
+     * 分类 key 的展示名。
+     *
+     * [categories] 放的是稳定 key（数字 id 或「id-digest」组合串），不是中文名，
+     * 界面没法直接显示，所以由实现方把 key 翻译成展示名。
+     * 默认实现原样返回 key，既有实现（中文分类本身就是 key）不受影响。
+     */
+    fun categoryLabel(category: String): String = category
+
+    /**
+     * 拉取平台真实的分类标签。
+     *
+     * 有些平台的标签写在代码里（酷狗），有些要调线上接口才有（网易云 / 酷我 / QQ），
+     * 后者在首次展示前需要刷新一次；实现方内部负责缓存，重复调用不应重复请求。
+     *
+     * @return 刷新后的分类 key 列表，与 [categories] 一致；
+     *         无法刷新时返回当前已有的 [categories]
+     */
+    suspend fun refreshCategories(): List<String> = categories
+
     /** 某个分类下的歌单 / 榜单 */
     suspend fun browse(category: String): List<PlatformBrowseCard>
+
+    /**
+     * 搜索结果里的歌单能否在站内直接展开曲目。
+     *
+     * 浏览页的歌单和搜索结果的歌单 id 语义不一定相同
+     * （酷我的浏览 id 是「id-digest」组合串，搜索结果只有 id），
+     * 所以这个能力单独标记：只有确认能读到曲目的平台才在搜索态打开站内展开，
+     * 其它平台维持「跳官方页面」的既有行为。
+     */
+    val supportsSearchPlaylistTracks: Boolean
+        get() = false
 
     /** 某个卡片下的曲目 */
     suspend fun tracks(card: PlatformBrowseCard): List<PlatformSearchResult>

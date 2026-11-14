@@ -1416,6 +1416,24 @@ fun PlaylistCard(
 
     val unfavoritedText = stringResource(CoreCommonR.string.home_unfavorited)
     val favoriteSuccessText = stringResource(CoreCommonR.string.favorite_success)
+    // 不同平台返回的字段不一样：榜单常缺歌曲数，汽水等场景歌单常缺播放量。
+    // 只展示真正拿到的字段，避免出现「0首」「0 · 231首」这类误导性副标题。
+    val playCountLabel = formatPlayCount(context, playlist.playCount)
+    val hasPlayCount = playlist.playCount > 0
+    val hasTrackCount = playlist.trackCount > 0
+    val browseSubtitle = when {
+        hasPlayCount && hasTrackCount -> stringResource(
+            CoreCommonR.string.home_play_count_format,
+            playCountLabel,
+            playlist.trackCount
+        )
+        hasTrackCount -> stringResource(
+            CoreCommonR.string.collection_track_count_format,
+            playlist.trackCount
+        )
+        hasPlayCount -> playCountLabel
+        else -> ""
+    }
 
     Column(
         modifier = Modifier
@@ -1434,11 +1452,7 @@ fun PlaylistCard(
                     offlineMode = offlineMode
                 ),
                 title = playlist.name,
-                subtitle = stringResource(
-                    CoreCommonR.string.home_play_count_format,
-                    formatPlayCount(context, playlist.playCount),
-                    playlist.trackCount
-                )
+                subtitle = browseSubtitle
             )
         } else {
             AsyncImage(
@@ -1463,11 +1477,7 @@ fun PlaylistCard(
                     style = MaterialTheme.typography.titleSmall
                 )
                 Text(
-                    text = stringResource(
-                        CoreCommonR.string.home_play_count_format,
-                        formatPlayCount(context, playlist.playCount),
-                        playlist.trackCount
-                    ),
+                    text = browseSubtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

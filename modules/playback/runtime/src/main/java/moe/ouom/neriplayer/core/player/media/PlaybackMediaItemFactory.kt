@@ -19,6 +19,7 @@ import moe.ouom.neriplayer.data.model.stableKey
 import moe.ouom.neriplayer.platform.youtube.api.transport.extractYouTubeMusicVideoId
 import moe.ouom.neriplayer.platform.youtube.media.isYouTubeMusicSong
 import moe.ouom.neriplayer.data.model.ltw.track.ListenTogetherChannels
+import moe.ouom.neriplayer.platform.search.api.PlatformSearchProvider
 
 internal object PlaybackMediaItemFactory {
     const val BILI_SOURCE_TAG = SongSourceTags.BILIBILI
@@ -39,6 +40,7 @@ internal object PlaybackMediaItemFactory {
             return youtubeSongCacheKey(song, youtubeQualityOverride, youtubePreferM4a, youtubeQuality)
         }
         if (isBiliSource(song)) return biliSongCacheKey(song, biliQuality)
+        if (isPlatformSearchSource(song)) return platformSearchCacheKey(song, neteaseQuality())
         return neteaseCacheKey(song.id, neteaseQuality(), neteaseFallbackEnabled())
     }
 
@@ -57,6 +59,21 @@ internal object PlaybackMediaItemFactory {
 
     fun isBiliSource(song: SongItem): Boolean =
         song.channelId == ListenTogetherChannels.BILIBILI || song.album.startsWith(BILI_SOURCE_TAG)
+
+    /**
+     * 来自 QQ音乐/酷狗/汽水 等免登录搜索平台的歌曲。
+     *
+     * 这些结果没有在本项目的播放链路上打通取流，只能靠 LX 自定义源兜底，
+     * 因此既不能走网易云解析，也不能和网易云歌曲共用缓存键。
+     */
+    fun isPlatformSearchSource(song: SongItem): Boolean =
+        song.channelId != null && song.channelId in PlatformSearchProvider.ALL_CHANNELS
+
+    private fun platformSearchCacheKey(song: SongItem, quality: String): String {
+        val qualityKey = quality.trim().lowercase().ifBlank { "exhigh" }
+        val audioKey = song.audioId?.takeIf { it.isNotBlank() } ?: song.id.toString()
+        return "platform-${song.channelId}-$audioKey-$qualityKey"
+    }
 
     private fun biliSongCacheKey(song: SongItem, quality: () -> String): String {
         val songId = song.audioId ?: song.id.toString()

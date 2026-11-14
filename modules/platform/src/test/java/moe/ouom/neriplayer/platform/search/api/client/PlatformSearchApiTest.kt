@@ -2,8 +2,6 @@ package moe.ouom.neriplayer.platform.search.api.client
 
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.test.runTest
-import moe.ouom.neriplayer.platform.search.api.ChartProvider
-import moe.ouom.neriplayer.platform.search.api.PlatformSearchProvider
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -12,14 +10,12 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 免登录搜索源的解析测试。
- *
- * 这些平台的搜索结果只用于浏览与检索，播放走 LX 兜底，
- * 所以这里只验证"接口返回 -> PlatformSearchResult"这一段。
+ * 免登录搜索与浏览的解析测试。
  */
 class PlatformSearchApiTest {
     private val requests = CopyOnWriteArrayList<Request>()
@@ -66,7 +62,6 @@ class PlatformSearchApiTest {
             song.coverUrl
         )
         assertEquals("https://y.qq.com/n/ryqq/songDetail/003OUlho2HcRHC", song.webUrl)
-        assertEquals(PlatformSearchProvider.QQ, song.provider)
         assertEquals("/soso/fcgi-bin/client_search_cp", requests.single().url.encodedPath)
     }
 
@@ -96,7 +91,6 @@ class PlatformSearchApiTest {
         assertEquals("周杰伦", song.subtitle)
         assertEquals(269000L, song.durationMs)
         assertEquals("http://img/1.jpg", song.coverUrl)
-        assertEquals(PlatformSearchProvider.KUGOU, song.provider)
         assertEquals("/song_search_v2", requests.single().url.encodedPath)
     }
 
@@ -165,7 +159,6 @@ class PlatformSearchApiTest {
                 "~tplv-b829550vbb-image.image",
             track.coverUrl
         )
-        assertEquals(PlatformSearchProvider.QISHUI, track.provider)
         assertEquals("/luna/search/track", requests.single().url.encodedPath)
     }
 
@@ -212,7 +205,7 @@ class PlatformSearchApiTest {
         assertEquals("慌啥子嘛", entries.single().title)
         assertEquals("村口吴老二", entries.single().subtitle)
         assertEquals(17L, entries.single().score)
-        assertEquals(ChartProvider.KUGOU, entries.single().source)
+        assertEquals(moe.ouom.neriplayer.platform.search.api.ChartProvider.KUGOU, entries.single().source)
         assertEquals("/api/v5/rank/song", requests.single().url.encodedPath)
     }
 

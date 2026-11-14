@@ -23,9 +23,15 @@
     <string name="explore_search_type_creator">Creators</string>
     <string name="explore_tab_youtube">YouTube</string>
     <string name="explore_tab_links">Links</string>
-    <string name="explore_platform_browse_empty">This platform has no public playlist or chart recommendations yet. Search for songs, playlists and artists above.</string>
+    <string name="explore_platform_browse_empty">This platform has no public playlist or chart recommendations yet.</string>
+    <string name="explore_platform_browse_loading">Loading playlists and charts…</string>
+    <string name="explore_platform_browse_retry">Failed to load. Tap to retry</string>
+    <string name="explore_platform_browse_tracks_empty">This playlist\'s track list is unavailable right now.</string>
+    <string name="explore_platform_browse_open_web">Open on the official page</string>
     <string name="explore_search_source_qq_music">QQ Music</string>
     <string name="explore_search_source_kugou">KuGou</string>
+    <string name="explore_search_source_migu">Migu</string>
+    <string name="explore_search_source_kuwo">Kuwo</string>
     <string name="explore_search_source_qishui">Qishui</string>
     <string name="explore_link_input_label">Link or share text</string>
     <string name="explore_link_input_placeholder">Paste a NetEase, Bilibili, or YouTube link</string>

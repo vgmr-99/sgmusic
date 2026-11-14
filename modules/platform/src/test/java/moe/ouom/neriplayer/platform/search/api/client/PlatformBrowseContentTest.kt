@@ -1,0 +1,362 @@
+package moe.ouom.neriplayer.platform.search.api.client
+
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.test.runTest
+import moe.ouom.neriplayer.platform.search.api.PlatformBrowseCard
+import moe.ouom.neriplayer.platform.search.api.PlatformBrowseSupport
+import moe.ouom.neriplayer.platform.search.api.PlatformSearchProvider
+import moe.ouom.neriplayer.platform.search.api.client.mint.collectPages
+import moe.ouom.neriplayer.platform.search.api.client.mint.decodeHtmlEntities
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * 酷狗 / QQ / 汽水 / 咪咕 浏览页的解析测试。
+ */
+class PlatformBrowseContentTest {
+    private val requests = CopyOnWriteArrayList<Request>()
+    private var responseBody = "{}"
+    private val client = OkHttpClient.Builder().addInterceptor { chain ->
+        requests += chain.request()
+        Response.Builder()
+            .request(chain.request())
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("fixture")
+            .body(responseBody.toResponseBody())
+            .build()
+    }.build()
+
+    @After
+    fun closeClient() {
+        client.dispatcher.executorService.shutdown()
+        client.connectionPool.evictAll()
+    }
+
+    @Test
+    fun `kugou special playlists are parsed`() = runTest {
+        responseBody = """
+            {"status":1,"special_db":[
+              {"specialid":"3339907","specialname":"乡村之旅","intro":"安静惬意",
+               "img":"http://c1.kgimg.com/custom/240/x.jpg","song_count":30,
+               "total_play_count":"1720万","nickname":"董若"}
+            ]}
+        """.trimIndent()
+
+        val cards = KugouBrowseApi(client).browse("热门歌单")
+
+        assertEquals(1, cards.size)
+        val card = cards.first()
+        assertEquals("kg_3339907", card.id)
+        assertEquals("乡村之旅", card.title)
+        assertEquals(30, card.trackCount)
+        assertEquals(17_200_000L, card.playCount)
+        assertTrue(requests.single().url.encodedPath.contains("getSpecial"))
+    }
+
+    @Test
+    fun `kugou chart tracks carry the hash extra`() = runTest {
+        responseBody = """
+            {"status":1,"data":{"info":[
+              {"songname":"慌啥子嘛","authors":[{"name":"村口吴老二"}],"album_id":"209518658",
+               "album_name":"单曲","duration":186,"hash":"D0F928C394C175BC0F4CAD8B9C3B5E9E",
+               "album_sizable_cover":"http://cover.jpg"}
+            ]}}
+        """.trimIndent()
+
+        val api = KugouBrowseApi(client)
+        // 榜单卡片来自榜单列表接口，这里直接构造
+        val card = moe.ouom.neriplayer.platform.search.api.PlatformBrowseCard(
+            id = "kg_8888",
+            title = "TOP500",
+            kind = moe.ouom.neriplayer.platform.search.api.PlatformBrowseKind.CHART,
+            provider = moe.ouom.neriplayer.platform.search.api.PlatformSearchProvider.KUGOU
+        )
+        val tracks = api.tracks(card)
+
+        assertEquals(1, tracks.size)
+        assertEquals("D0F928C394C175BC0F4CAD8B9C3B5E9E", tracks[0].id)
+        assertEquals("村口吴老二", tracks[0].subtitle)
+        assertEquals("D0F928C394C175BC0F4CAD8B9C3B5E9E", tracks[0].extras["hash"])
+        assertEquals("209518658", tracks[0].extras["albumId"])
+    }
+
+    @Test
+    fun `qq plaza playlists are parsed from v playlist`() = runTest {
+        responseBody = """
+            {"code":0,"playlist":{"code":0,"data":{"v_playlist":[
+              {"tid":"7707261125","title":"甜度爆表","desc":"说唱",
+               "cover_url_medium":"http://cover.jpg","song_ids":["1","2","3"],
+               "access_num":"2333"}
+            ]}}}
+        """.trimIndent()
+
+        val cards = QqBrowseApi(client).browse("热门歌单")
+
+        assertEquals(1, cards.size)
+        val card = cards.first()
+        assertEquals("tx_7707261125", card.id)
+        assertEquals("甜度爆表", card.title)
+        assertEquals(3, card.trackCount)
+        assertEquals(2333L, card.playCount)
+    }
+
+    @Test
+    fun `qq category playlists are parsed from v item`() = runTest {
+        responseBody = """
+            {"code":0,"playlist":{"code":0,"data":{"content":{"v_item":[
+              {"basic":{"tid":"3821289344","title":"短视频BGM","desc":"持续更新",
+                "cover":{"medium_url":"http://cover.jpg"},"song_cnt":1981,"play_cnt":"1979788267",
+                "creator":{"nick":"一番队队长"}}}
+            ]}}}}
+        """.trimIndent()
+
+        val cards = QqBrowseApi(client).browse("短视频热歌")
+
+        assertEquals(1, cards.size)
+        assertEquals("tx_3821289344", cards.first().id)
+        assertEquals(1981, cards.first().trackCount)
+        assertEquals(1_979_788_267L, cards.first().playCount)
+    }
+
+    @Test
+    fun `qq playlist tracks carry the str media mid extra`() = runTest {
+        responseBody = """
+            {"code":0,"cdlist":[{"songlist":[
+              {"songmid":"003OUlho2HcRHC","songname":"晴天","singer":[{"name":"周杰伦"}],
+               "albumname":"叶惠美","interval":269,"albummid":"002rODniR2x1ez"}
+            ]}]}
+        """.trimIndent()
+
+        val api = QqBrowseApi(client)
+        val tracks = api.tracks(
+            moe.ouom.neriplayer.platform.search.api.PlatformBrowseCard(
+                id = "tx_123",
+                title = "歌单",
+                kind = moe.ouom.neriplayer.platform.search.api.PlatformBrowseKind.PLAYLIST,
+                provider = moe.ouom.neriplayer.platform.search.api.PlatformSearchProvider.QQ
+            )
+        )
+
+        assertEquals(1, tracks.size)
+        assertEquals("003OUlho2HcRHC", tracks[0].id)
+        assertEquals("003OUlho2HcRHC", tracks[0].extras["strMediaMid"])
+    }
+
+    @Test
+    fun `qishui playlists are parsed from the luna response`() = runTest {
+        responseBody = """
+            {"result_groups":[{"id":"playlists","data":[{"entity":{"playlist":{
+              "id":"7429294603956600867","title":"伤感emo歌曲合集","count_tracks":75,
+              "owner":{"nickname":"艾君子EK"},
+              "url_cover":{"uri":"tos-cn-i-b829550vbb/9dafb8",
+                "urls":["https://p3-luna.douyinpic.com/img/"],"template_prefix":"tplv-b829550vbb"}
+            }}}]}]}
+        """.trimIndent()
+
+        val cards = QishuiBrowseApi(client).browse("伤感")
+
+        assertEquals(1, cards.size)
+        val card = cards.first()
+        assertEquals("qs_7429294603956600867", card.id)
+        assertEquals("伤感emo歌曲合集", card.title)
+        assertEquals(75, card.trackCount)
+        assertEquals(
+            "https://www.qishui.com/playlist/7429294603956600867",
+            card.webUrl
+        )
+    }
+
+    @Test
+    fun `migu playlist square marks the playlist nodes`() = runTest {
+        responseBody = """
+            {"code":"000000","data":{"contents":[
+              {"columnId":"49937966","title":"场景歌单","view":"playlist_square_scene_zone",
+               "contents":[{"resType":"2021","resId":"234168581","txt":"循环一整天",
+                 "txt2":"抖音爆款","img":"https://d.musicapp.migu.cn/a.jpeg"}]}
+            ]}}
+        """.trimIndent()
+
+        val cards = MiguBrowseApi(client).browse("热门歌单")
+
+        assertEquals(1, cards.size)
+        assertEquals("mg_234168581", cards.first().id)
+        assertEquals("循环一整天", cards.first().title)
+        assertEquals("抖音爆款", cards.first().subtitle)
+    }
+
+    @Test
+    fun `migu chart tracks carry the copyright id extra`() = runTest {
+        responseBody = """
+            {"code":"000000","columnInfo":{"columnTitle":"热歌榜","contents":[
+              {"objectInfo":{"copyrightId":"60054701923","songName":"晴天","singerName":"周杰伦",
+                "albumName":"叶惠美","duration":269,"img":"http://cover.jpg"}}
+            ]}}
+        """.trimIndent()
+
+        val api = MiguBrowseApi(client)
+        val tracks = api.tracks(
+            moe.ouom.neriplayer.platform.search.api.PlatformBrowseCard(
+                id = "mg_27186466",
+                title = "热歌榜",
+                kind = moe.ouom.neriplayer.platform.search.api.PlatformBrowseKind.CHART,
+                provider = moe.ouom.neriplayer.platform.search.api.PlatformSearchProvider.MIGU
+            )
+        )
+
+        assertEquals(1, tracks.size)
+        assertEquals("60054701923", tracks[0].id)
+        assertEquals("晴天", tracks[0].name)
+        assertEquals("60054701923", tracks[0].extras["copyrightId"])
+    }
+
+    @Test
+    fun `html entities are decoded including numeric emoji entities`() {
+        // 命名实体保持原有行为
+        assertEquals("A & B <C>", decodeHtmlEntities("A &amp; B &lt;C&gt;"))
+        // 汽水歌单标题里的十进制 / 十六进制 emoji 实体
+        assertEquals("轻音乐100首🌙", decodeHtmlEntities("轻音乐100首&#127769;"))
+        assertEquals("夜🌙", decodeHtmlEntities("夜&#x1F319;"))
+        // 非法或越界的实体原样保留，不抛异常
+        assertEquals("literal &#;", decodeHtmlEntities("literal &#;"))
+        assertEquals("bad &#99999999999;", decodeHtmlEntities("bad &#99999999999;"))
+        // 不做二次解码，避免 &amp;#38; 被误转成 &
+        assertEquals("&#38;", decodeHtmlEntities("&amp;#38;"))
+    }
+
+    @Test
+    fun `qishui card id keeps the raw playlist id after stripping the source prefix`() {
+        val raw = "7200303561195061287"
+        val card = PlatformBrowseCard(
+            id = PlatformBrowseSupport.qualifyId(PlatformSearchProvider.QISHUI, raw),
+            title = "2026抖音爆款热歌",
+            provider = PlatformSearchProvider.QISHUI
+        )
+        assertEquals("qs_$raw", card.id)
+        // tracks() 靠它还原出平台的 playlist id
+        assertEquals(raw, PlatformBrowseSupport.stripProviderPrefix(card.id))
+    }
+
+    @Test
+    fun `qishui playlist tracks are parsed from media resources`() = runTest {
+        responseBody = """
+            {"playlist":{"id":"7200303561195061287","title":"2026抖音爆款热歌","count_tracks":2},
+             "has_more":false,"next_cursor":"2",
+             "media_resources":[
+               {"id":"7654496187366426641","type":"track","index":0,
+                "entity":{"track_wrapper":{"track":{
+                  "id":"7654496187366426641",
+                  "name":"梦的翅膀受了伤（SouMix Remix）",
+                  "duration":133594,
+                  "artists":[{"id":"6795393014723250177","name":"蒋雪儿Snow.J"}],
+                  "album":{"id":"7654496373500364817","name":"梦的翅膀受了伤（SouMix Remix）",
+                    "url_cover":{"uri":"tos-cn-v-2774c002/abc",
+                      "urls":["https://p3-luna.douyinpic.com/img/"],"template_prefix":"tplv-b829550vbb"}}
+                }}}},
+               {"id":"7436998767289845777","type":"track","index":1,
+                "entity":{"track_wrapper":{"track":{
+                  "id":"7436998767289845777","name":"恋人","duration":275913,
+                  "artists":[{"id":"1","name":"李荣浩"},{"id":"2","name":"黑马"}],
+                  "album":{"id":"2","name":"黑马",
+                    "url_cover":{"uri":"u2","urls":["https://p3-luna.douyinpic.com/img/"],
+                      "template_prefix":"tplv-x"}}
+                }}}}
+             ]}
+        """.trimIndent()
+
+        val card = PlatformBrowseCard(
+            id = PlatformBrowseSupport.qualifyId(
+                PlatformSearchProvider.QISHUI,
+                "7200303561195061287"
+            ),
+            title = "2026抖音爆款热歌",
+            trackCount = 2,
+            provider = PlatformSearchProvider.QISHUI
+        )
+
+        val tracks = QishuiBrowseApi(client).tracks(card)
+
+        assertEquals(2, tracks.size)
+        val first = tracks.first()
+        assertEquals("7654496187366426641", first.id)
+        assertEquals("梦的翅膀受了伤（SouMix Remix）", first.name)
+        assertEquals("蒋雪儿Snow.J", first.subtitle)
+        assertEquals(133594L, first.durationMs)
+        assertEquals("梦的翅膀受了伤（SouMix Remix）", first.album)
+        assertTrue(first.coverUrl.orEmpty().contains("p3-luna.douyinpic.com"))
+        // 多歌手用 / 连接
+        assertEquals("李荣浩/黑马", tracks[1].subtitle)
+
+        val request = requests.first()
+        assertTrue(request.url.encodedPath.contains("playlist/detail"))
+        assertEquals(
+            "7200303561195061287",
+            request.url.queryParameter("playlist_id")
+        )
+    }
+
+    @Test
+    fun `qishui playlist tracks stay empty when the playlist has no media`() = runTest {
+        responseBody = """{"playlist":{"id":"1","title":"空歌单","count_tracks":0},"has_more":false}"""
+
+        val card = PlatformBrowseCard(
+            id = PlatformBrowseSupport.qualifyId(PlatformSearchProvider.QISHUI, "1"),
+            title = "空歌单",
+            provider = PlatformSearchProvider.QISHUI
+        )
+
+        val tracks = QishuiBrowseApi(client).tracks(card)
+        assertEquals(emptyList<Any>(), tracks)
+    }}
+
+/**
+ * 分页聚合的取消语义。
+ *
+ * 浏览页整体超时靠协程取消实现，如果这里把 CancellationException 吞掉，
+ * 超时后请求还会继续跑完，界面就会一直转圈。
+ */
+class MintCollectPagesCancellationTest {
+
+    @Test
+    fun `collectPages propagates cancellation instead of swallowing it`() = runTest {
+        var cancelled = false
+        try {
+            collectPages(3) { page ->
+                if (page == 1) throw CancellationException("upstream timeout")
+                emptyList<String>()
+            }
+        } catch (e: CancellationException) {
+            cancelled = true
+        }
+        assertTrue(cancelled)
+    }
+
+    @Test
+    fun `collectPages stops at first empty page and keeps collected items`() = runTest {
+        val visited = mutableListOf<Int>()
+        val items = collectPages(5) { page ->
+            visited += page
+            if (page == 1) listOf("a", "b") else emptyList()
+        }
+        assertEquals(listOf("a", "b"), items)
+        assertEquals(listOf(1, 2), visited)
+    }
+
+    @Test
+    fun `collectPages treats ordinary failure as an empty page`() = runTest {
+        val items = collectPages(3) { page ->
+            if (page == 1) throw IllegalStateException("boom")
+            listOf("x")
+        }
+        assertEquals(emptyList<String>(), items)
+    }
+
+}

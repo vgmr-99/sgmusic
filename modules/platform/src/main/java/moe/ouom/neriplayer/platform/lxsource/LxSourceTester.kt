@@ -64,6 +64,8 @@ data class LxQualityProbe(
  * @param sourceName 音源名
  * @param initialized 脚本是否初始化成功
  * @param initError 初始化失败原因
+ * @param hasRequestHandler 脚本是否注册了 lx.on('request')（没有它就取不到流）
+ * @param declaredSources 脚本声明的音源 key（sources 列表）
  * @param probes 逐项检测结果，顺序即表格行序
  * @param timedOut 是否因为脚本卡死而中止
  * @param cancelled 是否被用户取消
@@ -72,6 +74,10 @@ data class LxSourceTestReport(
     val sourceName: String,
     val initialized: Boolean,
     val initError: String? = null,
+    /** 有没有注册 request 事件：没有它脚本压根取不到流 */
+    val hasRequestHandler: Boolean = false,
+    /** 脚本声明的音源 key（宿主按它匹配平台） */
+    val declaredSources: List<String> = emptyList(),
     val probes: List<LxQualityProbe> = emptyList(),
     val timedOut: Boolean = false,
     val cancelled: Boolean = false
@@ -136,9 +142,18 @@ class LxSourceTester(
                 )
             }
             val info = (init as LxResult.Ok).value
-            val platforms = info.sources.keys
+            val declaredPlatforms = info.sources.keys
                 .mapNotNull { code -> LxPlatform.entries.firstOrNull { it.code == code } }
                 .filter { it != LxPlatform.LOCAL }
+            // 脚本没声明 sources 但注册了 request handler（对齐 Mint 的行为）：
+            // 认为五个平台都可用，逐个平台检测，否则一个探针都不会跑。
+            val platforms = declaredPlatforms.ifEmpty {
+                if (info.fallbackAllSources) {
+                    listOf(LxPlatform.WY, LxPlatform.KG, LxPlatform.KW, LxPlatform.TX, LxPlatform.MG)
+                } else {
+                    emptyList()
+                }
+            }
 
             val probes = mutableListOf<LxQualityProbe>()
             for (platform in platforms) {
@@ -209,6 +224,12 @@ class LxSourceTester(
             return LxSourceTestReport(
                 sourceName = sourceName,
                 initialized = true,
+                hasRequestHandler = runtime.hasRequestHandler(),
+                declaredSources = if (info.sources.isEmpty() && info.fallbackAllSources) {
+                    platforms.map { it.code }
+                } else {
+                    info.sources.keys.toList()
+                },
                 probes = probes,
                 timedOut = timedOut,
                 cancelled = cancelled

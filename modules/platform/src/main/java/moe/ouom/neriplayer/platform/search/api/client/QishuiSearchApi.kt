@@ -23,7 +23,6 @@ package moe.ouom.neriplayer.platform.search.api.client
  * Created: 2026/11/12
  */
 
-import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchApi
@@ -150,8 +149,9 @@ class QishuiSearchApi(
     }
 
     private fun commonParams(): Map<String, String> {
-        // 设备标识只需自洽即可，游客态不依赖登录态
-        val deviceId = UUID.randomUUID().toString().replace("-", "").take(16)
+        // 设备标识必须稳定：每次请求都换新的随机 id 会被当成一批新设备，
+        // 接口偶发返回空结果
+        val deviceId = LunaDeviceId.value
         return mapOf(
             "device_platform" to "android",
             "os" to "android",

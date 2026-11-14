@@ -29,6 +29,7 @@ import moe.ouom.neriplayer.data.identity.stableKey
 import moe.ouom.neriplayer.data.settings.playback.sanitized
 import moe.ouom.neriplayer.lyrics.parser.convertPlainLyricsToEntries
 import moe.ouom.neriplayer.lyrics.parser.normalizeLegacyLrcTimestamps
+import moe.ouom.neriplayer.platform.lxsource.LxResult
 import android.app.Application
 import android.util.LruCache
 import kotlinx.coroutines.CancellationException
@@ -70,6 +71,8 @@ import moe.ouom.neriplayer.platform.youtube.media.isYouTubeMusicSong
 import moe.ouom.neriplayer.data.model.lyrics.LyricEntry
 import moe.ouom.neriplayer.lyrics.parser.parseNeteaseLyricsAuto
 import moe.ouom.neriplayer.lyrics.parser.alignSubtitleLyrics
+import moe.ouom.neriplayer.lyrics.parser.isPlaceholderLyricContent
+import moe.ouom.neriplayer.lyrics.parser.isPlaceholderLyricLine
 import moe.ouom.neriplayer.lyrics.parser.parseEmbeddedPhoneticLyrics
 import moe.ouom.neriplayer.lyrics.parser.resolveStoredLyricText
 import moe.ouom.neriplayer.data.model.SongItem
@@ -105,6 +108,43 @@ internal fun extractRomanizedNeteaseLyricContent(rawResponse: String): String {
     return normalizeLegacyLrcTimestamps(
         payload.optJSONObject("romalrc")?.optString("lyric").orEmpty()
     )
+}
+
+/**
+ * 网易云返回的「这首歌没有收录歌词」占位响应。
+ *
+ * 真机实测（汽水歌《枪火（相对那就针锋相对）》）：
+ * `{"uncollected":true,"sgc":false,"sfy":false,"qfy":false,"needDesc":true,
+ *   "lrc":{"version":1,"lyric":"[00:00.00]暂无歌词"},"code":200,"briefDesc":null}`
+ *
+ * 这里要用网易云自己的 id 去查才有这个占位语；用别的平台的 id 去查，
+ * 网易云会当成「不存在的歌」返回同一份占位内容。
+ */
+internal fun isNeteaseUncollectedLyricResponse(rawResponse: String): Boolean {
+    val payload = runCatching { JSONObject(rawResponse) }.getOrNull() ?: return false
+    val lrc = payload.optJSONObject("lrc")?.optString("lyric").orEmpty()
+    val yrc = payload.optJSONObject("yrc")?.optString("lyric").orEmpty()
+    val content = yrc.ifBlank { lrc }
+    if (content.isBlank()) return false
+    return payload.optBoolean("uncollected", false) || isPlaceholderLyricContent(content)
+}
+
+/**
+ * 平台内置歌词要用的网易云 songId。
+ *
+ * 只有「这首歌本身就是网易云的」或「已经匹配到网易云歌曲」时才有意义。
+ * 汽水 / 咪咕 / 酷我 / QQ 的 song.id 是平台内部 id，拿去查网易云只会命中
+ * 「[00:00.00]暂无歌词」占位语（网易云把不存在的歌当成「未收录歌词」），
+ * 运气差还会拿到另一首歌的歌词；这种情况必须留给后面的兜底链路。
+ */
+internal fun resolvePlatformLyricNeteaseSongId(song: SongItem): Long? {
+    when (song.matchedLyricSource) {
+        MusicPlatform.QQ_MUSIC -> return null
+        MusicPlatform.CLOUD_MUSIC ->
+            return song.matchedSongId?.toLongOrNull()?.takeIf { it > 0L }
+        null -> Unit
+    }
+    return song.id.takeIf { it > 0L && song.isNeteaseOriginSong() }
 }
 
 data class NeteaseLyricsCacheEntry(
@@ -314,6 +354,14 @@ object PlayerLyricsProvider {
     // CC 字幕本身随视频固定，只缓存解析后的歌词行，避免重复拉取字幕文件
     private val biliSubtitleLyricsCache = androidx.collection.LruCache<String, BiliSubtitleLyrics>(24)
 
+    /**
+     * 多源高置信匹配的歌词缓存。
+     *
+     * 酷狗 / 网易云 / QQ / LrcLib 的匹配要走「搜索 → 详情 → 歌词」三跳网络，
+     * 同一首歌重复命中时直接复用，避免切歌来回时反复等网络。
+     */
+    private val externalLyricsCache = androidx.collection.LruCache<String, List<LyricEntry>>(40)
+
     // 记录原文来自 CC 字幕的歌曲，翻译行只在原文确实来自 CC 时加载
     private val biliCcOriginalSongs = androidx.collection.LruCache<String, Boolean>(32)
 
@@ -340,6 +388,7 @@ object PlayerLyricsProvider {
             lyricsCacheGeneration.incrementAndGet()
             amllLyricsCache.evictAll()
             preferredLyricSourceCache.evictAll()
+            externalLyricsCache.evictAll()
             biliSubtitleLyricsCache.evictAll()
             BiliSubtitleLyricsLoader.clearCachedTracks()
             LocalMediaSupport.clearLyricsLookupCache()
@@ -356,6 +405,7 @@ object PlayerLyricsProvider {
             lyricsCacheGeneration.incrementAndGet()
             amllLyricsCache.evictAll()
             preferredLyricSourceCache.evictAll()
+            externalLyricsCache.evictAll()
             biliSubtitleLyricsCache.evictAll()
             BiliSubtitleLyricsLoader.clearCachedTracks()
             LocalMediaSupport.clearLyricsLookupCache()
@@ -456,6 +506,117 @@ object PlayerLyricsProvider {
         ).orEmpty()
     }
 
+    /**
+     * 经 LX 脚本取歌词。
+     *
+     * 只有平台内置歌词读不到时才会走到这里，所以这是一条兜底路径：
+     * 脚本没实现歌词 action、或脚本没就绪，都只是安静地返回空列表。
+     */
+    private suspend fun loadLxLyrics(song: SongItem): List<LyricEntry> {
+        // PlayerDependencies 没装好（单测 / 早期启动）时安静跳过，不能让整条歌词链路挂掉
+        if (!PlayerDependencies.isInitialized()) return emptyList()
+        val repository = PlayerDependencies.repositories.lxSourceRepository ?: return emptyList()
+        return when (val result = repository.requestLyricForSong(song)) {
+            is LxResult.Ok -> {
+                val bundle = result.value
+                // 逐字歌词优先，其次普通歌词，最后翻译 / 罗马音
+                val text = bundle.crlyric?.takeIf { it.isNotBlank() }
+                    ?: bundle.lrc?.takeIf { it.isNotBlank() }
+                    ?: bundle.tlyric?.takeIf { it.isNotBlank() }
+                    ?: bundle.rlyric?.takeIf { it.isNotBlank() }
+                if (text.isNullOrBlank()) {
+                    NPLogger.d("NERI-PlayerManager", "LX 歌词为空: ${song.name}")
+                    return emptyList()
+                }
+                // LX 可能返回逐字歌词 / 普通 LRC / TTML，统一交给自动识别
+                val entries = parseNeteaseLyricsAuto(text)
+                NPLogger.d(
+                    "NERI-PlayerManager",
+                    "LX 歌词命中: ${song.name} lines=${entries.size} wordTimed=${bundle.crlyric != null}"
+                )
+                entries
+            }
+
+            is LxResult.Err -> {
+                NPLogger.d(
+                    "NERI-PlayerManager",
+                    "LX 歌词未命中: ${song.name} code=${result.code} message=${result.message}"
+                )
+                emptyList()
+            }
+        }
+    }
+
+    /**
+     * 多源高置信匹配歌词（酷狗 / 网易云 / QQ / LrcLib）。
+     *
+     * 汽水、咪咕、酷我这些平台**没有内置歌词接口**，song.id 拿去查网易云必然落空；
+     * 网易云歌曲又自带精确歌词，所以这条通道只在前两条（平台内置 + LX 脚本）
+     * 都没命中时才启用。
+     *
+     * 复用 YT Music 那套「高置信 + 时长兼容 + 歌名歌手一致」的判定，
+     * 宁可没有歌词也不给错版本的歌词。
+     */
+    private suspend fun loadAutomaticExternalLyrics(
+        song: SongItem,
+        editableLyricsMatcher: EditableLyricsMatcher,
+        preferWordTimedLyrics: Boolean
+    ): List<LyricEntry> {
+        // 时长 / 歌名 / 歌手缺一不可：匹配判定要用它们做一致性校验
+        if (song.durationMs <= 0L || song.name.isBlank() || song.artist.isBlank()) return emptyList()
+        val cacheKey = buildExternalLyricsCacheKey(song)
+        externalLyricsCache.get(cacheKey)?.let { cached ->
+            NPLogger.d("NERI-PlayerManager", "Using cached external lyrics for '${song.name}'")
+            return cached
+        }
+        val request = EditableLyricMatchRequest(
+            keyword = listOf(song.name, song.artist)
+                .filter { it.isNotBlank() }
+                .joinToString(" "),
+            trackName = song.name,
+            artistName = song.artist,
+            albumName = song.album,
+            durationMs = song.durationMs,
+            preferWordTimed = preferWordTimedLyrics,
+            sources = automaticExternalLyricSources
+        )
+        val matched = try {
+            loadFirstUsableAutomaticExternalLyrics(
+                request = request,
+                expectedDurationMs = song.durationMs,
+                expectedTitle = song.name,
+                expectedArtist = song.artist
+            ) { source ->
+                editableLyricsMatcher.matchHighConfidenceLyricsForSource(request, source)
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            NPLogger.d("NERI-PlayerManager", "外部歌词匹配失败: ${error.message}")
+            null
+        }
+        val entries = matched?.lyrics.orEmpty()
+        if (entries.isNotEmpty()) {
+            NPLogger.d(
+                "NERI-PlayerManager",
+                "Using ${matched?.source} lyrics for '${song.name}', durationDeltaMs=${matched?.durationDeltaMs}"
+            )
+        }
+        externalLyricsCache.put(cacheKey, entries)
+        return entries
+    }
+
+    /** 外部歌词缓存键：同一首歌（含改名 / 改词）要能区分。 */
+    private fun buildExternalLyricsCacheKey(song: SongItem): String = buildString {
+        append(song.stableKey())
+        append('|')
+        append(song.name.trim())
+        append('|')
+        append(song.artist.trim())
+        append('|')
+        append(song.durationMs)
+    }
+
     private fun logNeteaseLyricLoadFailure(operation: String, error: Exception) {
         if (error.isTransientHttp2StreamReset()) {
             NPLogger.w(
@@ -468,6 +629,22 @@ object PlayerLyricsProvider {
     }
 
     internal fun buildNeteaseLyricsCacheEntry(rawResponse: String): NeteaseLyricsCacheEntry {
+        if (isNeteaseUncollectedLyricResponse(rawResponse)) {
+            // 网易云对「没有收录歌词」的歌曲会返回占位歌词
+            // （{"uncollected":true,...,"lrc":{"lyric":"[00:00.00]暂无歌词"}}）。
+            // 必须当成「没有歌词」：当成真歌词会把「暂无歌词」这一行画到播放页，
+            // 还会因为「平台歌词非空」而挡住 LX 脚本与多源高置信兜底，
+            // 于是「用 LX 音源播放汽水 / 咪咕这类平台的歌」永远读不到歌词。
+            return NeteaseLyricsCacheEntry(
+                preferredLyricText = "",
+                translatedLyricText = "",
+                romanizedLyricText = "",
+                preferredLyricEntries = emptyList(),
+                translatedLyricEntries = emptyList(),
+                romanizedLyricEntries = emptyList(),
+                rawResponse = rawResponse
+            )
+        }
         val preferredLyric = extractPreferredNeteaseLyricContent(rawResponse)
         val translatedLyric = extractTranslatedNeteaseLyricContent(rawResponse)
         val romanizedLyric = extractRomanizedNeteaseLyricContent(rawResponse)
@@ -1224,23 +1401,50 @@ object PlayerLyricsProvider {
                     } else {
                         emptyList()
                     }
-                song.matchedLyricSource == MusicPlatform.QQ_MUSIC -> emptyList()
-                song.matchedLyricSource == MusicPlatform.CLOUD_MUSIC -> {
-                    val matchedId = song.matchedSongId?.toLongOrNull() ?: song.id
-                    getNeteaseLyrics(matchedId, neteaseClient, neteaseLyricsCache)
+                else -> {
+                    val neteaseId = resolvePlatformLyricNeteaseSongId(song)
+                    if (neteaseId == null) {
+                        emptyList()
+                    } else {
+                        getNeteaseLyrics(neteaseId, neteaseClient, neteaseLyricsCache)
+                    }
                 }
-                else -> getNeteaseLyrics(song.id, neteaseClient, neteaseLyricsCache)
+            }
+
+            // 平台内置歌词读不到时的两条兜底，按「精确度」排序：
+            //
+            // 1) LX 脚本：脚本拿到的是**平台原生 id**（汽水的 track id、酷狗的 FileHash），
+            //    命中就是精确歌词。社区脚本大多只实现取流、没有歌词 action，
+            //    这条会安静返回空（脚本不支持的动作会被记住，不再每首重试）。
+            // 2) 多源高置信匹配：汽水 / 咪咕 / 酷我这类平台本来就没有内置歌词接口，
+            //    song.id 拿去查网易云必然落空，只能靠「酷狗 / 网易云 / QQ / LrcLib」
+            //    按歌名 + 歌手 + 时长做高置信匹配。这一段以前**只在用户手动指定歌词源时**
+            //    才走（默认「自动」模式完全没这条通道），所以用 LX 音源播放汽水 / 酷狗的歌
+            //    一直是「暂无歌词」。
+            val exactLyrics = when {
+                platformLyrics.isNotEmpty() -> platformLyrics
+                // B 站是视频源：歌名位是视频标题、歌手位是 UP 主，
+                // 拿去「酷狗 / 网易云 / QQ / LrcLib」按歌名匹配必然落空，
+                // 却要白跑四次网络请求。视频的歌词只有 CC 字幕这一条路。
+                isBiliSong -> emptyList()
+                else -> loadLxLyrics(song).ifEmpty {
+                    loadAutomaticExternalLyrics(
+                        song = song,
+                        editableLyricsMatcher = editableLyricsMatcher,
+                        preferWordTimedLyrics = preferWordTimedLyrics
+                    )
+                }
             }
 
             if (PlayerAmllLyricsSource.preferPlatformLyrics(
                     biliCcLyricsLoaded = biliCcLyricsLoaded,
                     preferWordTimedLyrics = preferWordTimedLyrics,
-                    platformLyrics = platformLyrics,
+                    platformLyrics = exactLyrics,
                     amllLyricsEnabled = amllLyricsEnabled
                 )
             ) {
                 amllLyricsCache.remove(PlayerAmllLyricsSource.buildCacheKey(song, requireDurationMatch = false))
-                platformLyrics
+                exactLyrics
             } else {
                 val amllLyrics = PlayerAmllLyricsSource.loadWithCache(
                     cache = amllLyricsCache,
@@ -1249,10 +1453,10 @@ object PlayerLyricsProvider {
                     requireDurationMatch = false
                 )
                 if (amllLyrics.isEmpty()) {
-                    platformLyrics
+                    exactLyrics
                 } else if (PlayerLyricsPreferences.mergeLyricsAcrossSources) {
                     // 跨源合并：逐字歌词优先，缺失的行用平台歌词补齐
-                    PlayerAmllLyricsSource.mergeAcrossSources(amllLyrics, platformLyrics)
+                    PlayerAmllLyricsSource.mergeAcrossSources(amllLyrics, exactLyrics)
                 } else {
                     amllLyrics
                 }
@@ -1956,6 +2160,14 @@ private val automaticYouTubeExternalLyricSourceOrder = listOf(
 )
 
 private val automaticYouTubeExternalLyricSources = automaticYouTubeExternalLyricSourceOrder.toSet()
+
+/**
+ * 多源高置信匹配用的来源集合。
+ *
+ * 与 YT Music 的外部歌词同一套顺序（酷狗 → 网易云 → QQ → LrcLib）：
+ * 酷狗歌词最全且带逐字，网易云覆盖最广，QQ 补冷门，LrcLib 兜底。
+ */
+private val automaticExternalLyricSources = automaticYouTubeExternalLyricSourceOrder.toSet()
 
 private fun automaticExternalLyricMatchComparator(): Comparator<RankedEditableLyricMatch> {
     return compareByDescending<RankedEditableLyricMatch> {

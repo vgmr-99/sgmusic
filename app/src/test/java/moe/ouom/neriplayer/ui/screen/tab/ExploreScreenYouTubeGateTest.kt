@@ -31,6 +31,8 @@ class ExploreScreenYouTubeGateTest {
                 SearchSource.QQ_MUSIC,
                 SearchSource.KUGOU,
                 SearchSource.QISHUI,
+                SearchSource.KUWO,
+                SearchSource.MIGU,
                 SearchSource.BILIBILI,
                 SearchSource.LINK_RECOGNITION
             ),
@@ -51,6 +53,8 @@ class ExploreScreenYouTubeGateTest {
                 SearchSource.QQ_MUSIC,
                 SearchSource.KUGOU,
                 SearchSource.QISHUI,
+                SearchSource.KUWO,
+                SearchSource.MIGU,
                 SearchSource.BILIBILI,
                 SearchSource.YOUTUBE_MUSIC,
                 SearchSource.LINK_RECOGNITION

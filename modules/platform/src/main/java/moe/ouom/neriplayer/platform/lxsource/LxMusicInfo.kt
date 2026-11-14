@@ -87,6 +87,19 @@ data class LxMusicInfo(
     /** 洛雪协议里的时长格式：mm:ss（超过一小时为 hh:mm:ss） */
     val interval: String get() = formatInterval(durationMs)
 
+    /**
+     * 输出洛雪协议里 musicInfo 的完整字段集。
+     *
+     * 字段清单（洛雪插件协议约定的 21 个）：
+     * songmid, songId, songid, hash, singer, name, albumName, albumId, albumMid,
+     * strMediaMid, copyrightId, source, interval, img, lrc, lrcUrl, mrcUrl, trcUrl,
+     * types, _types, typeUrl, id
+     *
+     * 关键坑：**extras 里的键有值才写进顶层**。
+     * 社区脚本普遍用 `hash ?? songmid` 判空，给一个空字符串会把真正有效的值遮住，
+     * 所以平台特有字段（hash / rid / strMediaMid / copyrightId / songId ...）
+     * 拿不到值时整个 key 省略，而不是写成 ""。
+     */
     fun toJson(): JSONObject {
         val qualityTypes = JSONArray()
         val qualityMap = JSONObject()
@@ -104,10 +117,19 @@ data class LxMusicInfo(
             qualityMap.put(quality.code, mapEntry)
         }
 
+        // songId / songid：社区脚本普遍用 songId ?? songmid 判空，优先平台原始 id
+        val songIdValue = extras["songId"]?.takeIf { it.isNotBlank() }
+            ?: extras["copyrightId"]?.takeIf { it.isNotBlank() }
+            ?: songmid.takeIf { it.isNotBlank() }
+        val cover = coverUrl?.takeIf { it.isNotBlank() }
+
         val meta = JSONObject()
-            .put("songId", extras["copyrightId"] ?: songmid)
+            .put("songId", songIdValue ?: JSONObject.NULL)
             .put("albumName", albumName)
-            .put("picUrl", coverUrl?.takeIf { it.isNotBlank() } ?: JSONObject.NULL)
+            .put("picUrl", cover ?: JSONObject.NULL)
+            .put("interval", interval)
+            .put("types", qualityTypes)
+            .put("_types", qualityMap)
             .put("qualitys", qualityTypes)
             .put("_qualitys", qualityMap)
 
@@ -126,7 +148,26 @@ data class LxMusicInfo(
             .put("_qualitys", qualityMap)
             .put("typeUrl", JSONObject())
             .put("meta", meta)
+            // 本宿主没有歌词来源的字段：置 null（脚本读到 null 不会当成空串去判空）
+            .put("lrc", JSONObject.NULL)
+            .put("lrcUrl", JSONObject.NULL)
+            .put("mrcUrl", JSONObject.NULL)
+            .put("trcUrl", JSONObject.NULL)
 
+        // desktop/CeruMusic 脚本读 songId/songid/img，有值才写
+        if (songIdValue != null) {
+            json.put("songId", songIdValue)
+            json.put("songid", songIdValue)
+            meta.put("songId", songIdValue)
+            meta.put("songid", songIdValue)
+        }
+        if (cover != null) {
+            json.put("img", cover)
+            meta.put("img", cover)
+        }
+        // hash / albumId / albumMid / strMediaMid / copyrightId / rid 等平台特有字段
+        // 全部来自 extras，且「有值才写」：空字符串会遮住社区脚本
+        // `hash ?? songmid` 里真正有效的值（见 LxMusicInfoTest 的断言）。
         extras.forEach { (key, value) ->
             if (value.isNotBlank()) {
                 json.put(key, value)

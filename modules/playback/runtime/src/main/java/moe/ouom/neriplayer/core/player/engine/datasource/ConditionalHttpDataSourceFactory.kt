@@ -76,6 +76,19 @@ class ConditionalHttpDataSourceFactory(
     private var latestCookieHeader: String = ""
     @Volatile
     private var latestYouTubeAuth: YouTubeAuthBundle = YouTubeAuthBundle()
+
+    /**
+     * 当前正在播放的流上下文。
+     *
+     * Media3 的 MediaItem 不能携带 HTTP 请求头（1.10.1 只有 DRM 用的
+     * setDrmLicenseRequestHeaders），所以音乐平台的 Referer 与音源脚本返回的
+     * 请求头只能在这一层注入。
+     *
+     * 播放器是单流串行的，播放新曲时覆盖这份上下文即可。
+     */
+    @Volatile
+    var currentStreamContext: PlatformStreamContext = PlatformStreamContext.NONE
+
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     init {
@@ -107,6 +120,16 @@ class ConditionalHttpDataSourceFactory(
                     }
                     shouldInjectYouTubeHeaders(dataSpec.uri) -> {
                         buildYouTubeDataSpec(dataSpec)
+                    }
+                    shouldInjectMusicStreamHeaders(dataSpec.uri) -> {
+                        val headers = PlatformStreamHeaders.buildMusicStreamHeaders(
+                            uri = dataSpec.uri,
+                            original = dataSpec.httpRequestHeaders,
+                            scriptHeaders = currentStreamContext.headersFor(dataSpec.uri)
+                        )
+                        dataSpec.buildUpon()
+                            .setHttpRequestHeaders(headers)
+                            .build()
                     }
                     else -> dataSpec
                 }
@@ -155,6 +178,19 @@ class ConditionalHttpDataSourceFactory(
             path.contains("/playlist/index.m3u8") ||
             path.contains("/file/seg.ts") ||
             rawUrl.contains("/videoplayback")
+    }
+
+    /**
+     * 是否需要为该 URI 注入音乐平台拉流所需的请求头
+     *
+     * 只在 URL 能识别出平台时才注入，避免给本地文件、第三方探测请求
+     * 之类无关地址加上 Referer。
+     */
+    private fun shouldInjectMusicStreamHeaders(uri: Uri): Boolean {
+        if (PlatformStreamHeaders.isKuwoCarPreviewHost(uri)) return false
+        val scheme = uri.scheme?.lowercase() ?: return false
+        if (scheme != "http" && scheme != "https") return false
+        return PlatformStreamHeaders.refererFor(uri.toString()) != null
     }
 
     /**

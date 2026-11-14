@@ -30,10 +30,26 @@ package moe.ouom.neriplayer.platform.search.api
  * 搜索结果播放时走 LX 自定义源兜底。所以不与 MusicPlatform 混用，
  * 避免影响歌词、播放等既有按 MusicPlatform 分支的逻辑。
  */
-enum class PlatformSearchProvider(val code: String) {
-    QQ("qq"),
-    KUGOU("kugou"),
-    QISHUI("qishui");
+enum class PlatformSearchProvider(
+    /** 应用内的 channelId */
+    val code: String,
+    /** 洛雪自定义源协议里的 source code */
+    val lxCode: String
+) {
+    QQ("qq", "tx"),
+    KUGOU("kugou", "kg"),
+    QISHUI("qishui", "qs"),
+    KUWO("kw", "kw"),
+    MIGU("mg", "mg"),
+    /**
+     * 网易云音乐。
+     *
+     * 与其它平台不同，网易云在项目里本来就有独立的取流通道，
+     * 这里的枚举只用于「发现页浏览数据」这条线（复刻 Mint 的网易云发现页），
+     * 所以不能进 [ALL_CHANNELS]——那会让网易云的浏览结果被误判成
+     * 「只能靠 LX 兜底、没有直连通道」的搜索结果。
+     */
+    NETEASE("netease", "wy");
 
     companion object {
         /**
@@ -41,8 +57,21 @@ enum class PlatformSearchProvider(val code: String) {
          *
          * 播放链路用它识别"来自这些平台的搜索结果"，这类结果没有取流通道，
          * 需要走 LX 自定义源兜底，因此不能当成网易云歌曲处理。
+         *
+         * [NETEASE] 不在集合里：网易云有独立的直连取流通道，
+         * 它只借用这套枚举来承载发现页的浏览数据。
          */
-        val ALL_CHANNELS: Set<String> = entries.mapTo(LinkedHashSet()) { it.code }
+        val ALL_CHANNELS: Set<String> = entries
+            .filterNot { it == NETEASE }
+            .mapTo(LinkedHashSet()) { it.code }
+
+        /** 按 channelId 反查平台 */
+        fun fromChannel(channelId: String?): PlatformSearchProvider? =
+            entries.firstOrNull { it.code == channelId?.lowercase() }
+
+        /** 按洛雪 source code 反查平台 */
+        fun fromLxCode(lxCode: String?): PlatformSearchProvider? =
+            entries.firstOrNull { it.lxCode == lxCode?.lowercase() }
     }
 }
 
@@ -81,6 +110,8 @@ enum class PlatformSearchType {
  * @param coverUrl 封面
  * @param extraCount 播放量或歌曲数等统计
  * @param webUrl 对应页面在官方站点的地址，点击歌单/歌手时用来打开网页
+ * @param extras 平台特有的原始字段（如酷狗 hash、咪咕 copyrightId、QQ strMediaMid）。
+ *               播放取流时透传给 LX 脚本，能大幅提高换源成功率
  */
 data class PlatformSearchResult(
     val type: PlatformSearchType,
@@ -92,6 +123,7 @@ data class PlatformSearchResult(
     val coverUrl: String? = null,
     val extraCount: Long = 0L,
     val webUrl: String? = null,
+    val extras: Map<String, String> = emptyMap(),
     val provider: PlatformSearchProvider
 )
 

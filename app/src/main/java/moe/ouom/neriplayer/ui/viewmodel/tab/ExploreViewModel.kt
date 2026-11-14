@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.data.model.bilibili.collection.FavFolder
 import moe.ouom.neriplayer.data.model.bilibili.search.SearchVideoItem
@@ -62,6 +63,8 @@ import moe.ouom.neriplayer.platform.search.api.HotSearchEntry
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchApi
 import moe.ouom.neriplayer.platform.search.api.PlatformBrowseApi
 import moe.ouom.neriplayer.platform.search.api.PlatformBrowseCard
+import moe.ouom.neriplayer.platform.search.api.PlatformBrowseSupport
+import moe.ouom.neriplayer.platform.search.api.PlatformSearchProvider
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchResult
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchType
 import moe.ouom.neriplayer.platform.search.api.stablePlatformSongId
@@ -75,6 +78,65 @@ import org.json.JSONObject
 
 private const val TAG = "NERI-ExploreVM"
 private const val NETEASE_SEARCH_PAGE_SIZE = 30
+
+/** 浏览页缓存有效期：5 分钟 */
+private const val PLATFORM_BROWSE_CACHE_TTL_MS = 5 * 60 * 1000L
+
+/**
+ * 浏览卡片的整体超时。
+ *
+ * 底层 OkHttp 只设了 connect 15s / read 30s，且 browse() 内部还有多层串行兜底
+ * （直连失败退代理、热门歌单空了再试标签、多页拼接），最坏能挂好几分钟。
+ * 这里给整条链加一个硬上限，超时就落到「加载失败 + 点我重试」，不再无限转圈。
+ */
+private const val PLATFORM_BROWSE_TIMEOUT_MS = 12_000L
+
+/** 分类标签刷新是非关键路径，超时更短，失败也不影响卡片展示。 */
+private const val PLATFORM_CATEGORY_TIMEOUT_MS = 8_000L
+
+private data class PlatformBrowseCacheEntry(
+    val timestamp: Long,
+    val cards: List<PlatformBrowseCard>
+)
+
+/**
+ * 探索页各平台真实支持的能力。
+ *
+ * 不支持的能力不渲染入口，避免用户点进去才看到「暂不支持」的死路：
+ * - 咪咕只有浏览（歌单/排行榜），没有搜索接口；
+ * - 热搜榜只有网易云 / QQ音乐 / 酷狗有数据；
+ * - B站 / YouTube Music 只有搜索，没有可浏览的歌单广场。
+ */
+internal enum class ExploreCapability { SEARCH, BROWSE, HOT_SEARCH }
+
+internal fun exploreSourceCapabilities(source: SearchSource): Set<ExploreCapability> = when (source) {
+    SearchSource.NETEASE,
+    SearchSource.QQ_MUSIC,
+    SearchSource.KUGOU -> setOf(
+        ExploreCapability.SEARCH,
+        ExploreCapability.BROWSE,
+        ExploreCapability.HOT_SEARCH
+    )
+    SearchSource.QISHUI,
+    SearchSource.KUWO -> setOf(ExploreCapability.SEARCH, ExploreCapability.BROWSE)
+    SearchSource.MIGU -> setOf(ExploreCapability.BROWSE)
+    SearchSource.BILIBILI,
+    SearchSource.YOUTUBE_MUSIC -> setOf(ExploreCapability.SEARCH)
+    // 链接识别是独立的粘贴入口，输入框要保留，但不属于常规搜索
+    SearchSource.LINK_RECOGNITION -> setOf(ExploreCapability.SEARCH)
+}
+
+internal fun exploreSourceSupports(source: SearchSource, capability: ExploreCapability): Boolean =
+    capability in exploreSourceCapabilities(source)
+
+/**
+ * 热搜榜去重。
+ *
+ * 上游偶尔返回同名条目（实测酷狗「慌啥子嘛」出现两次），
+ * 不去掉会让 LazyRow 的 key 冲突直接抛异常。UI 侧 key 也带 index 做第二层保险。
+ */
+internal fun dedupeHotSearchEntries(entries: List<HotSearchEntry>): List<HotSearchEntry> =
+    entries.distinctBy { "${it.source.name}|${it.title}" }
 private const val PLATFORM_SEARCH_PAGE_SIZE = 20
 private const val YOUTUBE_MUSIC_SEARCH_LIMIT = 30
 private const val BILI_RESOURCE_TYPE_COLLECTION = 21
@@ -118,6 +180,8 @@ enum class SearchSource {
     QQ_MUSIC,
     KUGOU,
     QISHUI,
+    KUWO,
+    MIGU,
     BILIBILI,
     LINK_RECOGNITION
 }
@@ -169,7 +233,14 @@ sealed class ExploreSearchResult {
         val playlist: PlaylistSummary,
         val sourceTag: String = "netease",
         val webUrl: String? = null,
-        val owner: String = ""
+        val owner: String = "",
+        /**
+         * 平台内的原始歌单 id。
+         *
+         * [playlist.id] 是给列表 key 用的哈希值，反推不出平台 id；
+         * 汽水这类没有取流接口的平台要靠它去拉歌单曲目，所以得单独留一份。
+         */
+        val rawId: String? = null
     ) : ExploreSearchResult() {
         override val stableKey: String = "$sourceTag|playlist|${playlist.id}"
     }
@@ -230,14 +301,49 @@ data class ExploreUiState(
     val hotSearchLoading: Boolean = false,
     /** 平台浏览页（默认页）的歌单 / 榜单卡片 */
     val platformBrowseCards: List<PlatformBrowseCard> = emptyList(),
+    /** 当前卡片属于哪个平台，切源时用来判断是否需要重新加载，避免串台显示上一个平台的数据 */
+    val platformBrowseSource: SearchSource? = null,
     val platformBrowseLoading: Boolean = false,
     val platformBrowseError: UiText? = null,
     val platformBrowseCategory: String = "",
+    /**
+     * 当前平台的分类标签。
+     *
+     * 标签是异步刷回来的，放在 state 里 Compose 才能感知变化；
+     * 之前用 remember(selectedSearchSource) 只取一次，线上标签永远不显示。
+     */
+    val platformBrowseCategories: List<String> = emptyList(),
     /** 展开中的榜单及其曲目 */
     val platformBrowseTracks: List<PlatformSearchResult> = emptyList(),
     val platformBrowseTracksLoading: Boolean = false,
-    val platformBrowseTrackTitle: String = ""
+    val platformBrowseTrackTitle: String = "",
+    /**
+     * 展开中歌单的官方页面链接。
+     *
+     * 正常情况下点歌单就能在站内展开曲目；只有接口读不到时，
+     * 才用它兜底给一个「去官方页面看」的入口。
+     */
+    val platformBrowseTrackWebUrl: String? = null,
+    /**
+     * 展开中的曲目面板属于哪个入口。
+     *
+     * 浏览页和搜索页共用同一套曲目状态，不区分的话，
+     * 浏览页展开的歌单会残留到搜索页，把搜索结果整个挡住。
+     */
+    val platformBrowseTrackScope: PlatformBrowseTrackScope = PlatformBrowseTrackScope.NONE
 )
+
+/** 展开中的曲目面板属于哪个入口 */
+enum class PlatformBrowseTrackScope {
+    /** 没有展开任何歌单 */
+    NONE,
+
+    /** 浏览页（分类歌单 / 榜单）展开的 */
+    BROWSE,
+
+    /** 搜索结果里的歌单展开的 */
+    SEARCH
+}
 
 /**
  * 网易云搜索不再要求登录。
@@ -388,7 +494,20 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private val app: Context get() = LanguageManager.applyLanguage(baseApplication)
     private val neteaseRepo = AppContainer.neteaseCookieRepo
     private var highQualityLoadJob: Job? = null
-private var platformBrowseJob: Job? = null
+    private var platformBrowseJob: Job? = null
+
+    /**
+     * 浏览页数据的短期缓存。
+     *
+     * 切走再切回同一个平台时不必重新拉一遍上游接口，
+     * 上游本来就随时可能改版，短 TTL 既省流量也少踩接口抖动。
+     */
+    private val platformBrowseCache = mutableMapOf<String, PlatformBrowseCacheEntry>()
+
+    /** 分类标签按平台缓存：刷新成功一次就复用，切 tab 不再重复打线上分类接口。 */
+    private val platformBrowseCategoriesCache = mutableMapOf<SearchSource, List<String>>()
+    private val categoryRefreshInFlight = mutableSetOf<SearchSource>()
+
     private var highQualityLoadCookies: Map<String, String>? = null
     private var searchJob: Job? = null
     private var searchMoreJob: Job? = null
@@ -434,9 +553,25 @@ private var platformBrowseJob: Job? = null
         NPLogger.d(TAG, "setSearchSource: ${_uiState.value.selectedSearchSource} -> $source")
         searchJob?.cancel()
         searchMoreJob?.cancel()
+        // 浏览页按平台隔离：取消在途请求并清掉上一个平台的卡片/分类/曲目，
+        // 否则切换 tab 时会一直显示旧平台（通常是网易云）的榜单。
+        platformBrowseJob?.cancel()
         invalidateSearchRequest()
         _uiState.value = _uiState.value.copy(
             selectedSearchSource = source,
+            platformBrowseCards = emptyList(),
+            platformBrowseSource = null,
+            platformBrowseLoading = false,
+            platformBrowseError = null,
+            platformBrowseCategory = "",
+            // 先用已缓存/内置的标签把分类栏画出来，线上标签异步补齐
+            platformBrowseCategories = platformBrowseCategoriesCache[source]
+                ?: platformBrowseApiFor(source)?.categories.orEmpty(),
+            platformBrowseTracks = emptyList(),
+            platformBrowseTracksLoading = false,
+            platformBrowseTrackTitle = "",
+            platformBrowseTrackWebUrl = null,
+            platformBrowseTrackScope = PlatformBrowseTrackScope.NONE,
             // 各平台开放的分类不一样，切源时把分类落到该平台支持的第一项
             selectedPlatformSearchType = supportedSearchTypes(source)
                 .firstOrNull { it == _uiState.value.selectedPlatformSearchType }
@@ -463,23 +598,38 @@ private var platformBrowseJob: Job? = null
      */
     fun loadHotSearch() {
         val source = _uiState.value.selectedSearchSource
-        val chartApi = when (source) {
-            SearchSource.NETEASE -> AppContainer.cloudMusicChartApi
-            SearchSource.QQ_MUSIC -> AppContainer.qqMusicChartApi
-            SearchSource.KUGOU -> AppContainer.kugouChartApi
-            else -> null
+        val chartApi = if (exploreSourceSupports(source, ExploreCapability.HOT_SEARCH)) {
+            when (source) {
+                SearchSource.NETEASE -> AppContainer.cloudMusicChartApi
+                SearchSource.QQ_MUSIC -> AppContainer.qqMusicChartApi
+                SearchSource.KUGOU -> AppContainer.kugouChartApi
+                else -> null
+            }
+        } else {
+            null
         }
         if (chartApi == null) {
+            // 不支持热搜榜的平台直接清空，不发请求也不留旧平台的数据
+            hotSearchJob?.cancel()
             _uiState.value = _uiState.value.copy(hotSearchEntries = emptyList(), hotSearchLoading = false)
             return
         }
         hotSearchJob?.cancel()
         _uiState.value = _uiState.value.copy(hotSearchLoading = true)
+        val requestedSource = source
         hotSearchJob = viewModelScope.launch {
-            val entries = runCatching { chartApi.hotSearch() }.getOrElse { error ->
+            val entries = try {
+                // 上游会返回同名条目（实测酷狗「慌啥子嘛」重复），
+                // 去重后再交给 LazyRow，避免 key 冲突崩溃和无意义的重复 chip。
+                dedupeHotSearchEntries(chartApi.hotSearch())
+            } catch (e: CancellationException) {
+                // 快速切换 tab 时旧任务被取消属正常行为，不要记成「加载失败」
+                throw e
+            } catch (error: Exception) {
                 NPLogger.w(TAG, "加载热搜榜失败: ${error.message.orEmpty()}")
                 emptyList()
             }
+            if (requestedSource != _uiState.value.selectedSearchSource) return@launch
             _uiState.value = _uiState.value.copy(
                 hotSearchEntries = entries,
                 hotSearchLoading = false
@@ -533,7 +683,13 @@ private var platformBrowseJob: Job? = null
             searchLoadMoreError = null,
             searchPage = 0,
             searchKeyword = "",
-            searchDisplayQuery = ""
+            searchDisplayQuery = "",
+            // 换分类等于换了一批结果，之前展开的歌单要收起来
+            platformBrowseTracks = emptyList(),
+            platformBrowseTrackTitle = "",
+            platformBrowseTracksLoading = false,
+            platformBrowseTrackWebUrl = null,
+            platformBrowseTrackScope = PlatformBrowseTrackScope.NONE
         )
     }
 
@@ -542,6 +698,7 @@ private var platformBrowseJob: Job? = null
         SearchSource.QQ_MUSIC -> AppContainer.qqPlatformSearchApi.supportedTypes.toList()
         SearchSource.KUGOU -> AppContainer.kugouSearchApi.supportedTypes.toList()
         SearchSource.QISHUI -> AppContainer.qishuiSearchApi.supportedTypes.toList()
+        SearchSource.KUWO -> AppContainer.kuwoSearchApi.supportedTypes.toList()
         else -> emptyList()
     }
 
@@ -594,6 +751,9 @@ private var platformBrowseJob: Job? = null
         }
         val source = _uiState.value.selectedSearchSource
         val requestVersion = beginSearchRequest(apiKeyword, matchQuery)
+        // 新一轮搜索等于换了一批结果，之前展开的歌单要收起来，
+        // 否则展开的曲目面板会一直挡在搜索结果上面。
+        closePlatformBrowseTracks()
         NPLogger.d(
             TAG,
             "search start: source=$source, request=$requestVersion, keyword=$apiKeyword, display=$matchQuery"
@@ -602,7 +762,9 @@ private var platformBrowseJob: Job? = null
             SearchSource.NETEASE -> searchNetease(apiKeyword, matchQuery, requestVersion)
             SearchSource.QQ_MUSIC,
             SearchSource.KUGOU,
-            SearchSource.QISHUI -> searchPlatformSource(apiKeyword, matchQuery, requestVersion)
+            SearchSource.QISHUI,
+            SearchSource.KUWO -> searchPlatformSource(apiKeyword, matchQuery, requestVersion)
+            SearchSource.MIGU -> searchUnsupportedSource(apiKeyword, requestVersion)
             SearchSource.BILIBILI -> searchBilibili(apiKeyword, matchQuery, requestVersion)
             SearchSource.YOUTUBE_MUSIC -> searchYouTubeMusic(apiKeyword, matchQuery, requestVersion)
             SearchSource.LINK_RECOGNITION -> searchRecognizedLink(apiKeyword, requestVersion)
@@ -643,7 +805,8 @@ private var platformBrowseJob: Job? = null
                     )
                     SearchSource.QQ_MUSIC,
                     SearchSource.KUGOU,
-                    SearchSource.QISHUI -> fetchPlatformSearchPage(
+                    SearchSource.QISHUI,
+                    SearchSource.KUWO -> fetchPlatformSearchPage(
                         source = source,
                         keyword = keyword,
                         matchQuery = matchQuery,
@@ -656,7 +819,8 @@ private var platformBrowseJob: Job? = null
                         page = nextPage
                     )
                     SearchSource.YOUTUBE_MUSIC,
-                    SearchSource.LINK_RECOGNITION -> return@launch
+                    SearchSource.LINK_RECOGNITION,
+                    SearchSource.MIGU -> return@launch
                 }
                 updateSearchStateIfCurrent(requestVersion, source) {
                     val merged = mergeExploreSearchResults(it.searchItems, result.items)
@@ -868,33 +1032,107 @@ private var platformBrowseJob: Job? = null
     /**
      * 加载平台浏览页（默认页）的歌单 / 榜单。
      *
-     * 网易云走精品歌单，其它平台走各自的榜单，
-     * 语义上都是"一组可浏览的集合"，界面才能共用同一套渲染。
+     * 三个约束：
+     * - 切平台一律落回该平台的默认分类（热门歌单 / 排行榜），打开就有内容，不用再点一次；
+     * - 分类标签走独立的后台任务，与卡片加载并行，不再串行挡住首屏；
+     * - 整条卡片链路有硬超时，超时落到可重试的错误态，杜绝无限转圈。
      */
     fun loadPlatformBrowse(source: SearchSource, category: String? = null) {
         val api = platformBrowseApiFor(source) ?: return
-        val realCategory = category ?: _uiState.value.platformBrowseCategory
-        if (platformBrowseJob?.isActive == true && realCategory == _uiState.value.platformBrowseCategory) return
+        val realCategory = category?.takeIf { it.isNotBlank() } ?: api.defaultCategory
+        val categories = platformBrowseCategoriesCache[source] ?: api.categories
+
+        val sameTarget = _uiState.value.platformBrowseSource == source &&
+            realCategory == _uiState.value.platformBrowseCategory
+        // 同一平台同一分类且正在加载时不重复发起；跨平台的在途任务必须先取消，
+        // 否则旧平台的异步结果会覆盖新平台的卡片。
+        if (sameTarget && platformBrowseJob?.isActive == true) return
+        platformBrowseJob?.cancel()
+
+        val cacheKey = "${source.name}|$realCategory"
+        val cachedCards = platformBrowseCache[cacheKey]
+            ?.takeIf { System.currentTimeMillis() - it.timestamp < PLATFORM_BROWSE_CACHE_TTL_MS }
+            ?.cards
+        if (cachedCards != null) {
+            NPLogger.d(
+                TAG,
+                "platform browse cache hit: $source/$realCategory cards=${cachedCards.size}"
+            )
+            _uiState.value = _uiState.value.copy(
+                platformBrowseSource = source,
+                platformBrowseLoading = false,
+                platformBrowseError = null,
+                platformBrowseCategory = realCategory,
+                platformBrowseCategories = categories,
+                platformBrowseCards = cachedCards,
+                platformBrowseTracks = emptyList(),
+                platformBrowseTrackTitle = "",
+                platformBrowseTrackWebUrl = null,
+                platformBrowseTrackScope = PlatformBrowseTrackScope.NONE
+            )
+            // 缓存命中也顺手在后台补分类，下次进来标签栏就是完整的
+            refreshBrowseCategories(source, api)
+            return
+        }
+
         _uiState.value = _uiState.value.copy(
+            platformBrowseSource = source,
             platformBrowseLoading = true,
             platformBrowseError = null,
             platformBrowseCategory = realCategory,
+            platformBrowseCategories = categories,
             platformBrowseCards = emptyList(),
             platformBrowseTracks = emptyList(),
-            platformBrowseTrackTitle = ""
+            platformBrowseTrackTitle = "",
+            platformBrowseTrackWebUrl = null,
+            platformBrowseTrackScope = PlatformBrowseTrackScope.NONE
         )
+        // 分类刷新不再挡卡片：两个任务并行发出
+        refreshBrowseCategories(source, api)
         platformBrowseJob = viewModelScope.launch {
+            val startedAt = System.currentTimeMillis()
             try {
-                val cards = api.browse(realCategory)
+                val cards = withTimeoutOrNull(PLATFORM_BROWSE_TIMEOUT_MS) {
+                    api.browse(realCategory)
+                }
+                if (_uiState.value.selectedSearchSource != source) return@launch
+                if (cards == null) {
+                    NPLogger.w(TAG, "platform browse timeout: $source/$realCategory")
+                    _uiState.value = _uiState.value.copy(
+                        platformBrowseSource = source,
+                        platformBrowseLoading = false,
+                        platformBrowseError = feedbackText(
+                            CoreCommonR.string.error_load_playlist,
+                            feedbackText(CoreCommonR.string.github_sync_failed_message)
+                        )
+                    )
+                    return@launch
+                }
+                // 空结果不写缓存：接口偶发返回空（随机 device_id 被风控）时，
+                // 缓存下来会让用户在 TTL 内一直看到空页，重试也没用
+                if (cards.isNotEmpty()) {
+                    platformBrowseCache[cacheKey] = PlatformBrowseCacheEntry(
+                        timestamp = System.currentTimeMillis(),
+                        cards = cards
+                    )
+                }
+                NPLogger.d(
+                    TAG,
+                    "platform browse ready: $source/$realCategory cards=${cards.size} in ${System.currentTimeMillis() - startedAt}ms"
+                )
                 _uiState.value = _uiState.value.copy(
+                    platformBrowseSource = source,
                     platformBrowseLoading = false,
                     platformBrowseError = null,
+                    platformBrowseCategory = realCategory,
                     platformBrowseCards = cards
                 )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (_uiState.value.selectedSearchSource != source) return@launch
                 _uiState.value = _uiState.value.copy(
+                    platformBrowseSource = source,
                     platformBrowseLoading = false,
                     platformBrowseError = feedbackText(
                         CoreCommonR.string.error_load_playlist,
@@ -905,14 +1143,58 @@ private var platformBrowseJob: Job? = null
         }
     }
 
-    /** 展开某个榜单的曲目 */
-    fun loadPlatformBrowseTracks(card: PlatformBrowseCard) {
+    /**
+     * 后台刷新分类标签。
+     *
+     * 每个平台成功一次就缓存复用，切 tab 不再重复打线上分类接口；失败允许下次重试。
+     * 结果写进 state，Compose 才会把线上标签补进分类栏（原先 remember 只取一次，永远补不上）。
+     */
+    private fun refreshBrowseCategories(source: SearchSource, api: PlatformBrowseApi) {
+        if (platformBrowseCategoriesCache.containsKey(source)) return
+        if (!categoryRefreshInFlight.add(source)) return
+        viewModelScope.launch {
+            try {
+                val refreshed = withTimeoutOrNull(PLATFORM_CATEGORY_TIMEOUT_MS) {
+                    api.refreshCategories()
+                }
+                if (!refreshed.isNullOrEmpty()) {
+                    platformBrowseCategoriesCache[source] = refreshed
+                    if (_uiState.value.selectedSearchSource == source) {
+                        _uiState.value = _uiState.value.copy(
+                            platformBrowseCategories = refreshed,
+                            platformBrowseCategory = _uiState.value.platformBrowseCategory
+                                .ifBlank { api.defaultCategory }
+                        )
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                NPLogger.d(TAG, "browse categories refresh failed: $source ${e.message.orEmpty()}")
+            } finally {
+                categoryRefreshInFlight.remove(source)
+            }
+        }
+    }
+
+    /**
+     * 展开某个榜单 / 歌单的曲目。
+     *
+     * [scope] 区分这个面板属于浏览页还是搜索页：
+     * 两处共用同一份曲目状态，不区分的话浏览页展开的歌单会残留到搜索页。
+     */
+    fun loadPlatformBrowseTracks(
+        card: PlatformBrowseCard,
+        scope: PlatformBrowseTrackScope = PlatformBrowseTrackScope.BROWSE
+    ) {
         val api = platformBrowseApiFor(_uiState.value.selectedSearchSource) ?: return
         if (_uiState.value.platformBrowseTracksLoading) return
         _uiState.value = _uiState.value.copy(
             platformBrowseTracksLoading = true,
             platformBrowseTracks = emptyList(),
-            platformBrowseTrackTitle = card.title
+            platformBrowseTrackTitle = card.title,
+            platformBrowseTrackWebUrl = card.webUrl,
+            platformBrowseTrackScope = scope
         )
         viewModelScope.launch {
             try {
@@ -940,20 +1222,83 @@ private var platformBrowseJob: Job? = null
         _uiState.value = _uiState.value.copy(
             platformBrowseTracks = emptyList(),
             platformBrowseTrackTitle = "",
-            platformBrowseTracksLoading = false
+            platformBrowseTracksLoading = false,
+            platformBrowseTrackWebUrl = null,
+            platformBrowseTrackScope = PlatformBrowseTrackScope.NONE
         )
     }
 
     private fun platformBrowseApiFor(source: SearchSource): PlatformBrowseApi? = when (source) {
-        SearchSource.KUGOU -> AppContainer.kugouBrowseApi
-        SearchSource.QQ_MUSIC -> AppContainer.qqBrowseApi
+        SearchSource.NETEASE -> AppContainer.mintNeteaseBrowseApi
+        SearchSource.KUGOU -> AppContainer.mintKugouBrowseApi
+        SearchSource.QQ_MUSIC -> AppContainer.mintQqBrowseApi
         SearchSource.QISHUI -> AppContainer.qishuiBrowseApi
+        SearchSource.KUWO -> AppContainer.mintKuwoBrowseApi
+        SearchSource.MIGU -> AppContainer.mintMiguBrowseApi
         else -> null
     }
 
-    /** 平台浏览页的分类标签 */
+    /**
+     * 搜索结果里的歌单 -> 浏览卡片。
+     *
+     * 只有声明了 [PlatformBrowseApi.supportsSearchPlaylistTracks] 的平台才返回卡片，
+     * 也就是确认能用同一套 id 读到曲目的平台（目前是汽水）；
+     * 其它平台返回 null，由界面退回「跳官方页面」，避免出现空面板死路。
+     */
+    fun searchPlaylistToBrowseCard(
+        sourceTag: String,
+        rawId: String?,
+        title: String,
+        coverUrl: String?,
+        trackCount: Int,
+        webUrl: String?
+    ): PlatformBrowseCard? {
+        val provider = PlatformSearchProvider.fromChannel(sourceTag) ?: return null
+        val api = provider.toSearchSource()?.let { platformBrowseApiFor(it) } ?: return null
+        if (!api.supportsSearchPlaylistTracks) return null
+        val raw = rawId?.trim().orEmpty()
+        if (raw.isEmpty()) return null
+        return PlatformBrowseCard(
+            id = PlatformBrowseSupport.qualifyId(provider, raw),
+            title = title,
+            coverUrl = coverUrl?.takeIf { it.isNotBlank() },
+            trackCount = trackCount,
+            webUrl = webUrl,
+            provider = provider
+        )
+    }
+
+    /** 平台枚举 -> 探索页的平台来源 */
+    private fun PlatformSearchProvider.toSearchSource(): SearchSource? = when (this) {
+        PlatformSearchProvider.NETEASE -> SearchSource.NETEASE
+        PlatformSearchProvider.QQ -> SearchSource.QQ_MUSIC
+        PlatformSearchProvider.KUGOU -> SearchSource.KUGOU
+        PlatformSearchProvider.QISHUI -> SearchSource.QISHUI
+        PlatformSearchProvider.KUWO -> SearchSource.KUWO
+        PlatformSearchProvider.MIGU -> SearchSource.MIGU
+    }
+
+    /**
+     * 平台浏览页的分类标签。
+     *
+     * UI 直接读 `uiState.platformBrowseCategories`（异步刷新会推进 state）；
+     * 这里保留给其它调用方，优先返回已刷新的结果，没刷新时退回内置标签。
+     */
     fun platformBrowseCategories(source: SearchSource): List<String> =
-        platformBrowseApiFor(source)?.categories.orEmpty()
+        platformBrowseCategoriesCache[source]
+            ?: _uiState.value.platformBrowseCategories.takeIf {
+                it.isNotEmpty() && _uiState.value.platformBrowseSource == source
+            }
+            ?: platformBrowseApiFor(source)?.categories.orEmpty()
+
+    /**
+     * 平台浏览页的分类标签展示名。
+     *
+     * 分类 key 是「id-digest」这类组合串，直接显示没法看，
+     * 由实现方把 key 翻译成中文名。
+     */
+    fun platformBrowseCategoryLabel(source: SearchSource, category: String): String =
+        platformBrowseApiFor(source)?.categoryLabel(category) ?: category
 
     /**
      * 搜索网易云歌曲。
@@ -1007,7 +1352,29 @@ private var platformBrowseJob: Job? = null
     }
 
     /**
-     * 多平台搜索（QQ音乐 / 酷狗 / 汽水）。
+     * 该源没有可用的公开搜索接口（咪咕的搜索需要签名且已失效）。
+     *
+     * 明确提示而不是静默返回空结果，用户才知道去浏览页看歌单与榜单。
+     */
+    private fun searchUnsupportedSource(keyword: String, requestVersion: Long) {
+        searchJob = viewModelScope.launch {
+            updateSearchStateIfCurrent(requestVersion, SearchSource.MIGU) {
+                it.copy(
+                    searching = false,
+                    searchError = feedbackText(CoreCommonR.string.error_platform_search_unsupported),
+                    searchResults = emptyList(),
+                    searchItems = emptyList(),
+                    searchHasMore = false,
+                    searchLoadingMore = false,
+                    searchLoadMoreError = null,
+                    searchPage = 0
+                )
+            }
+        }
+    }
+
+    /**
+     * 多平台搜索（QQ音乐 / 酷狗 / 汽水 / 酷我）。
      *
      * 这些平台都不需要登录账号就能搜，分类与网易云保持一致（歌曲 / 歌单 / 歌手）；
      * 平台本身没开放的分类不会出现在类型栏里。
@@ -1554,6 +1921,7 @@ private var platformBrowseJob: Job? = null
         SearchSource.QQ_MUSIC -> AppContainer.qqPlatformSearchApi
         SearchSource.KUGOU -> AppContainer.kugouSearchApi
         SearchSource.QISHUI -> AppContainer.qishuiSearchApi
+        SearchSource.KUWO -> AppContainer.kuwoSearchApi
         else -> null
     }
 
@@ -1587,7 +1955,8 @@ private var platformBrowseJob: Job? = null
                 ),
                 sourceTag = providerCode,
                 webUrl = webUrl,
-                owner = subtitle
+                owner = subtitle,
+                rawId = id
             )
             PlatformSearchType.ARTIST -> ExploreSearchResult.Artist(
                 result = NeteaseSearchArtistResult(
@@ -1803,7 +2172,9 @@ private var platformBrowseJob: Job? = null
             SearchSource.LINK_RECOGNITION -> feedbackText(CoreCommonR.string.error_link_recognition, fallback)
             SearchSource.QQ_MUSIC,
             SearchSource.KUGOU,
-            SearchSource.QISHUI -> feedbackText(CoreCommonR.string.error_platform_search, fallback)
+            SearchSource.QISHUI,
+            SearchSource.KUWO -> feedbackText(CoreCommonR.string.error_platform_search, fallback)
+            SearchSource.MIGU -> feedbackText(CoreCommonR.string.error_platform_search_unsupported)
         }
     }
 }

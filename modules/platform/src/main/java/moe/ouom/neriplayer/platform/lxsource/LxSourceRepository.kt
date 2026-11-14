@@ -22,12 +22,15 @@ package moe.ouom.neriplayer.platform.lxsource
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import moe.ouom.neriplayer.common.logging.NPLogger
 import moe.ouom.neriplayer.data.model.SongItem
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 多脚本管理：启停 / 状态三态 / 并行 runtime
@@ -43,6 +46,20 @@ class LxSourceRepository(
     private val runtimes = ConcurrentHashMap<String, LxRuntime>()
     private val _items = MutableStateFlow<List<LxSourceItem>>(emptyList())
     val items: StateFlow<List<LxSourceItem>> = _items
+
+    /**
+     * 已知「不提供歌词」的脚本 id。
+     *
+     * 社区脚本绝大多数只实现取流（inited 里每个 source 只有 `musicUrl`），
+     * 歌词 action 会被立刻拒绝。不记住的话，每首歌都要白跑一遍三个 action。
+     */
+    private val lyricUnsupportedScriptIds = ConcurrentHashMap.newKeySet<String>()
+
+    /** 脚本初始化是否已经开始（冷启动时 init 跑在后台 IO 上） */
+    private val initStarted = AtomicBoolean(false)
+
+    /** 脚本初始化是否已经结束（成功或失败都算） */
+    private val initFinished = AtomicBoolean(false)
     /**
      * init 与 import 共用同一把锁：冷启动时 Application 里的 init() 往往与外部 Intent
      * 触发的 importScript() 并发，两者都往 _items 与 lx_sources.json 写，
@@ -51,27 +68,51 @@ class LxSourceRepository(
     private val mutationLock = Mutex()
 
     suspend fun init() {
-        mutationLock.withLock {
-            val loaded = store.loadAll()
-            NPLogger.d("LxSource", "init start: scripts=${loaded.size}")
-            _items.value = loaded
-            loaded.filter { it.enabled }.forEach { item ->
-                val runtime = LxRuntime(http, preloadJs)
-                runtimes[item.id] = runtime
-                NPLogger.d("LxSource", "init script=${item.name} id=${item.id}")
-                when (val r = runtime.init(item.scriptText, CurrentScriptInfo(name = item.name))) {
-                    is LxResult.Ok -> {
-                        NPLogger.d("LxSource", "init OK script=${item.name} sources=${r.value.sources.keys}")
-                        val ok = item.copy(state = LxSourceState.OK, info = r.value, error = null)
-                        replace(ok)
-                    }
-                    is LxResult.Err -> {
-                        NPLogger.w("LxSource", "init FAIL script=${item.name} code=${r.code} message=${r.message}")
-                        val fail = item.copy(state = LxSourceState.FAIL, error = "${r.code}:${r.message}")
-                        replace(fail)
+        initStarted.set(true)
+        try {
+            mutationLock.withLock {
+                val loaded = store.loadAll()
+                NPLogger.d("LxSource", "init start: scripts=${loaded.size}")
+                _items.value = loaded
+                loaded.filter { it.enabled }.forEach { item ->
+                    val runtime = LxRuntime(http, preloadJs)
+                    runtimes[item.id] = runtime
+                    NPLogger.d("LxSource", "init script=${item.name} id=${item.id}")
+                    when (val r = runtime.init(item.scriptText, CurrentScriptInfo(name = item.name))) {
+                        is LxResult.Ok -> {
+                            NPLogger.d("LxSource", "init OK script=${item.name} sources=${r.value.sources.keys}")
+                            val ok = item.copy(state = LxSourceState.OK, info = r.value, error = null)
+                            replace(ok)
+                        }
+                        is LxResult.Err -> {
+                            NPLogger.w("LxSource", "init FAIL script=${item.name} code=${r.code} message=${r.message}")
+                            val fail = item.copy(state = LxSourceState.FAIL, error = "${r.code}:${r.message}")
+                            replace(fail)
+                        }
                     }
                 }
             }
+        } finally {
+            initFinished.set(true)
+        }
+    }
+
+    /**
+     * 等待脚本就绪。
+     *
+     * 冷启动时 QuickJS 求值大脚本要十几秒，这期间点歌必然解析失败
+     * （`no enabled LX source matched`）；脚本已经在加载的话就等它加载完再试，
+     * 最多等 [timeoutMs]。
+     *
+     * 没有配置脚本、或脚本已经加载完但没有可用源时不等待，直接失败。
+     */
+    suspend fun awaitRuntimeReady(timeoutMs: Long = LX_READY_WAIT_TIMEOUT_MS) {
+        if (runtimes.isNotEmpty()) return
+        if (!initStarted.get()) return
+        if (initFinished.get() && _items.value.none { it.state == LxSourceState.OK }) return
+        NPLogger.d("LxSource", "await runtime ready (timeout=${timeoutMs}ms)")
+        withTimeoutOrNull(timeoutMs) {
+            items.first { list -> list.any { it.state == LxSourceState.OK } }
         }
     }
 
@@ -110,6 +151,8 @@ class LxSourceRepository(
         }
         val runtime = LxRuntime(http, preloadJs)
         runtimes[id] = runtime
+        // 脚本内容变了，之前「不支持歌词」的结论不再作废
+        lyricUnsupportedScriptIds.remove(id)
         when (val r = runtime.init(scriptText, CurrentScriptInfo(name = name))) {
             is LxResult.Ok -> {
                 val okItem = item.copy(state = LxSourceState.OK, info = r.value, error = null)
@@ -135,9 +178,18 @@ class LxSourceRepository(
             val item = _items.value.firstOrNull { it.id == id } ?: continue
             if (!item.enabled || item.state != LxSourceState.OK) continue
             if (item.info?.supports(platform) != true) continue
-            when (val r = runtime.requestMusicUrl(musicInfo, platform, quality)) {
-                is LxResult.Ok -> return r
-                is LxResult.Err -> continue
+            val declaredQualities = item.info.qualities(platform)
+            // 音质降级链：对齐 Mint 的 _qualityFallbackChain（只向下）
+            for (q in qualityChain(quality, declaredQualities)) {
+                val info = if (q == quality) musicInfo else musicInfo.withQuality(q)
+                when (val r = runtime.requestMusicUrl(info, platform, q)) {
+                    is LxResult.Ok -> {
+                        // 酷我提示音（试听片段）不是真正的歌曲地址，直接换下一档音质
+                        if (isPromptUrl(platform, r.value.url)) continue
+                        return r
+                    }
+                    is LxResult.Err -> continue
+                }
             }
         }
         return LxResult.Err("no_source", "no enabled LX source matched")
@@ -156,17 +208,236 @@ class LxSourceRepository(
         platform: LxPlatform,
         quality: LxQuality,
     ): LxResult<LxMusicUrl> {
+        // 脚本还在加载就等它加载完，否则冷启动后第一时间点歌必然取不到地址
+        awaitRuntimeReady()
+        NPLogger.d(
+            "LxSource",
+            "resolve start: song=${song.name} platform=${platform.code} " +
+                "quality=${quality.code} runtimes=${runtimes.size} items=${_items.value.size}"
+        )
+        for ((id, runtime) in runtimes) {
+            val item = _items.value.firstOrNull { it.id == id }
+            if (item == null) {
+                NPLogger.w("LxSource", "resolve skip runtime id=$id: no matching item")
+                continue
+            }
+            NPLogger.d(
+                "LxSource",
+                "resolve candidate: name=${item.name} enabled=${item.enabled} state=${item.state} " +
+                    "supports=${item.info?.supports(platform)} sources=${item.info?.sources?.keys}"
+            )
+            if (!item.enabled || item.state != LxSourceState.OK) continue
+            if (item.info?.supports(platform) != true) continue
+            val musicInfo = resolveMusicInfo(runtime, song, platform, quality)
+            if (musicInfo == null) {
+                NPLogger.w("LxSource", "resolve skip: musicInfo 定位失败 platform=${platform.code}")
+                continue
+            }
+            val declaredQualities = item.info.qualities(platform)
+            val chain = qualityChain(quality, declaredQualities)
+            NPLogger.d(
+                "LxSource",
+                "resolve chain: songmid=${musicInfo.songmid} declared=$declaredQualities " +
+                    "chain=${chain.map { it.code }}"
+            )
+            // 音质降级链：对齐 Mint 的 _qualityFallbackChain（只向下），
+            // 脚本只支持更低档时自动降级，而不是直接判定取流失败。
+            for (q in chain) {
+                val info = if (q == quality) musicInfo else musicInfo.withQuality(q)
+                when (val r = runtime.requestMusicUrl(info, platform, q)) {
+                    is LxResult.Ok -> {
+                        NPLogger.d("LxSource", "resolve probe ok: q=${q.code} url=${r.value.url.take(120)}")
+                        // 酷我提示音（试听片段）不是真正的歌曲地址，直接换下一档音质
+                        if (isPromptUrl(platform, r.value.url)) {
+                            NPLogger.w("LxSource", "拒绝酷我提示音地址: ${r.value.url}")
+                            continue
+                        }
+                        return r
+                    }
+                    is LxResult.Err -> {
+                        NPLogger.w("LxSource", "resolve probe fail: q=${q.code} code=${r.code} message=${r.message}")
+                        continue
+                    }
+                }
+            }
+        }
+        NPLogger.w("LxSource", "resolve failed: no enabled LX source matched song=${song.name}")
+        return LxResult.Err("no_source", "no enabled LX source matched")
+    }
+
+    /**
+     * 音质降级链（对齐 Mint-Music 的 `_qualityFallbackChain`）。
+     *
+     * 规则：
+     * - 以请求音质为起点，按 [LxQuality.FALLBACK_ORDER] **只向下**取（请求档 + 更低档）
+     * - 脚本声明了音质时，只在声明范围内取（脚本不支持的档位给了也是白给）
+     * - 请求音质不在标准序里（脚本用了自定义档）时，退回 320k → 128k
+     */
+    private fun qualityChain(requested: LxQuality, supported: List<String>): List<LxQuality> {
+        val supportedCodes = supported.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+        val order = LxQuality.FALLBACK_ORDER
+        val index = order.indexOf(requested)
+        val base = if (index < 0) {
+            listOf(LxQuality.Q320, LxQuality.Q128)
+        } else {
+            order.subList(0, index + 1).reversed()
+        }
+        val filtered = if (supportedCodes.isEmpty()) {
+            base
+        } else {
+            base.filter { qualityCodeMatches(it.code, supportedCodes) }
+        }
+        // 脚本声明的档位与标准序对不上时，至少保证请求档本身被尝试一次
+        if (filtered.isEmpty()) {
+            val requestedSupported = supportedCodes.any { qualityCodeMatches(requested.code, setOf(it)) }
+            return if (requestedSupported) listOf(requested) else emptyList()
+        }
+        return filtered
+    }
+
+    /** 音质码比较：flac24bit / 24bit 视为同一档。 */
+    private fun qualityCodeMatches(code: String, supported: Set<String>): Boolean {
+        if (supported.contains(code)) return true
+        val alias = when (code) {
+            "flac24bit" -> "24bit"
+            "24bit" -> "flac24bit"
+            else -> null
+        }
+        return alias != null && supported.contains(alias)
+    }
+
+    /**
+     * 是不是「提示音 / 试听片段」地址。
+     *
+     * 对齐 Mint-Music 的 `_isKuwoPromptUrl`：酷我音源常返回 10~30 秒的试听片段，
+     * 拿它当歌曲播放会表现为「能播但只有几秒」。
+     */
+    private fun isPromptUrl(platform: LxPlatform, url: String): Boolean {
+        if (platform != LxPlatform.KW) return false
+        val lower = url.lowercase()
+        val markers = listOf(
+            "kw_promo", "kuwo_promo", "/promo/", "permission_prompt", "trial",
+        )
+        if (markers.any { lower.contains(it) }) return true
+        val path = lower.substringBefore('?').substringBefore('#')
+        return path.endsWith(".mflac") || path.endsWith(".mgg")
+    }
+
+    /**
+     * 经脚本取歌词（对齐 Mint 的 getLyricResult 兜底链）。
+     *
+     * 脚本没实现歌词时返回 Err，调用方自行决定是否回落到平台内置歌词。
+     *
+     * 社区脚本里**只有取流、没有歌词**是常态（脚本的 inited 声明里
+     * 每个 source 只有 `musicUrl` 一个 action）。这类脚本会立刻回
+     * 「action not support」，这里把它记进 [lyricUnsupportedScriptIds]，
+     * 之后所有歌都直接跳过这个脚本，不再每首重试一遍。
+     */
+    suspend fun requestLyric(
+        platform: LxPlatform,
+        musicInfo: LxMusicInfo,
+    ): LxResult<LxLyricBundle> {
         for ((id, runtime) in runtimes) {
             val item = _items.value.firstOrNull { it.id == id } ?: continue
             if (!item.enabled || item.state != LxSourceState.OK) continue
             if (item.info?.supports(platform) != true) continue
-            val musicInfo = resolveMusicInfo(runtime, song, platform, quality) ?: continue
-            when (val r = runtime.requestMusicUrl(musicInfo, platform, quality)) {
-                is LxResult.Ok -> return r
+            if (id in lyricUnsupportedScriptIds) continue
+            when (val r = runtime.requestLyric(platform, musicInfo)) {
+                is LxResult.Ok -> {
+                    val bundle = LxLyricParser.parse(r.value)
+                    if (!bundle.isEmpty) return LxResult.Ok(bundle)
+                }
+                is LxResult.Err -> {
+                    if (r.isLyricUnsupported()) {
+                        lyricUnsupportedScriptIds.add(id)
+                        NPLogger.d(
+                            "LxSource",
+                            "脚本不支持歌词 action，跳过后续请求: name=${item.name} id=$id message=${r.message}"
+                        )
+                    }
+                    continue
+                }
+            }
+        }
+        return LxResult.Err("no_source", "no enabled LX source returned lyric")
+    }
+
+    /**
+     * 当前是否有「可能提供歌词」的脚本。
+     *
+     * 已知不支持歌词的脚本会被排除；调用方可以在没有可用脚本时直接跳过，
+     * 省掉一次跨进程等待。
+     */
+    fun hasLyricCapableSource(): Boolean {
+        if (lyricUnsupportedScriptIds.isEmpty()) return true
+        return _items.value.any { item ->
+            item.enabled && item.state == LxSourceState.OK && item.id !in lyricUnsupportedScriptIds
+        }
+    }
+
+    /**
+     * 按歌曲向脚本要歌词。
+     *
+     * 歌词链路原本只走平台内置接口（网易云 / QQ / 酷狗 / B 站 / AMLL 模糊匹配），
+     * 脚本的 `lyric` action 从来没被调用过 ——
+     * 于是「用 LX 音源播放汽水 / 咪咕这类没有内置歌词接口的平台」时，
+     * 明明脚本能按平台 id 精确查到歌词，界面却一直是「暂无歌词」。
+     *
+     * @return 脚本返回的歌词包；平台不支持或脚本没实现歌词时返回 Err
+     */
+    suspend fun requestLyricForSong(song: SongItem): LxResult<LxLyricBundle> {
+        val platform = LxPlatform.forChannelId(song.channelId)
+            ?: return LxResult.Err(
+                "no_platform",
+                "歌曲来源 ${song.channelId.orEmpty()} 不在 LX 支持的平台里"
+            )
+        val musicInfo = buildLyricMusicInfo(song, platform)
+            ?: return LxResult.Err("no_songmid", "歌曲缺少平台 id")
+        return requestLyric(platform, musicInfo)
+    }
+
+    /**
+     * 歌曲 -> LX 歌词请求参数。
+     *
+     * songmid 取 [SongItem.audioId]（平台原生 id：汽水的 track id、酷狗的 FileHash、
+     * 网易云的歌曲 id），与取流时保持一致；脚本认的就是这些 id。
+     *
+     * @return 请求参数；歌曲缺少可用 id 时返回 null
+     */
+    internal fun buildLyricMusicInfo(song: SongItem, platform: LxPlatform): LxMusicInfo? {
+        val songmid = song.audioId?.takeIf { it.isNotBlank() } ?: song.id.toString()
+        if (songmid.isBlank() || songmid == "0") return null
+        return LxMusicInfo(
+            source = platform.code,
+            songmid = songmid,
+            name = song.name,
+            singer = song.artist,
+            albumName = song.album,
+            durationMs = song.durationMs,
+            types = listOf(LxQuality.Q128),
+            coverUrl = song.coverUrl,
+            extras = platformExtras(platform, songmid)
+        )
+    }
+
+    /** 经脚本取封面地址（对齐 Mint 的 getPic：musicPic → pic）。 */
+    suspend fun requestPic(
+        platform: LxPlatform,
+        musicInfo: LxMusicInfo,
+    ): LxResult<String> {
+        for ((id, runtime) in runtimes) {
+            val item = _items.value.firstOrNull { it.id == id } ?: continue
+            if (!item.enabled || item.state != LxSourceState.OK) continue
+            if (item.info?.supports(platform) != true) continue
+            when (val r = runtime.requestPic(platform, musicInfo)) {
+                is LxResult.Ok -> {
+                    val url = r.value.trim().trim('"')
+                    if (url.isNotEmpty() && url != "null") return LxResult.Ok(url)
+                }
                 is LxResult.Err -> continue
             }
         }
-        return LxResult.Err("no_source", "no enabled LX source matched")
+        return LxResult.Err("no_source", "no enabled LX source returned pic")
     }
 
     private suspend fun resolveMusicInfo(
@@ -175,8 +446,9 @@ class LxSourceRepository(
         platform: LxPlatform,
         quality: LxQuality
     ): LxMusicInfo? {
-        // 网易云歌曲本身就是 wy 源的 songmid，不用再搜
-        if (platform == LxPlatform.WY && song.channelId.equals("netease", ignoreCase = true)) {
+        // 歌曲本身就是这个平台的 id 时，直接用它，不必再搜一遍。
+        // 网易云的 audioId 是歌曲 id；酷狗/QQ/酷我/咪咕的 audioId 是该平台的 id。
+        if (LxPlatform.matchesChannelId(platform, song.channelId)) {
             val songmid = song.audioId?.takeIf { it.isNotBlank() } ?: song.id.toString()
             if (songmid.isNotBlank() && songmid != "0") {
                 return LxMusicInfo(
@@ -187,14 +459,15 @@ class LxSourceRepository(
                     albumName = song.album,
                     durationMs = song.durationMs,
                     types = listOf(quality),
-                    coverUrl = song.coverUrl
+                    coverUrl = song.coverUrl,
+                    extras = platformExtras(platform, songmid)
                 )
             }
         }
         val keyword = song.name.trim()
         if (keyword.isBlank()) return null
-        // 脚本自带 search 时优先用它的候选
-        val candidates = (runtime.search(platform, keyword) as? LxResult.Ok)?.value.orEmpty()
+        // 脚本自带 search 时优先用它的候选（mobile 契约失败会退回 desktop 契约）
+        val candidates = searchCandidates(runtime, platform, keyword)
         LxIdMatcher.best(song.name, song.artist, song.durationMs, candidates)?.let { best ->
             return LxMusicInfo(
                 source = platform.code,
@@ -204,7 +477,8 @@ class LxSourceRepository(
                 albumName = best.album,
                 durationMs = best.durationMs.takeIf { it > 0L } ?: song.durationMs,
                 types = listOf(quality),
-                coverUrl = best.picUrl
+                coverUrl = best.picUrl,
+                extras = platformExtras(platform, best.songmid)
             )
         }
         // 脚本不实现 search 时，用我们自己的平台搜索定位同一首歌
@@ -213,7 +487,48 @@ class LxSourceRepository(
             keyword = "$keyword ${song.artist}".trim(),
             types = listOf(quality),
             quality = quality
-        )
+        )?.let { located ->
+            located.copy(extras = located.extras + platformExtras(platform, located.songmid))
+        }
+    }
+
+    /**
+     * 平台特有字段（洛雪协议里各平台的 id 落位）。
+     *
+     * 社区脚本按固定字段名取 id，字段名不对就换不出地址：
+     * - kg：FileHash → `hash`
+     * - kw：rid → `rid`（`hash` 兜底同值）
+     * - tx：mid → `strMediaMid`（数字 tid 落 `songId`，宿主拿不到就不写）
+     * - mg：copyrightId → `copyrightId`（`songId` 兜底同值，由 toJson 补）
+     * - wy：数字 songid → `songId`（`hash` 兜底同值）
+     *
+     * 缺失的字段必须整个 key 省略，否则 `hash ?? songmid` 会被空串遮住。
+     */
+    private fun platformExtras(platform: LxPlatform, songmid: String): Map<String, String> = when (platform) {
+        LxPlatform.KG -> mapOf("hash" to songmid)
+        LxPlatform.KW -> mapOf("rid" to songmid, "hash" to songmid)
+        LxPlatform.TX -> mapOf("strMediaMid" to songmid)
+        LxPlatform.MG -> mapOf("copyrightId" to songmid)
+        LxPlatform.WY -> mapOf("songId" to songmid, "hash" to songmid)
+        else -> emptyMap()
+    }
+
+    /**
+     * 脚本搜索候选。
+     *
+     * 社区脚本两种契约都存在：mobile 是 action "search" + info.searchParam，
+     * desktop/CeruMusic 是 action "musicSearch" + info{keyword,page,limit,pagesize}。
+     * 只认一种，另一半脚本永远定位不到歌曲，取流就会退到「无播放地址」。
+     */
+    private suspend fun searchCandidates(
+        runtime: LxRuntime,
+        platform: LxPlatform,
+        keyword: String
+    ): List<LxIdMatcher.Candidate> {
+        val mobile = (runtime.search(platform, keyword) as? LxResult.Ok)?.value.orEmpty()
+        if (mobile.isNotEmpty()) return mobile
+        val desktop = (runtime.searchDesktop(platform, keyword) as? LxResult.Ok)?.value.orEmpty()
+        return mobile + desktop
     }
 
     /**
@@ -226,7 +541,7 @@ class LxSourceRepository(
             val item = _items.value.firstOrNull { it.id == id } ?: continue
             if (!item.enabled || item.state != LxSourceState.OK) continue
             if (item.info?.supports(platform) != true) continue
-            val candidates = (runtime.search(platform, keyword) as? LxResult.Ok)?.value.orEmpty()
+            val candidates = searchCandidates(runtime, platform, keyword)
             if (candidates.isEmpty()) continue
             return candidates.take(50).map { c ->
                 SongItem(
@@ -250,6 +565,8 @@ class LxSourceRepository(
             val updated = if (!enabled) {
                 item.copy(enabled = false, state = LxSourceState.DISABLED)
             } else {
+                // 重新启用意味着脚本可能被换过，清掉「不支持歌词」的旧结论
+                lyricUnsupportedScriptIds.remove(item.id)
                 item.copy(enabled = true)
             }
             replace(updated)
@@ -279,5 +596,15 @@ class LxSourceRepository(
 
     private fun replace(item: LxSourceItem) {
         _items.value = _items.value.filterNot { it.id == item.id } + item
+    }
+
+    private companion object {
+        /**
+         * 等脚本就绪的上限。
+         *
+         * 1.4MB 量级的社区脚本用 QuickJS 求值要十几秒，给到这个量级才够；
+         * 再久就没意义了，用户宁可看到失败提示。
+         */
+        const val LX_READY_WAIT_TIMEOUT_MS = 20_000L
     }
 }

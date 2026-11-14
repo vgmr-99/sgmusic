@@ -38,9 +38,6 @@ import moe.ouom.neriplayer.data.identity.stableKey
 import moe.ouom.neriplayer.data.sync.mapping.toSongItem
 import moe.ouom.neriplayer.util.platform.tryStartActivity
 import android.app.Application
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -173,10 +170,13 @@ import moe.ouom.neriplayer.ui.component.sheet.bottomSheetScrollGuard
 import moe.ouom.neriplayer.ui.feedback.NeriSnackbarHost
 import moe.ouom.neriplayer.ui.feedback.showNeriSnackbar
 import moe.ouom.neriplayer.data.model.SongItem
+import moe.ouom.neriplayer.ui.viewmodel.tab.ExploreCapability
 import moe.ouom.neriplayer.ui.viewmodel.tab.ExploreSearchResult
 import moe.ouom.neriplayer.ui.viewmodel.tab.ExploreViewModel
+import moe.ouom.neriplayer.ui.viewmodel.tab.exploreSourceSupports
 import moe.ouom.neriplayer.ui.viewmodel.tab.BiliPlaylist
 import moe.ouom.neriplayer.ui.viewmodel.tab.NeteaseExploreSearchType
+import moe.ouom.neriplayer.ui.viewmodel.tab.PlatformBrowseTrackScope
 import moe.ouom.neriplayer.ui.viewmodel.tab.PlaylistSummary
 import moe.ouom.neriplayer.ui.viewmodel.tab.SearchSource
 import moe.ouom.neriplayer.ui.viewmodel.tab.YouTubeExploreSearchType
@@ -205,6 +205,8 @@ internal fun exploreSearchSourceDisplayOrder(
             SearchSource.QQ_MUSIC,
             SearchSource.KUGOU,
             SearchSource.QISHUI,
+            SearchSource.KUWO,
+            SearchSource.MIGU,
             SearchSource.BILIBILI,
             SearchSource.LINK_RECOGNITION
         )
@@ -215,6 +217,8 @@ internal fun exploreSearchSourceDisplayOrder(
             SearchSource.QQ_MUSIC,
             SearchSource.KUGOU,
             SearchSource.QISHUI,
+            SearchSource.KUWO,
+            SearchSource.MIGU,
             SearchSource.BILIBILI,
             SearchSource.LINK_RECOGNITION
         )
@@ -224,6 +228,8 @@ internal fun exploreSearchSourceDisplayOrder(
             SearchSource.QQ_MUSIC,
             SearchSource.KUGOU,
             SearchSource.QISHUI,
+            SearchSource.KUWO,
+            SearchSource.MIGU,
             SearchSource.BILIBILI,
             SearchSource.YOUTUBE_MUSIC,
             SearchSource.LINK_RECOGNITION
@@ -255,7 +261,8 @@ internal fun exploreSearchScrollContextKey(
         SearchSource.YOUTUBE_MUSIC -> youtubeSearchType.name
         SearchSource.QQ_MUSIC,
         SearchSource.KUGOU,
-        SearchSource.QISHUI -> platformSearchType.name
+        SearchSource.QISHUI,
+        SearchSource.KUWO -> platformSearchType.name
         else -> "-"
     }
     return "${source.name}|$sourceType|$normalizedKeyword"
@@ -330,13 +337,6 @@ internal fun shouldShowBiliPartsPicker(song: SongItem): Boolean {
         song.album.startsWith("${PlayerManager.BILI_SOURCE_TAG}|")
 }
 
-/** 在浏览器里打开平台页面（免登录平台的歌单/歌手没有取流接口，只能跳官网） */
-private fun openPlatformWebPage(context: Context, url: String) {
-    if (url.isBlank()) return
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-    context.tryStartActivity(intent)
-}
-
 @Composable
 private fun searchSourceLabel(source: SearchSource): String {
     return when (source) {
@@ -347,6 +347,8 @@ private fun searchSourceLabel(source: SearchSource): String {
         SearchSource.QQ_MUSIC -> stringResource(CoreCommonR.string.explore_search_source_qq_music)
         SearchSource.KUGOU -> stringResource(CoreCommonR.string.explore_search_source_kugou)
         SearchSource.QISHUI -> stringResource(CoreCommonR.string.explore_search_source_qishui)
+        SearchSource.KUWO -> stringResource(CoreCommonR.string.explore_search_source_kuwo)
+        SearchSource.MIGU -> stringResource(CoreCommonR.string.explore_search_source_migu)
     }
 }
 
@@ -479,9 +481,18 @@ fun ExploreScreen(
     val platformSearchTypes = remember(ui.selectedSearchSource) {
         vm.supportedSearchTypes(ui.selectedSearchSource)
     }
-    // 浏览页的分类标签（汽水有场景歌单，酷狗/QQ 的榜单没有分类）
-    val platformBrowseCategories = remember(ui.selectedSearchSource) {
-        vm.platformBrowseCategories(ui.selectedSearchSource)
+    // 不支持搜索的平台（咪咕）不渲染搜索框、搜索历史和搜索分类，避免点了才提示「暂不支持」
+    val searchCapable = exploreSourceSupports(
+        ui.selectedSearchSource,
+        ExploreCapability.SEARCH
+    )
+    // 分类标签从 state 读：线上标签是异步刷回来的，用 remember(selectedSearchSource)
+    // 只取一次的话，刷新结果永远补不进标签栏。
+    val platformBrowseCategories = ui.platformBrowseCategories
+    // 分类 key 是稳定 id（数字、组合串），界面上要显示中文名。
+    // 标签是异步拉取的，所以 key 列表变化时也要跟着重新取展示名。
+    val platformBrowseCategoryLabel: (String) -> String = remember(ui.selectedSearchSource, platformBrowseCategories) {
+        { category -> vm.platformBrowseCategoryLabel(ui.selectedSearchSource, category) }
     }
 
     val shouldLoadMoreSearch by remember(
@@ -533,14 +544,22 @@ fun ExploreScreen(
         if (currentSource == SearchSource.YOUTUBE_MUSIC && ui.ytMusicPlaylists.isEmpty()) {
             vm.loadYtMusicPlaylists()
         }
-        // 平台源切到默认页时加载浏览内容（歌单 / 榜单），和网易云保持一致
-        if (currentSource == SearchSource.QQ_MUSIC ||
-            currentSource == SearchSource.KUGOU ||
-            currentSource == SearchSource.QISHUI
-        ) {
-            if (ui.platformBrowseCards.isEmpty() && !ui.platformBrowseLoading) {
-                vm.loadPlatformBrowse(currentSource)
-            }
+    }
+
+    // 浏览页按「当前选中的平台」加载，六个浏览源（含网易云）一视同仁。
+    // 只以 selectedSearchSource 为 key：切 tab 一定重载，点分类 chip 不会重载；
+    // 5 分钟缓存命中时由 ViewModel 直接回填，不产生额外网络请求。
+    // 旧逻辑用 platformBrowseCards.isEmpty() 做守卫，只要网易云加载过一次，
+    // 切到任何平台都不会再拉数据，导致所有 tab 都显示网易云的四个榜单。
+    LaunchedEffect(ui.selectedSearchSource) {
+        when (ui.selectedSearchSource) {
+            SearchSource.NETEASE,
+            SearchSource.QQ_MUSIC,
+            SearchSource.KUGOU,
+            SearchSource.QISHUI,
+            SearchSource.KUWO,
+            SearchSource.MIGU -> vm.loadPlatformBrowse(ui.selectedSearchSource)
+            else -> Unit
         }
     }
 
@@ -758,6 +777,7 @@ fun ExploreScreen(
                     .fillMaxWidth()
                     .padding(horizontal = searchPanelHorizontalPadding, vertical = 8.dp)
             ) {
+                    if (searchCapable) {
                     val cleanSearchField = NeriDesign.isClean
                     val searchFieldLabel = stringResource(
                         if (ui.selectedSearchSource == SearchSource.LINK_RECOGNITION) {
@@ -814,11 +834,12 @@ fun ExploreScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     }
+                    } // 不支持搜索的平台不显示搜索框
                     // only the search field stays pinned; everything below scrolls with the list
                     Column(Modifier.fillMaxWidth().exploreCollapsingHeader(collapsingHeader)) {
                     ExploreSearchHistoryRow(
                         history = visibleSearchHistory,
-                        visible = shouldShowSearchHistory,
+                        visible = shouldShowSearchHistory && searchCapable,
                         query = searchQuery,
                         onHistoryClick = { item -> submitExploreSearch(item) },
                         onRemoveHistory = { item ->
@@ -834,7 +855,7 @@ fun ExploreScreen(
                     )
                     ExploreHotSearchRow(
                         entries = ui.hotSearchEntries,
-                        visible = ui.searchKeyword.isBlank(),
+                        visible = ui.searchKeyword.isBlank() && searchCapable,
                         onEntryClick = { entry -> submitExploreSearch(entry.title) }
                     )
                     if (ui.selectedSearchSource == SearchSource.NETEASE && !ui.isNeteaseLoggedIn) {
@@ -896,8 +917,9 @@ fun ExploreScreen(
                             }
                         }
                     }
-                    // 搜索分类只影响搜索结果；没有搜索词时展示它会让人以为能切换浏览内容
-                    if (searchQuery.isNotBlank()) {
+                    // 搜索分类只影响搜索结果；没有搜索词时展示它会让人以为能切换浏览内容。
+                    // 不支持搜索的平台连分类栏一起隐藏。
+                    if (searchQuery.isNotBlank() && searchCapable) {
                         ExploreSearchTypeBar(
                             source = searchTypeBarSource,
                             selectedNeteaseSearchType = ui.selectedNeteaseSearchType,
@@ -922,7 +944,12 @@ fun ExploreScreen(
                     .fillMaxWidth()
             ) { page ->
                 val currentSource = orderedSearchSources[page]
-                if (searchQuery.isNotEmpty()) {
+                // pager 会预渲染相邻页，按当前页各自的平台能力判断，不共用全局选中源
+                val pageSearchCapable = exploreSourceSupports(
+                    currentSource,
+                    ExploreCapability.SEARCH
+                )
+                if (searchQuery.isNotEmpty() && pageSearchCapable) {
                     if (shouldRenderExploreSearchResults(page, pagerState.currentPage)) {
                         when {
                             ui.searching -> {
@@ -952,6 +979,31 @@ fun ExploreScreen(
                                 ) { Text(stringResource(CoreCommonR.string.search_no_result)) }
                             }
                             else -> {
+                                // 搜索态下点开歌单：直接在站内展开曲目；
+                                // 没展开时才显示搜索结果列表
+                                if (ui.platformBrowseTrackTitle.isNotEmpty() &&
+                                    ui.platformBrowseTrackScope == PlatformBrowseTrackScope.SEARCH
+                                ) {
+                                    PlatformBrowseTrackList(
+                                        browse = PlatformBrowseState(
+                                            trackTitle = ui.platformBrowseTrackTitle,
+                                            tracks = ui.platformBrowseTracks,
+                                            tracksLoading = ui.platformBrowseTracksLoading,
+                                            trackWebUrl = ui.platformBrowseTrackWebUrl,
+                                            trackScope = ui.platformBrowseTrackScope
+                                        ),
+                                        onTrackClick = { track ->
+                                            onSongClick(
+                                                ui.platformBrowseTracks.map { it.toSongItem() },
+                                                ui.platformBrowseTracks.indexOf(track)
+                                            )
+                                        },
+                                        onCloseTracks = { vm.closePlatformBrowseTracks() },
+                                        onPlayTrackNow = { track ->
+                                            onSongPlayPreservingQueue(track.toSongItem())
+                                        }
+                                    )
+                                } else {
                                 ExploreSearchResultsList(
                                     state = searchListState,
                                     isTabletLayout = isTabletLayout,
@@ -1077,10 +1129,26 @@ fun ExploreScreen(
                                                     owner = item.owner,
                                                     offlineMode = offlineMode,
                                                     onClick = {
-                                                        // 免登录平台的歌单没有取流接口，改成打开官方页面
-                                                        val webUrl = item.webUrl
-                                                        if (webUrl != null) {
-                                                            openPlatformWebPage(context, webUrl)
+                                                        // 免登录平台（汽水等）也能读歌单曲目，
+                                                        // 先在站内展开；读不到才退回官方页面
+                                                        val card = vm.searchPlaylistToBrowseCard(
+                                                            sourceTag = item.sourceTag,
+                                                            rawId = item.rawId,
+                                                            title = item.playlist.name,
+                                                            coverUrl = item.playlist.picUrl,
+                                                            trackCount = item.playlist.trackCount,
+                                                            webUrl = item.webUrl
+                                                        )
+                                                        if (card != null) {
+                                                            vm.loadPlatformBrowseTracks(
+                                                                card,
+                                                                PlatformBrowseTrackScope.SEARCH
+                                                            )
+                                                        } else {
+                                                            val webUrl = item.webUrl
+                                                            if (webUrl != null) {
+                                                                openPlatformWebPage(context, webUrl)
+                                                            }
                                                         }
                                                     }
                                                 )
@@ -1155,6 +1223,7 @@ fun ExploreScreen(
                                     }
                                 }
                                 }
+                                }
                             }
                         }
                     } else {
@@ -1162,26 +1231,6 @@ fun ExploreScreen(
                     }
                 } else {
                     when (currentSource) {
-                        SearchSource.NETEASE -> {
-                            NeteaseDefaultContent(
-                                gridState = gridState,
-                                browse = NeteaseBrowseState(
-                                    selectedTag = ui.selectedTag,
-                                    playlists = ui.playlists,
-                                    loading = ui.loading,
-                                    error = ui.error?.asString()
-                                ),
-                                tagKeys = tagKeys,
-                                tagLabels = tagLabels,
-                                favoriteKeys = favoriteKeys,
-                                onTagSelected = vm::loadHighQuality,
-                                onPlay = onPlay,
-                                tagChipSelectedAlpha = tagChipSelectedAlpha,
-                                tagChipUnselectedAlpha = tagChipUnselectedAlpha,
-                                tagChipBorderAlpha = tagChipBorderAlpha,
-                                isTabletLayout = isTabletLayout
-                            )
-                        }
                         SearchSource.BILIBILI -> {
                             Box(Modifier.fillMaxSize(), Alignment.Center) {
                                 Text(stringResource(AppR.string.explore_bili_desc), style = MaterialTheme.typography.bodyLarge)
@@ -1189,7 +1238,10 @@ fun ExploreScreen(
                         }
                         SearchSource.QQ_MUSIC,
                         SearchSource.KUGOU,
-                        SearchSource.QISHUI -> {
+                        SearchSource.QISHUI,
+                        SearchSource.KUWO,
+                        SearchSource.MIGU,
+                        SearchSource.NETEASE -> {
                             PlatformBrowseContent(
                                 browse = PlatformBrowseState(
                                     cards = ui.platformBrowseCards,
@@ -1199,19 +1251,23 @@ fun ExploreScreen(
                                     selectedCategory = ui.platformBrowseCategory,
                                     trackTitle = ui.platformBrowseTrackTitle,
                                     tracks = ui.platformBrowseTracks,
-                                    tracksLoading = ui.platformBrowseTracksLoading
+                                    tracksLoading = ui.platformBrowseTracksLoading,
+                                    trackWebUrl = ui.platformBrowseTrackWebUrl,
+                                    trackScope = ui.platformBrowseTrackScope
                                 ),
                                 onCardClick = { card ->
-                                    val webUrl = card.webUrl
-                                    if (webUrl != null) {
-                                        // 该集合没有公开的曲目接口，直接跳平台官方页
-                                        openPlatformWebPage(context, webUrl)
-                                    } else {
-                                        vm.loadPlatformBrowseTracks(card)
-                                    }
+                                    // 各平台歌单都能直接展开曲目并播放；
+                                    // 读不到曲目时曲目面板会给出「去官方页面」的兜底入口
+                                    vm.loadPlatformBrowseTracks(
+                                        card,
+                                        PlatformBrowseTrackScope.BROWSE
+                                    )
                                 },
                                 onCategoryClick = { category ->
                                     vm.loadPlatformBrowse(currentSource, category)
+                                },
+                                onRetry = {
+                                    vm.loadPlatformBrowse(currentSource, ui.platformBrowseCategory)
                                 },
                                 onTrackClick = { track ->
                                     onSongClick(
@@ -1223,6 +1279,10 @@ fun ExploreScreen(
                                     onSongPlayPreservingQueue(track.toSongItem())
                                 },
                                 onCloseTracks = { vm.closePlatformBrowseTracks() },
+                                categoryLabel = platformBrowseCategoryLabel,
+                                tagChipSelectedAlpha = tagChipSelectedAlpha,
+                                tagChipUnselectedAlpha = tagChipUnselectedAlpha,
+                                tagChipBorderAlpha = tagChipBorderAlpha,
                                 isTabletLayout = isTabletLayout
                             )
                         }
@@ -1563,7 +1623,12 @@ private fun ExploreHotSearchRow(
                     ),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(entries, key = { _, entry -> "${entry.source.name}-${entry.title}" }) { index, entry ->
+                // 上游热搜榜偶尔返回同名条目（实测酷狗「慌啥子嘛」出现两次），
+                // key 只带标题会让 LazyRow 抛 "Key ... was already used" 直接崩。
+                // 加上 index 保证唯一，去重则由 loadHotSearch 在数据层兜住。
+                itemsIndexed(entries, key = { index, entry ->
+                    "${entry.source.name}-$index-${entry.title}"
+                }) { index, entry ->
                     ExploreHotSearchChip(
                         rank = index + 1,
                         entry = entry,

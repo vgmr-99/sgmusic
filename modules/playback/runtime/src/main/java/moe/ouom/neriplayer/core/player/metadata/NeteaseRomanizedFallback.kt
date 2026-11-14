@@ -67,8 +67,18 @@ fun resolveKnownNeteaseLyricSongId(song: SongItem): Long? {
     if (song.matchedLyricSource == MusicPlatform.CLOUD_MUSIC) {
         song.matchedSongId?.toLongOrNull()?.takeIf { it > 0L }?.let { return it }
     }
-    val directNetease = song.album.startsWith(SongSourceTags.NETEASE) ||
-        song.channelId.equals("netease", ignoreCase = true) ||
-        song.mediaUri?.startsWith("https://music.163.com/") == true
-    return song.id.takeIf { it > 0L && directNetease }
+    return song.id.takeIf { it > 0L && song.isNeteaseOriginSong() }
+}
+
+/**
+ * 这首歌本身是不是网易云来源。
+ *
+ * 只有网易云来源的歌，song.id 才是网易云的 songId，可以直接拿去查网易云歌词。
+ * 汽水 / 咪咕 / 酷我 / QQ 的 song.id 是平台内部 id，拿去查网易云只会拿到
+ * 「[00:00.00]暂无歌词」占位语，运气差还会命中另一首歌的歌词。
+ */
+internal fun SongItem.isNeteaseOriginSong(): Boolean {
+    if (channelId.equals("netease", ignoreCase = true)) return true
+    if (album.startsWith(SongSourceTags.NETEASE, ignoreCase = true)) return true
+    return mediaUri?.startsWith("https://music.163.com/") == true
 }

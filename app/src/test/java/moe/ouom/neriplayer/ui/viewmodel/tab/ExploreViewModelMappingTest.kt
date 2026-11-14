@@ -7,7 +7,10 @@ import moe.ouom.neriplayer.data.model.bilibili.video.VideoBasicInfo
 import moe.ouom.neriplayer.data.model.bilibili.video.VideoStats
 import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicSearchResult
 import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicSearchResultType
+import moe.ouom.neriplayer.platform.search.api.ChartProvider
+import moe.ouom.neriplayer.platform.search.api.HotSearchEntry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -208,4 +211,82 @@ class ExploreViewModelMappingTest {
         pages = emptyList(),
         ugcSeason = ugcSeason
     )
+}
+
+/** 探索页平台能力表 + 热搜去重：不支持的入口不渲染、重复 chip 不崩 LazyRow。 */
+class ExploreSourceCapabilityTest {
+
+    @Test
+    fun `migu exposes browse only`() {
+        assertEquals(
+            setOf(ExploreCapability.BROWSE),
+            exploreSourceCapabilities(SearchSource.MIGU)
+        )
+        assertFalse(exploreSourceSupports(SearchSource.MIGU, ExploreCapability.SEARCH))
+        assertFalse(exploreSourceSupports(SearchSource.MIGU, ExploreCapability.HOT_SEARCH))
+    }
+
+    @Test
+    fun `hot search only for netease qq and kugou`() {
+        listOf(
+            SearchSource.NETEASE,
+            SearchSource.QQ_MUSIC,
+            SearchSource.KUGOU
+        ).forEach { source ->
+            assertTrue(exploreSourceSupports(source, ExploreCapability.HOT_SEARCH))
+            assertTrue(exploreSourceSupports(source, ExploreCapability.BROWSE))
+        }
+        listOf(
+            SearchSource.QISHUI,
+            SearchSource.KUWO,
+            SearchSource.MIGU,
+            SearchSource.BILIBILI,
+            SearchSource.YOUTUBE_MUSIC,
+            SearchSource.LINK_RECOGNITION
+        ).forEach { source ->
+            assertFalse(exploreSourceSupports(source, ExploreCapability.HOT_SEARCH))
+        }
+    }
+
+    @Test
+    fun `every browse platform has browse and bili youtube links have search only`() {
+        listOf(
+            SearchSource.NETEASE,
+            SearchSource.QQ_MUSIC,
+            SearchSource.KUGOU,
+            SearchSource.QISHUI,
+            SearchSource.KUWO,
+            SearchSource.MIGU
+        ).forEach { source ->
+            assertTrue(exploreSourceSupports(source, ExploreCapability.BROWSE))
+        }
+        listOf(
+            SearchSource.BILIBILI,
+            SearchSource.YOUTUBE_MUSIC,
+            SearchSource.LINK_RECOGNITION
+        ).forEach { source ->
+            assertTrue(exploreSourceSupports(source, ExploreCapability.SEARCH))
+            assertFalse(exploreSourceSupports(source, ExploreCapability.BROWSE))
+        }
+    }
+
+    @Test
+    fun `duplicate hot search titles collapse to one while order is kept`() {
+        val entries = listOf(
+            HotSearchEntry(title = "慌啥子嘛", source = ChartProvider.KUGOU),
+            HotSearchEntry(title = "我不难过", source = ChartProvider.KUGOU),
+            HotSearchEntry(title = "慌啥子嘛", source = ChartProvider.KUGOU),
+            HotSearchEntry(title = "慌啥子嘛", source = ChartProvider.NETEASE)
+        )
+        val deduped = dedupeHotSearchEntries(entries)
+        assertEquals(3, deduped.size)
+        assertEquals(
+            listOf("慌啥子嘛", "我不难过", "慌啥子嘛"),
+            deduped.map { it.title }
+        )
+        assertEquals(
+            listOf(ChartProvider.KUGOU, ChartProvider.KUGOU, ChartProvider.NETEASE),
+            deduped.map { it.source }
+        )
+    }
 }

@@ -106,6 +106,11 @@ class NeriPlayerApplication : Application(), WorkConfiguration.Provider {
             installNativeCrashHandler = startupPlan.shouldInstallNativeCrashHandler
         )
 
+        NPLogger.i(
+            "NeriPlayerApplication",
+            "startup plan: main=$runningInMainProcess safeMode=${startupPlan.enterSafeMode} " +
+                "initNormal=${startupPlan.shouldInitializeNormalComponents}"
+        )
         if (!startupPlan.shouldInitializeNormalComponents) {
             return
         }
@@ -142,6 +147,7 @@ class NeriPlayerApplication : Application(), WorkConfiguration.Provider {
     }
 
     internal fun initializeNormalComponents() {
+        NPLogger.i("NeriPlayerApplication", "initializeNormalComponents start")
         if (normalComponentsInitialized) return
         synchronized(this) {
             if (normalComponentsInitialized) {
