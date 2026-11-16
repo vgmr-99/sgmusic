@@ -47,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.core.player.PlayerManager
 import moe.ouom.neriplayer.data.model.playback.PlaybackAudioInfo
+import moe.ouom.neriplayer.data.model.playback.PlaybackAudioSource
 import moe.ouom.neriplayer.data.model.playback.PlaybackQualityOption
 import moe.ouom.neriplayer.data.model.lyrics.LyricEntry
 import moe.ouom.neriplayer.ui.component.lyrics.LyricSeekHapticFeedback
@@ -67,9 +68,40 @@ import moe.ouom.neriplayer.util.format.formatDuration
 import java.util.Locale
 import kotlin.math.roundToInt
 
+/**
+ * 播放渠道来源标识对应的字符串资源。
+ *
+ * 优先用歌曲的 channelId（能区分经 LX 解析的实际平台，如 qq/kugou/qishui），
+ * 拿不到再用 PlaybackAudioSource 兜底。返回 null 表示不展示来源。
+ */
+internal fun nowPlayingSourceLabelRes(
+    channelId: String?,
+    audioSource: PlaybackAudioSource?
+): Int? {
+    when (channelId?.trim()?.lowercase(Locale.US)) {
+        "netease", "wy" -> return CoreCommonR.string.nowplaying_netease_cloud
+        "qq", "tx" -> return CoreCommonR.string.settings_lx_platform_tx
+        "kugou", "kg" -> return CoreCommonR.string.settings_lx_platform_kg
+        "qishui", "qs" -> return CoreCommonR.string.settings_lx_platform_qs
+        "kw" -> return CoreCommonR.string.settings_lx_platform_kw
+        "mg" -> return CoreCommonR.string.settings_lx_platform_mg
+    }
+    return when (audioSource) {
+        PlaybackAudioSource.NETEASE -> CoreCommonR.string.nowplaying_netease_cloud
+        PlaybackAudioSource.BILIBILI -> CoreCommonR.string.nowplaying_bilibili
+        PlaybackAudioSource.YOUTUBE_MUSIC -> CoreCommonR.string.nowplaying_youtube_music
+        PlaybackAudioSource.LOCAL -> CoreCommonR.string.local_files
+        PlaybackAudioSource.SUBSONIC -> CoreCommonR.string.server_source
+        PlaybackAudioSource.LX -> CoreCommonR.string.settings_lx_source
+        null -> null
+    }
+}
+
 internal data class NowPlayingProgressInfoSegment(
     val label: String,
-    val highlighted: Boolean = false
+    val highlighted: Boolean = false,
+    /** 音质档位段可点击，点开音质选择弹窗 */
+    val clickable: Boolean = false
 )
 
 internal data class NowPlayingProgressInfoPresentation(
@@ -215,16 +247,17 @@ internal fun buildNowPlayingProgressInfoPresentation(
     showAudioCodec: Boolean,
     showAudioSpec: Boolean,
     playbackSpeed: Float,
-    phoneLandscape: Boolean
+    phoneLandscape: Boolean,
+    sourceLabel: String? = null
 ): NowPlayingProgressInfoPresentation {
     val segments = buildNowPlayingProgressInfoSegments(
-        audioInfo, showQualitySwitch, showAudioCodec, showAudioSpec, playbackSpeed
+        audioInfo, showQualitySwitch, showAudioCodec, showAudioSpec, playbackSpeed, sourceLabel
     )
     return NowPlayingProgressInfoPresentation(
         segments = nowPlayingVisibleProgressInfoSegments(segments, phoneLandscape),
         reserveRowHeight = shouldReserveNowPlayingProgressInfoSpace(
             showQualitySwitch, showAudioCodec, showAudioSpec, playbackSpeed, phoneLandscape
-        )
+        ) || (!phoneLandscape && !sourceLabel.isNullOrBlank())
     )
 }
 
@@ -233,10 +266,14 @@ internal fun buildNowPlayingProgressInfoSegments(
     showQualitySwitch: Boolean,
     showAudioCodec: Boolean,
     showAudioSpec: Boolean,
-    playbackSpeed: Float
+    playbackSpeed: Float,
+    sourceLabel: String? = null
 ): List<NowPlayingProgressInfoSegment> {
-    if (audioInfo == null) return emptyList()
+    val sourceSegment = sourceLabel?.takeIf { it.isNotBlank() }
+        ?.let { NowPlayingProgressInfoSegment(it) }
+    if (audioInfo == null) return listOfNotNull(sourceSegment)
     return listOfNotNull(
+        sourceSegment,
         progressQualityBadge(audioInfo, showQualitySwitch),
         progressSpeedBadge(playbackSpeed),
         progressCodecBadge(audioInfo, showAudioCodec),
@@ -246,7 +283,7 @@ internal fun buildNowPlayingProgressInfoSegments(
 
 private fun progressQualityBadge(info: PlaybackAudioInfo, enabled: Boolean): NowPlayingProgressInfoSegment? =
     info.qualityLabel?.takeIf { enabled && it.isNotBlank() }
-        ?.let { NowPlayingProgressInfoSegment(it, highlighted = true) }
+        ?.let { NowPlayingProgressInfoSegment(it, highlighted = true, clickable = true) }
 
 private fun progressSpeedBadge(speed: Float): NowPlayingProgressInfoSegment? =
     formatNowPlayingPlaybackSpeed(speed)
@@ -273,6 +310,7 @@ private fun formatNowPlayingPlaybackSpeed(playbackSpeed: Float): String {
 private fun NowPlayingProgressInfoRow(
     segments: List<NowPlayingProgressInfoSegment>,
     highlightedContentColor: Color,
+    onQualityClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val lineHeight = with(LocalDensity.current) { MaterialTheme.typography.labelSmall.lineHeight.toDp() }
@@ -290,7 +328,12 @@ private fun NowPlayingProgressInfoRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             segments.forEachIndexed { index, segment ->
-                NowPlayingProgressInfoCell(index, segment, highlightedContentColor)
+                NowPlayingProgressInfoCell(
+                    index = index,
+                    segment = segment,
+                    highlightedContentColor = highlightedContentColor,
+                    onQualityClick = onQualityClick
+                )
             }
         }
     }
@@ -300,7 +343,8 @@ private fun NowPlayingProgressInfoRow(
 private fun NowPlayingProgressInfoCell(
     index: Int,
     segment: NowPlayingProgressInfoSegment,
-    highlightedContentColor: Color
+    highlightedContentColor: Color,
+    onQualityClick: () -> Unit
 ) {
     if (index > 0) {
         Text(
@@ -312,7 +356,16 @@ private fun NowPlayingProgressInfoCell(
     Text(
         text = segment.label,
         style = MaterialTheme.typography.labelSmall,
-        color = progressInfoColor(segment.highlighted, highlightedContentColor)
+        color = progressInfoColor(segment.highlighted, highlightedContentColor),
+        modifier = if (segment.clickable) {
+            Modifier
+                .clip(neriRoundedShape(6.dp))
+                .clickable(onClick = onQualityClick)
+                .padding(horizontal = 4.dp, vertical = 2.dp)
+                .testTag("nowPlayingQualityBadge")
+        } else {
+            Modifier
+        }
     )
 }
 
@@ -419,6 +472,7 @@ internal fun NowPlayingProgressSection(
     activeContentColor: Color,
     useWideLandscapeLayout: Boolean,
     onPreviewPositionChange: (Long?) -> Unit,
+    onQualityClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     tabletLandscape: Boolean = false,
     progressRowModifier: Modifier = Modifier
@@ -463,6 +517,7 @@ internal fun NowPlayingProgressSection(
             NowPlayingProgressInfoRow(
                 segments = progressInfoPresentation.segments,
                 highlightedContentColor = activeContentColor,
+                onQualityClick = onQualityClick,
                 modifier = Modifier
                     .fillMaxWidth()
                     .offset(y = when {

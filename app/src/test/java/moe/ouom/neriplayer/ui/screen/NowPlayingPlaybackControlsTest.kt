@@ -10,8 +10,10 @@ import moe.ouom.neriplayer.ui.screen.nowplaying.NowPlayingProgressOwner
 import moe.ouom.neriplayer.ui.screen.nowplaying.NowPlayingSeekActionOwner
 import moe.ouom.neriplayer.ui.screen.nowplaying.buildNowPlayingProgressInfoPresentation
 import moe.ouom.neriplayer.ui.screen.nowplaying.buildNowPlayingProgressInfoSegments
+import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.ui.screen.nowplaying.isNowPlayingPhoneLandscape
 import moe.ouom.neriplayer.ui.screen.nowplaying.nowPlayingProgressFraction
+import moe.ouom.neriplayer.ui.screen.nowplaying.nowPlayingSourceLabelRes
 import moe.ouom.neriplayer.ui.screen.nowplaying.nowPlayingVisibleProgressInfoSegments
 import moe.ouom.neriplayer.ui.screen.nowplaying.shouldReserveNowPlayingProgressInfoSpace
 import org.junit.Assert.assertEquals
@@ -101,7 +103,7 @@ class NowPlayingPlaybackControlsTest {
         )
         val tabletLandscape = isNowPlayingPhoneLandscape(true, 800)
         assertEquals(
-            listOf(NowPlayingProgressInfoSegment("Hi-Res", highlighted = true)),
+            listOf(NowPlayingProgressInfoSegment("Hi-Res", highlighted = true, clickable = true)),
             nowPlayingVisibleProgressInfoSegments(
                 buildNowPlayingProgressInfoSegments(info, true, false, false, 1f), tabletLandscape
             )
@@ -319,7 +321,7 @@ class NowPlayingPlaybackControlsTest {
         )
         assertEquals(
             listOf(
-                NowPlayingProgressInfoSegment("Hi-Res", highlighted = true),
+                NowPlayingProgressInfoSegment("Hi-Res", highlighted = true, clickable = true),
                 NowPlayingProgressInfoSegment("1.25x"),
                 NowPlayingProgressInfoSegment("FLAC"),
                 NowPlayingProgressInfoSegment("96 kHz | 24 bit")
@@ -346,5 +348,76 @@ class NowPlayingPlaybackControlsTest {
                 true, true, true, 1f
             )
         )
+    }
+
+    @Test
+    fun `source label prefers channel id so LX playback shows the real platform`() {
+        // 经 LX 解析的 QQ / 酷狗 / 汽水，channelId 仍在，应显示具体平台而非笼统的 LX
+        assertEquals(
+            CoreCommonR.string.settings_lx_platform_tx,
+            nowPlayingSourceLabelRes("qq", PlaybackAudioSource.LX)
+        )
+        assertEquals(
+            CoreCommonR.string.settings_lx_platform_kg,
+            nowPlayingSourceLabelRes("kugou", PlaybackAudioSource.LX)
+        )
+        assertEquals(
+            CoreCommonR.string.settings_lx_platform_qs,
+            nowPlayingSourceLabelRes("qishui", null)
+        )
+        assertEquals(
+            CoreCommonR.string.nowplaying_netease_cloud,
+            nowPlayingSourceLabelRes("netease", PlaybackAudioSource.LX)
+        )
+        assertEquals(
+            CoreCommonR.string.nowplaying_netease_cloud,
+            nowPlayingSourceLabelRes(null, PlaybackAudioSource.NETEASE)
+        )
+        assertEquals(
+            CoreCommonR.string.nowplaying_bilibili,
+            nowPlayingSourceLabelRes(null, PlaybackAudioSource.BILIBILI)
+        )
+        // LX 但没有 channelId 时退回通用 LX 标识
+        assertEquals(
+            CoreCommonR.string.settings_lx_source,
+            nowPlayingSourceLabelRes("lx", PlaybackAudioSource.LX)
+        )
+        assertNull(nowPlayingSourceLabelRes(null, null))
+    }
+
+    @Test
+    fun `quality badge is clickable and source becomes the first info segment`() {
+        val info = PlaybackAudioInfo(
+            source = PlaybackAudioSource.LX,
+            qualityKey = "320k",
+            qualityLabel = "320k",
+            qualityOptions = listOf(
+                moe.ouom.neriplayer.data.model.playback.PlaybackQualityOption("128k", "128k"),
+                moe.ouom.neriplayer.data.model.playback.PlaybackQualityOption("320k", "320k")
+            )
+        )
+        val segments = buildNowPlayingProgressInfoSegments(
+            info, true, true, true, 1f, sourceLabel = "汽水"
+        )
+        // 来源在最前，音质段可点击
+        assertEquals("汽水", segments.first().label)
+        assertFalse(segments.first().clickable)
+        val quality = segments.first { it.label == "320k" }
+        assertTrue(quality.highlighted)
+        assertTrue(quality.clickable)
+    }
+
+    @Test
+    fun `source label alone reserves a row in portrait but not phone landscape`() {
+        val portrait = buildNowPlayingProgressInfoPresentation(
+            null, false, false, false, 1f, false, sourceLabel = "网易云"
+        )
+        assertEquals(listOf("网易云"), portrait.segments.map { it.label })
+        assertTrue(portrait.reserveRowHeight)
+        val landscape = buildNowPlayingProgressInfoPresentation(
+            null, false, false, false, 1f, true, sourceLabel = "网易云"
+        )
+        assertTrue(landscape.segments.isEmpty())
+        assertFalse(landscape.reserveRowHeight)
     }
 }

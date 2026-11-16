@@ -189,10 +189,9 @@ private fun SettingsVersionItem(
     } else {
         ""
     }
-    // 对外版本号走 APP_VERSION（gradle.properties 的 appVersion，如 1.4.0），
-    // VERSION_NAME 是构建身份（<git短哈希>.<时间戳>），放在副行保留可追溯性。
-    val appVersion = "${BuildConfig.APP_VERSION}$suffix"
-    val buildIdentity = BuildConfig.VERSION_NAME
+    // 版本号直接取 versionName（语义化版本，如 1.4.1），不再展示编译时间；
+    // 构建身份由下方独立的「构建 UUID / 构建时间」条目承载。
+    val versionText = "${BuildConfig.VERSION_NAME}$suffix"
 
     ListItem(
         leadingContent = {
@@ -208,21 +207,9 @@ private fun SettingsVersionItem(
                 style = MaterialTheme.typography.titleMedium
             )
         },
-        supportingContent = {
-            Column {
-                Text(
-                    text = appVersion,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Text(
-                    text = buildIdentity,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
+        supportingContent = { Text(versionText) },
         modifier = androidx.compose.ui.Modifier.settingsItemClickable {
-            onCopyValue(appVersion)
+            onCopyValue(versionText)
             onVersionClick()
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent)

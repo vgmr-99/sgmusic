@@ -826,13 +826,21 @@ fun NowPlayingScreen(
         preferredSource = loadedPreferredLyricSource,
         isBiliCcSubtitleLyrics = PlayerManager.isBiliCcSubtitleLyricsActive(currentSong)
     )
+    // 播放渠道来源标识：优先取当前歌曲 channelId（能区分 LX 下实际走的平台），
+    // 再回退到音频信息的 source。用 stringResource 解析后再交给纯函数拼装信息行。
+    val sourceLabelRes = nowPlayingSourceLabelRes(
+        channelId = currentSong?.channelId,
+        audioSource = currentPlaybackAudioInfo?.source
+    )
+    val sourceLabelText = sourceLabelRes?.let { stringResource(it) }
     val progressInfoPresentation = remember(
         currentPlaybackAudioInfo,
         showProgressQualitySwitch,
         showProgressAudioCodec,
         showProgressAudioSpec,
         playbackSoundState.speed,
-        phoneLandscape
+        phoneLandscape,
+        sourceLabelText
     ) {
         buildNowPlayingProgressInfoPresentation(
             audioInfo = currentPlaybackAudioInfo,
@@ -840,7 +848,8 @@ fun NowPlayingScreen(
             showAudioCodec = showProgressAudioCodec,
             showAudioSpec = showProgressAudioSpec,
             playbackSpeed = playbackSoundState.speed,
-            phoneLandscape = phoneLandscape
+            phoneLandscape = phoneLandscape,
+            sourceLabel = sourceLabelText
         )
     }
 
@@ -1182,6 +1191,12 @@ fun NowPlayingScreen(
                                     activeContentColor = targetNowPlayingActiveIconColor,
                                     useWideLandscapeLayout = useWideLandscapeLayout,
                                     onPreviewPositionChange = { previewPositionOverrideMs = it },
+                                    // 点红框的音质档位直接弹出音质选择，不必绕进「更多」菜单
+                                    onQualityClick = {
+                                        if (currentPlaybackAudioInfo?.qualityOptions?.isNotEmpty() == true) {
+                                            showQualitySwitchDialog = true
+                                        }
+                                    },
                                     tabletLandscape = useWideLandscapeLayout && !phoneLandscape,
                                     progressRowModifier = Modifier
                                         .sharedBounds(
@@ -1639,10 +1654,11 @@ fun NowPlayingScreen(
                         if (showQualitySwitchDialog && currentPlaybackAudioInfo != null) {
                             NowPlayingQualityOptionsDialog(
                                 title = stringResource(CoreCommonR.string.nowplaying_quality_switch_title),
-                                selectedKey = currentPlaybackAudioInfo
-                                    ?.source
-                                    ?.let(preferredQualityKeys::forSource)
-                                    ?: currentPlaybackAudioInfo?.qualityKey,
+                                // 高亮当前这首歌实际在播的档位，而不是设置里的偏好档位
+                                selectedKey = currentPlaybackAudioInfo?.qualityKey
+                                    ?: currentPlaybackAudioInfo
+                                        ?.source
+                                        ?.let(preferredQualityKeys::forSource),
                                 options = currentPlaybackAudioInfo?.qualityOptions.orEmpty(),
                                 onDismiss = { showQualitySwitchDialog = false },
                                 onSelect = { option ->

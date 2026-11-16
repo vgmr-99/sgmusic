@@ -68,6 +68,7 @@ import moe.ouom.neriplayer.platform.search.api.PlatformSearchProvider
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchResult
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchType
 import moe.ouom.neriplayer.platform.search.api.stablePlatformSongId
+import moe.ouom.neriplayer.platform.lxsource.LxPlatform
 import moe.ouom.neriplayer.platform.youtube.config.YouTubeFeatureGate
 import moe.ouom.neriplayer.platform.youtube.api.transport.buildYouTubeMusicMediaUri
 import moe.ouom.neriplayer.platform.youtube.api.transport.stableYouTubeMusicId
@@ -1384,13 +1385,34 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         val type = _uiState.value.selectedPlatformSearchType
         searchJob = viewModelScope.launch {
             try {
-                val result = fetchPlatformSearchPage(
+                var result = fetchPlatformSearchPage(
                     source = source,
                     keyword = keyword,
                     matchQuery = matchQuery,
                     page = 1,
                     type = type
                 )
+                // 汽水按关键词搜歌曲的公开接口（luna/search/track、pc/search/track）已被
+                // 服务端定向封锁：前者返回空 body，后者返回 empty_search，且国内国外都一样，
+                // 参数层面绕不过。这里在官方结果为空时退回 LX 自定义源的汽水（qs）搜索——
+                // LX 脚本通常带服务端签名能力，是这类平台最可靠的兜底。
+                val qishuiSongSearch = source == SearchSource.QISHUI && type == PlatformSearchType.SONG
+                if (qishuiSongSearch && result.items.isEmpty() && isLxSearchAvailable()) {
+                    val lxSongs = withContext(Dispatchers.IO) {
+                        AppContainer.lxSourceRepository.searchSongsForUi(keyword, LxPlatform.QS)
+                    }.let { rankExploreSongSearchResults(matchQuery, it) }
+                    NPLogger.d(
+                        TAG,
+                        "search qishui via LX fallback: request=$requestVersion, keyword=$keyword, count=${lxSongs.size}"
+                    )
+                    if (lxSongs.isNotEmpty()) {
+                        result = ExploreSearchFetchResult(
+                            items = lxSongs.map(ExploreSearchResult::Song),
+                            page = 1,
+                            hasMore = false
+                        )
+                    }
+                }
                 NPLogger.d(
                     TAG,
                     "search platform success: source=$source, request=$requestVersion, " +

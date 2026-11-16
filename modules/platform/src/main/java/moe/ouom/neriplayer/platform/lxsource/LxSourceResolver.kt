@@ -23,6 +23,7 @@ package moe.ouom.neriplayer.platform.lxsource
 import moe.ouom.neriplayer.data.model.SongItem
 import moe.ouom.neriplayer.data.model.playback.PlaybackAudioInfo
 import moe.ouom.neriplayer.data.model.playback.PlaybackAudioSource
+import moe.ouom.neriplayer.data.model.playback.PlaybackQualityOption
 import moe.ouom.neriplayer.data.model.playback.SongUrlResult
 import moe.ouom.neriplayer.common.logging.NPLogger
 
@@ -64,6 +65,9 @@ class LxSourceResolver(
                         source = PlaybackAudioSource.LX,
                         qualityKey = quality.code,
                         qualityLabel = quality.code,
+                        // 只列出脚本声明支持的音质档位（保持界面固定顺序），
+                        // 没声明时不提供切换，避免列出点了也取不到流的档位。
+                        qualityOptions = lxQualityOptions(r.value.supportedQualities),
                         mimeType = when (quality) {
                             LxQuality.FLAC, LxQuality.FLAC24 -> "audio/flac"
                             else -> "audio/mpeg"
@@ -79,7 +83,25 @@ class LxSourceResolver(
         }
     }
 
-    private companion object {
+    internal companion object {
+        /**
+         * 脚本声明的音质 -> 播放页可选项。
+         * 顺序固定为 128k / 320k / 无损 / 高解析，只保留脚本真正声明的档位；
+         * 脚本用了自定义档位（标准序之外）时也一并列出来，否则用户无法切到它。
+         */
+        internal fun lxQualityOptions(declared: List<String>): List<PlaybackQualityOption> {
+            if (declared.isEmpty()) return emptyList()
+            val declaredLower = declared.map { it.trim().lowercase() }
+                .filter { it.isNotEmpty() }.toSet()
+            if (declaredLower.isEmpty()) return emptyList()
+            val ordered = LxQuality.STANDARD_ORDER.filter { it.code in declaredLower }
+            // 标准序之外但脚本声明了的档位（192k / hires / atmos / master 等）
+            val extras = LxQuality.entries.filter {
+                it !in ordered && it.code in declaredLower
+            }
+            return (ordered + extras).map { PlaybackQualityOption(it.code, it.code) }
+        }
+
         /**
          * 歌曲来源平台 -> LX 源平台。
          *

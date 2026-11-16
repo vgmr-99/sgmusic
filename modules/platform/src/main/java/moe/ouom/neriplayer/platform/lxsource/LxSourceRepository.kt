@@ -252,7 +252,10 @@ class LxSourceRepository(
                             NPLogger.w("LxSource", "拒绝酷我提示音地址: ${r.value.url}")
                             continue
                         }
-                        return r
+                        // 把脚本声明的音质一并返回，播放页据此只列出该源真正支持的档位
+                        return LxResult.Ok(
+                            r.value.copy(supportedQualities = declaredQualities)
+                        )
                     }
                     is LxResult.Err -> {
                         NPLogger.w("LxSource", "resolve probe fail: q=${q.code} code=${r.code} message=${r.message}")

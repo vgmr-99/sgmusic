@@ -31,10 +31,13 @@ import org.json.JSONObject
  * 脚本返回的播放地址。
  *
  * @param headers 脚本要求带的请求头（部分音源的地址需要 Referer 才能拉流）
+ * @param supportedQualities 脚本为该平台声明支持的音质 code 列表，用于播放页音质选择。
+ * 空列表表示脚本未声明（此时按默认档处理，不提供音质切换）。
  */
 data class LxMusicUrl(
     val url: String,
-    val headers: Map<String, String> = emptyMap()
+    val headers: Map<String, String> = emptyMap(),
+    val supportedQualities: List<String> = emptyList()
 )
 
 /**

@@ -89,8 +89,13 @@ def stage(arguments):
     if config["BUILD_UUID"] != build_uuid or config["BUILD_TIMESTAMP"] != timestamp:
         raise ValueError("BuildConfig does not match the requested UUID/timestamp; target ref may not support injection")
     version_timestamp = os.environ.get("NERI_BUILD_VERSION_TIMESTAMP", "").strip()
-    if version_timestamp and (not re.fullmatch(r"[0-9]{8}", version_timestamp)
-                              or not config["VERSION_NAME"].endswith(f".{version_timestamp}")):
+    if version_timestamp and not re.fullmatch(r"[0-9]{8}", version_timestamp):
+        raise ValueError("NERI_BUILD_VERSION_TIMESTAMP must be 8 digits (MMddHHmm)")
+    # 版本号已改为语义化版本（如 1.4.1），末尾不再是编译时间戳；
+    # 只有旧格式（<sha>.<MMddHHmm>）才校验时间戳后缀，身份仍由 UUID/BUILD_TIMESTAMP 保证。
+    is_semantic_version = bool(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", config["VERSION_NAME"]))
+    if (version_timestamp and not is_semantic_version
+            and not config["VERSION_NAME"].endswith(f".{version_timestamp}")):
         raise ValueError("NERI_BUILD_VERSION_TIMESTAMP does not match BuildConfig VERSION_NAME")
     apk_files = sorted(arguments.apk_dir.rglob("*.apk"))
     if not apk_files:
@@ -117,7 +122,8 @@ def stage(arguments):
         "build_timestamp": timestamp,
         "build_time": datetime.fromtimestamp(timestamp / 1000, timezone.utc).isoformat(),
         "build_version": config["VERSION_NAME"],
-        "build_version_timestamp": version_timestamp or config["VERSION_NAME"].rsplit(".", 1)[-1],
+        "build_version_timestamp": version_timestamp or datetime.fromtimestamp(
+            config["BUILD_TIMESTAMP"] / 1000, TAIPEI).strftime("%m%d%H%M"),
         "target_sha": target_sha,
         "repository": repository,
         "workflow_run": workflow_run,
