@@ -173,6 +173,11 @@ class PlatformBrowseContentTest {
             "https://www.qishui.com/playlist/7429294603956600867",
             card.webUrl
         )
+        // 回归：必须走 PC 搜索接口 + LunaPC UA，老 luna/search/playlist 已失效
+        val request = requests.single()
+        assertEquals("/luna/pc/search/playlist", request.url.encodedPath)
+        assertEquals("LunaPC/3.0.0(290101097)", request.header("User-Agent"))
+        assertEquals("input", request.url.queryParameter("search_method"))
     }
 
     @Test
@@ -295,12 +300,20 @@ class PlatformBrowseContentTest {
         // 多歌手用 / 连接
         assertEquals("李荣浩/黑马", tracks[1].subtitle)
 
+        // 回归：详情必须走 POST beta-luna.douyin.com/luna/playlist/detail，
+        // playlist_id 放在 JSON body；老的 GET api.qishui.com/luna/playlist/detail 已失效
         val request = requests.first()
-        assertTrue(request.url.encodedPath.contains("playlist/detail"))
-        assertEquals(
-            "7200303561195061287",
-            request.url.queryParameter("playlist_id")
-        )
+        assertEquals("POST", request.method)
+        assertEquals("https", request.url.scheme)
+        assertEquals("beta-luna.douyin.com", request.url.host)
+        assertEquals("/luna/playlist/detail", request.url.encodedPath)
+        assertEquals("Luna/19.1.0 Android", request.header("User-Agent"))
+        val bodyJson = okio.Buffer().let { buffer ->
+            request.body!!.writeTo(buffer)
+            buffer.readUtf8()
+        }
+        assertTrue(bodyJson.contains("7200303561195061287"))
+        assertTrue(bodyJson.contains("playlist_id"))
     }
 
     @Test

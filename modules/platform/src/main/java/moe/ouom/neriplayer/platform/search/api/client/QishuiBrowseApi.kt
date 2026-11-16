@@ -37,8 +37,10 @@ import moe.ouom.neriplayer.platform.search.api.PlatformSearchResult
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchType
 import moe.ouom.neriplayer.platform.search.api.client.mint.decodeHtmlEntities
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 /**
@@ -171,16 +173,20 @@ class QishuiBrowseApi(
 
     /** 歌单详情（含曲目列表） */
     private fun playlistDetail(playlistId: String, cursor: Int, count: Int): JSONObject? {
-        val url = "https://api.qishui.com/luna/playlist/detail".toHttpUrl().newBuilder()
-            .apply { commonParams().forEach { (k, v) -> addQueryParameter(k, v) } }
-            .addQueryParameter("playlist_id", playlistId)
-            .addQueryParameter("cursor", cursor.toString())
-            .addQueryParameter("count", count.toString())
-            .build()
+        // 老接口 GET api.qishui.com/luna/playlist/detail 已被服务端降级为返回 1000005。
+        // 现行 App 协议是 POST beta-luna.douyin.com/luna/playlist/detail（JSON body），
+        // 免签名、游客态可用，media_resources 里直接带曲目列表。
+        val body = JSONObject()
+            .put("playlist_id", playlistId)
+            .put("cursor", cursor.toString())
+            .put("count", count)
+            .toString()
+            .toRequestBody(JSON_MEDIA_TYPE)
         val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", LUNA_USER_AGENT)
-            .header("Accept", "*/*")
+            .url(LUNA_HOST + "/luna/playlist/detail")
+            .header("User-Agent", LUNA_APP_UA)
+            .header("Content-Type", "application/json; charset=utf-8")
+            .post(body)
             .build()
         return requestJson(request)
     }
@@ -201,22 +207,27 @@ class QishuiBrowseApi(
     }
 
     private fun searchPlaylists(keyword: String): JSONObject? {
-        val url = "https://api.qishui.com/luna/search/playlist".toHttpUrl().newBuilder()
-            .apply { commonParams().forEach { (k, v) -> addQueryParameter(k, v) } }
+        // 老接口 GET api.qishui.com/luna/search/playlist 已失效：
+        // 服务端对 app_name=luna 的移动端搜索统一返回 {"extra":{"empty_search":1}}，
+        // 与出口地区/设备号无关（国内国外都一样），所以国内也无法恢复。
+        // 现行可用的是 PC 搜索 GET /luna/pc/search/playlist + LunaPC UA，
+        // 返回结构与老接口一致（result_groups[0].data[].entity.playlist）。
+        val url = "https://api.qishui.com/luna/pc/search/playlist".toHttpUrl().newBuilder()
+            .apply { pcSearchParams().forEach { (k, v) -> addQueryParameter(k, v) } }
             .addQueryParameter("q", keyword)
-            .addQueryParameter("cursor", "0")
-            .addQueryParameter("count", "20")
+            .addQueryParameter("search_method", "input")
             .build()
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", LUNA_USER_AGENT)
-            .header("Accept", "*/*")
+            .header("User-Agent", LUNA_PC_UA)
+            .header("Accept", "application/json, text/plain, */*")
             .build()
         return requestJson(request)
     }
 
     /** 抖音系图片模板：{urls[0]}{uri}~{template_prefix}-image.image */
-    private fun playlistCoverUrl(playlist: JSONObject): String? {
+    private fun playlistCoverUrl(playlist: JSONObject?): String? {
+        if (playlist == null) return null
         val cover = playlist.optJSONObject("url_cover") ?: return null
         val uri = cover.optString("uri", "").trim()
         val prefix = cover.optString("template_prefix", "").trim()
@@ -226,29 +237,14 @@ class QishuiBrowseApi(
         return "$host$uri$template-image.image"
     }
 
-    private fun commonParams(): Map<String, String> {
-        // device_id / iid 必须是**稳定**的：每次请求都换新的随机 id，
-        // 会被当成一批新设备，接口偶发返回空结果（cards=0）。
-        val deviceId = LunaDeviceId.value
-        return mapOf(
-            "device_platform" to "android",
-            "os" to "android",
-            "aid" to "386088",
-            "app_name" to "luna",
-            "version_code" to "100198030",
-            "version_name" to "19.8.0",
-            "package" to "com.luna.music",
-            "language" to "zh",
-            "os_api" to "35",
-            "os_version" to "15",
-            "channel" to "xiaomi_8478_64",
-            "ssmix" to "a",
-            "cdid" to "46556f98-1720-4248-83da-62b74b60b46a",
-            "iid" to deviceId,
-            "device_id" to deviceId,
-            "_rticket" to System.currentTimeMillis().toString()
-        )
-    }
+    /** PC 搜索的公共参数。实测搜索/歌单读取不需要 x-helios/x-medusa 签名头。 */
+    private fun pcSearchParams(): Map<String, String> = mapOf(
+        "aid" to "386088",
+        "device_platform" to "web",
+        "channel" to "pc_web",
+        "cursor" to "0",
+        "count" to "20"
+    )
 
     private companion object {
         /** 场景分类 -> 搜索关键词 */
@@ -267,8 +263,15 @@ class QishuiBrowseApi(
         /** 歌单曲目最多并发拉几页，避免超大歌单把界面撑爆 */
         const val MAX_TRACK_PAGES = 5
 
-        const val LUNA_USER_AGENT =
-            "com.luna.music/100198030 (Linux; U; Android 15; zh_CN_#Hans; ABR-AL80; " +
-                "Build/V417IR;tt-ok/3.12.13.19)"
+        /** 免签名的 luna H5/App 网关：discover、playlist/detail、seo_track 都走这里 */
+        const val LUNA_HOST = "https://beta-luna.douyin.com"
+
+        /** postLuna 的 UA，参考 qishui-api：Luna/19.1.0 Android */
+        const val LUNA_APP_UA = "Luna/19.1.0 Android"
+
+        /** PC 搜索/详情的 UA，服务端据此放行匿名请求 */
+        const val LUNA_PC_UA = "LunaPC/3.0.0(290101097)"
+
+        val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 }
