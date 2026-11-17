@@ -41,7 +41,7 @@ import requests
 MUSIC_ORIGIN = "https://music.youtube.com"
 YOUTUBE_ORIGIN = "https://www.youtube.com"
 YOUTUBEI_API_BASE = "https://youtubei.googleapis.com/youtubei/v1"
-DEFAULT_COOKIE_FILE = r"E:\AndroidProject\NeriPlayer\.ck\youtube-cookie.txt"
+DEFAULT_COOKIE_FILE = r"E:\AndroidProject\Timbre\.ck\youtube-cookie.txt"
 DEFAULT_VIDEO_IDS = ["fbvvS8e1KgI", "o2x1DBRCZJg"]
 DEFAULT_PYDEPS_PATH = Path(tempfile.gettempdir()) / "neri_pydeps"
 DEFAULT_REPORT_PATH = Path(__file__).with_name("ytmusic_api_probe_report.json")

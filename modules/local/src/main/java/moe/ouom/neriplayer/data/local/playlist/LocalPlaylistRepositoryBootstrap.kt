@@ -862,7 +862,7 @@ internal fun LocalPlaylistRepository.stampSongsForPlaylistInsert(
     return songsForInsert.mapIndexed { index, song ->
         val membershipAddedAt = (addedAt - index).coerceAtLeast(1L)
         song.copy(
-            // membership 时间记录 NeriPlayer 导入歌曲的时刻
+            // membership 时间记录 Timbre 导入歌曲的时刻
             addedAt = resolvePlaylistSongAddedAt(
                 song = song,
                 membershipAddedAt = addedAt,

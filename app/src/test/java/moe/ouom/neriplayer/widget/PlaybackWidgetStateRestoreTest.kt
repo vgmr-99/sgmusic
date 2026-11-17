@@ -125,7 +125,7 @@ class PlaybackWidgetStateRestoreTest {
     }
 
     private companion object {
-        const val APP_NAME = "NeriPlayer"
+        const val APP_NAME = "Timbre"
         const val IDLE_SUBTITLE = "Nothing is playing"
         const val READY = "Ready"
         const val PAUSED = "Paused"

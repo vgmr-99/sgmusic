@@ -105,11 +105,11 @@ android {
         buildConfigField("String", "LISTEN_TOGETHER_INVITE_SCHEME", "\"$inviteScheme\"")
 
         buildConfigField("String", "BUILD_UUID", "\"${buildUUID}\"")
-        buildConfigField("String", "TAG", "\"[NeriPlayer]\"")
+        buildConfigField("String", "TAG", "\"[Timbre]\"")
         buildConfigField("long", "BUILD_TIMESTAMP", "${buildTimestamp}L")
 
 
-        testInstrumentationRunner = "moe.ouom.neriplayer.testing.NeriPlayerInstrumentationTestRunner"
+        testInstrumentationRunner = "moe.ouom.neriplayer.testing.TimbreInstrumentationTestRunner"
 
         renderscriptTargetApi = 31
         renderscriptSupportModeEnabled = true
@@ -443,7 +443,7 @@ androidComponents {
                 ?: ""
             output.outputFileName.set(
                 output.versionName.orElse("dev").map { versionName ->
-                    "NeriPlayer-${versionName}${abiSuffix}.apk"
+                    "Timbre-${versionName}${abiSuffix}.apk"
                 }
             )
         }

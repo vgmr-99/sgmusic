@@ -39,9 +39,9 @@ class PlaybackPresentationLocaleTest {
                 .apply { enableVibration(true) }
         )
         for ((language, ready, channel) in listOf(
-            Triple(LanguageManager.Language.ENGLISH, "Ready", "NeriPlayer Playback"),
-            Triple(LanguageManager.Language.CHINESE, "准备就绪", "NeriPlayer 播放"),
-            Triple(LanguageManager.Language.ENGLISH, "Ready", "NeriPlayer Playback")
+            Triple(LanguageManager.Language.ENGLISH, "Ready", "Timbre Playback"),
+            Triple(LanguageManager.Language.CHINESE, "准备就绪", "Timbre 播放"),
+            Triple(LanguageManager.Language.ENGLISH, "Ready", "Timbre Playback")
         )) {
             LanguageManager.setLanguage(context, language)
             port.ensureNotificationChannel()

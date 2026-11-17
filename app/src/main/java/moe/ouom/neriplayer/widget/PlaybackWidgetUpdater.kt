@@ -87,7 +87,7 @@ internal object PlaybackWidgetUpdater {
         }
         val appWidgetManager = AppWidgetManager.getInstance(context)
         val appWidgetIds = appWidgetManager.getAppWidgetIds(
-            ComponentName(context, NeriPlayerPlaybackWidgetProvider::class.java),
+            ComponentName(context, TimbrePlaybackWidgetProvider::class.java),
         )
         if (appWidgetIds.isEmpty()) {
             return
@@ -137,11 +137,11 @@ internal object PlaybackWidgetUpdater {
     internal fun hasInstalledWidgets(context: Context): Boolean {
         val appWidgetManager = AppWidgetManager.getInstance(context)
         return appWidgetManager.getAppWidgetIds(
-            ComponentName(context, NeriPlayerPlaybackWidgetProvider::class.java),
+            ComponentName(context, TimbrePlaybackWidgetProvider::class.java),
         ).isNotEmpty() || appWidgetManager.getAppWidgetIds(
-            ComponentName(context, NeriPlayerCompactWidgetProvider::class.java),
+            ComponentName(context, TimbreCompactWidgetProvider::class.java),
         ).isNotEmpty() || appWidgetManager.getAppWidgetIds(
-            ComponentName(context, NeriPlayerStripWidgetProvider::class.java),
+            ComponentName(context, TimbreStripWidgetProvider::class.java),
         ).isNotEmpty()
     }
 
@@ -154,7 +154,7 @@ internal object PlaybackWidgetUpdater {
         updateProvider(
             context = context,
             appWidgetManager = appWidgetManager,
-            provider = NeriPlayerPlaybackWidgetProvider::class.java,
+            provider = TimbrePlaybackWidgetProvider::class.java,
             layoutRes = R.layout.widget_playback_4x2,
             state = state,
             visuals = visuals,
@@ -162,7 +162,7 @@ internal object PlaybackWidgetUpdater {
         updateProvider(
             context = context,
             appWidgetManager = appWidgetManager,
-            provider = NeriPlayerStripWidgetProvider::class.java,
+            provider = TimbreStripWidgetProvider::class.java,
             layoutRes = R.layout.widget_playback_4x1,
             state = state,
             visuals = visuals,
@@ -170,7 +170,7 @@ internal object PlaybackWidgetUpdater {
         updateProvider(
             context = context,
             appWidgetManager = appWidgetManager,
-            provider = NeriPlayerCompactWidgetProvider::class.java,
+            provider = TimbreCompactWidgetProvider::class.java,
             layoutRes = R.layout.widget_playback_2x2,
             state = state,
             visuals = visuals,
@@ -287,9 +287,9 @@ internal object PlaybackWidgetUpdater {
             hasProgress = hasProgress,
         )
         val controlReceiver = when (layoutRes) {
-            R.layout.widget_playback_4x1 -> NeriPlayerStripWidgetProvider::class.java
-            R.layout.widget_playback_2x2 -> NeriPlayerCompactWidgetProvider::class.java
-            else -> NeriPlayerPlaybackWidgetProvider::class.java
+            R.layout.widget_playback_4x1 -> TimbreStripWidgetProvider::class.java
+            R.layout.widget_playback_2x2 -> TimbreCompactWidgetProvider::class.java
+            else -> TimbrePlaybackWidgetProvider::class.java
         }
         views.setTextViewText(R.id.widget_title, state.title)
         views.setTextViewText(R.id.widget_subtitle, state.subtitle)
@@ -713,7 +713,7 @@ internal object PlaybackWidgetUpdater {
         requestCode: Int,
         enabled: Boolean,
         fallback: PendingIntent,
-        receiver: Class<out NeriPlayerBaseWidgetProvider>,
+        receiver: Class<out TimbreBaseWidgetProvider>,
     ): PendingIntent {
         if (!enabled) {
             return fallback

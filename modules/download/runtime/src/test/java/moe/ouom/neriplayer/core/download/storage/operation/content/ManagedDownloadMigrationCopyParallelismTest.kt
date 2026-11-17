@@ -13,7 +13,7 @@ import org.mockito.Mockito.mock
 class ManagedDownloadMigrationCopyParallelismTest {
     @Test
     fun `file to file copies keep file parallelism while any tree root lowers it`() {
-        val fileRoot = ManagedDownloadRootHandle.FileRoot(File("/storage/emulated/0/Music/NeriPlayer"))
+        val fileRoot = ManagedDownloadRootHandle.FileRoot(File("/storage/emulated/0/Music/Timbre"))
         val treeRoot = ManagedDownloadRootHandle.TreeRoot(mock(DocumentFile::class.java))
 
         assertEquals(

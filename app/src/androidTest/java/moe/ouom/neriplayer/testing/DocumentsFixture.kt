@@ -27,7 +27,7 @@ internal object DocumentsFixture {
 
     fun createExternalTree(confirmPicker: Boolean = true, timeoutMillis: Long = 20_000): Uri {
         check(Build.HARDWARE in setOf("ranchu", "goldfish")) { "external fixtures require an emulator" }
-        val name = "NeriPlayer-test-${UUID.randomUUID()}"
+        val name = "Timbre-test-${UUID.randomUUID()}"
         val path = "/sdcard/Download/$name"
         val automation = instrumentation.uiAutomation
         fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(

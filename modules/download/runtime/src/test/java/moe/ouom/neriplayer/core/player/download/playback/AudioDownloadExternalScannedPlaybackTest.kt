@@ -120,7 +120,7 @@ class AudioDownloadExternalScannedPlaybackTest {
             if (uri == Uri.parse("content://media/external/audio/media/859470")) {
                 return@doAnswer MatrixCursor(projection).apply {
                     addRow(projection.map { column ->
-                        if (column == "_data") "/storage/emulated/0/NeriPlayer-Download2/$AUDIO_NAME" else null
+                        if (column == "_data") "/storage/emulated/0/Timbre-Download2/$AUDIO_NAME" else null
                     })
                 }
             }
@@ -785,7 +785,7 @@ class AudioDownloadExternalScannedPlaybackTest {
         val original = "content://media/external/audio/media/859470"
         val song = scannedSong(explicit = false).copy(
             mediaUri = original,
-            localFilePath = "/storage/emulated/0/NeriPlayer-Download2/$AUDIO_NAME",
+            localFilePath = "/storage/emulated/0/Timbre-Download2/$AUDIO_NAME",
             explicitLocalSourceReference = original.takeIf { snapshotMarker }
         )
         explicitReferences.add(original)
@@ -908,8 +908,8 @@ class AudioDownloadExternalScannedPlaybackTest {
 
     private companion object {
         const val AUTHORITY = "com.android.externalstorage.documents"
-        const val CURRENT_ROOT_ID = "primary:NeriPlayer-Download"
-        const val EXTERNAL_ROOT_ID = "primary:NeriPlayer-Download2"
+        const val CURRENT_ROOT_ID = "primary:Timbre-Download"
+        const val EXTERNAL_ROOT_ID = "primary:Timbre-Download2"
         const val AUDIO_NAME = "Scanned Song.flac"
         const val METADATA_NAME = "$AUDIO_NAME.npmeta.json"
         const val AUDIO_ID = "$EXTERNAL_ROOT_ID/$AUDIO_NAME"

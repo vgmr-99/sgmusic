@@ -20,7 +20,7 @@ class PlaybackWidgetProviderInfoTest {
     @SdkSuppress(minSdkVersion = 31)
     fun stripWidgetDefaultsToOneRowAndAllowsHorizontalResizing() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val provider = ComponentName(context, NeriPlayerStripWidgetProvider::class.java)
+        val provider = ComponentName(context, TimbreStripWidgetProvider::class.java)
         val providerInfo = checkNotNull(
             AppWidgetManager.getInstance(context).getInstalledProvidersForPackage(
                 context.packageName,
@@ -46,7 +46,7 @@ class PlaybackWidgetProviderInfoTest {
     fun fullWidgetDefaultsToTwoRowsAndAllowsVerticalResizing() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val appWidgetManager = AppWidgetManager.getInstance(context)
-        val provider = ComponentName(context, NeriPlayerPlaybackWidgetProvider::class.java)
+        val provider = ComponentName(context, TimbrePlaybackWidgetProvider::class.java)
         val providerInfo = checkNotNull(
             appWidgetManager.getInstalledProvidersForPackage(
                 context.packageName,

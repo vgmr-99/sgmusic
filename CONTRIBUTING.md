@@ -1,8 +1,8 @@
 [English](./CONTRIBUTING_EN.md) | [中文](./CONTRIBUTING.md)
 
-## Contributing to NeriPlayer / 贡献指南
+## Contributing to Timbre / 贡献指南
 
-感谢你愿意为 NeriPlayer 做出贡献。
+感谢你愿意为 Timbre 做出贡献。
 本文描述**当前 Android 客户端和一起听 Worker 的真实实现**，
 请以源码和运行行为为准同步维护文档。
 
@@ -10,7 +10,7 @@
 
 ### 项目定位 / Scope
 
-- NeriPlayer 是一个**原生 Android 音频播放器**，不是公共云端曲库服务。
+- Timbre 是一个**原生 Android 音频播放器**，不是公共云端曲库服务。
 - 在线内容能力主要来自 **网易云音乐**、**Bilibili** 与 **YouTube Music**。
 - 播放页元数据/歌词补全链路目前使用 **网易云 + QQ 音乐**，
   并接入 LRCLIB、酷狗和 AMLL TTML 外部歌词来源。
@@ -33,7 +33,7 @@
 | [Kotlin 辅助工具](docs/kotlin-helpers.md) | 请求代次、单位、播放器读取和协程结果等辅助工具的用法与边界。 |
 | [音乐服务器 API](docs/music-server-api.md) | **预览版本，缺乏充分测试。** 实际使用的 HTTP 接口、认证、来源身份与缓存约定；核心文件职责见平台模块 README。 |
 | [质量门禁](tools_pub/quality/README.md) | CRAP、模块归属、依赖边界检查的范围、命令和验证限制。 |
-| [Native 源码授权](modules/native/src/main/cpp/README.md) | NeriPlayer 自有 Native 源码的替代授权范围、第三方排除项和外部贡献所需的显式双授权声明。 |
+| [Native 源码授权](modules/native/src/main/cpp/README.md) | Timbre 自有 Native 源码的替代授权范围、第三方排除项和外部贡献所需的显式双授权声明。 |
 | [Native USB host 门禁](modules/native/src/main/cpp/tests/usb/config/host-gate-contract.md) | 公开 Native USB host 门禁、CI 覆盖与真实设备验证边界。 |
 | [USB 测试语料](modules/native/src/main/cpp/tests/usb/corpus/README.md)与[夹具](modules/native/src/main/cpp/tests/usb/fixtures/README.md) | 公开测试语料/夹具只能使用合成或可审计资料，真实设备证据留在私有目录。 |
 | [一起听服务端](https://github.com/TheSmallHanCat/NeriPlayer-LTW#readme) | 面向服务端部署者，说明 Worker API、事件模型、部署和本地检查。 |
@@ -57,7 +57,7 @@
 | CMake | `3.22.1`，由 Android 构建脚本固定指定 |
 | Node.js | 22，用于一起听 Worker 检查 |
 | 版本名格式 | `<git短哈希>.<MMddHHmm>` |
-| Release APK 文件名 | `NeriPlayer-<versionName>[-abi].apk` |
+| Release APK 文件名 | `Timbre-<versionName>[-abi].apk` |
 
 补充说明：
 
@@ -113,7 +113,7 @@
 1. 克隆仓库：
    ```bash
    git clone --recursive https://github.com/cwuom/NeriPlayer.git
-   cd NeriPlayer
+   cd Timbre
    ```
 2. 构建调试版：
    ```bash
@@ -162,7 +162,7 @@
 
 4. 产物位于 `app/build/outputs/apk/release/`，文件名格式为：
    ```text
-   NeriPlayer-<git短哈希>.<MMddHHmm>[-abi].apk
+   Timbre-<git短哈希>.<MMddHHmm>[-abi].apk
    ```
 
 安全提醒：
@@ -198,7 +198,7 @@
 
 #### Android 客户端关键路径
 
-- `app/src/main/java/moe/ouom/neriplayer/NeriPlayerApplication.kt`
+- `app/src/main/java/moe/ouom/neriplayer/TimbreApplication.kt`
   - 应用初始化入口，负责语言、异常处理、`AppContainer`、
     Lyricon、全局下载管理和共享图片加载器。
 
@@ -830,13 +830,13 @@
 常用命令：
 
 ```bash
-adb logcat | findstr NeriPlayer
+adb logcat | findstr Timbre
 ```
 
 Linux / macOS 可改用：
 
 ```bash
-adb logcat | grep NeriPlayer
+adb logcat | grep Timbre
 ```
 
 ---
@@ -995,7 +995,7 @@ Commit 信息建议遵循 Conventional Commits，
 - 本项目使用 **GPL-3.0** 协议。
 - 提交贡献即表示你同意至少以 GPL-3.0 分发你的修改。
 - `modules/native/src/main/cpp/README.md` 中的替代授权只覆盖明确列出的
-  NeriPlayer 自有 Native 源码，不覆盖第三方代码或其他仓库内容。
+  Timbre 自有 Native 源码，不覆盖第三方代码或其他仓库内容。
 - Native PR 本身不代表授予替代授权；若贡献者同意双授权，必须在 PR、
   commit 或版权持有人接受的其他可审计记录中加入该 README 提供的声明。
 - 未提供显式双授权的外部 Native 贡献仍可按 GPL-3.0 接受，

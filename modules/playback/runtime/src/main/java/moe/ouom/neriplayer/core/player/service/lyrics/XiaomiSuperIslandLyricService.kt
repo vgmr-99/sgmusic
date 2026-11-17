@@ -20,7 +20,7 @@ import androidx.core.content.ContextCompat
  */
 internal class XiaomiSuperIslandLyricService : Service() {
     companion object {
-        const val TAG = "NeriPlayerSuperIslandSvc"
+        const val TAG = "TimbreSuperIslandSvc"
         const val ACTION_PUBLISH = "moe.ouom.neriplayer.action.PUBLISH_SUPER_ISLAND_LYRIC"
         const val ACTION_STOP = "moe.ouom.neriplayer.action.STOP_SUPER_ISLAND_LYRIC"
         const val NOTIFICATION_ID = 0x454c4c53

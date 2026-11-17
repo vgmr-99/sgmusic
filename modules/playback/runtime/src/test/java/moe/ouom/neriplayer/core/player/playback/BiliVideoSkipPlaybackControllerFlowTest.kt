@@ -128,7 +128,7 @@ class BiliVideoSkipPlaybackControllerFlowTest {
     private val unresolvedSong = SongItem(
         id = 8_020_001L,
         name = "Unresolved",
-        artist = "NeriPlayer",
+        artist = "Timbre",
         album = "Bilibili||BV1skipflow",
         albumId = 0L,
         durationMs = 60_000L,
@@ -140,7 +140,7 @@ class BiliVideoSkipPlaybackControllerFlowTest {
     private val otherSong = SongItem(
         id = 8_020_009L,
         name = "Other",
-        artist = "NeriPlayer",
+        artist = "Timbre",
         album = "Album",
         albumId = 0L,
         durationMs = 60_000L,

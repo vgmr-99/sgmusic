@@ -53,7 +53,7 @@ internal object UsbExclusiveFloatingKeepAlive {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.START or Gravity.TOP
-            title = "NeriPlayerUsbKeepAlive"
+            title = "TimbreUsbKeepAlive"
         }
         runCatching { manager.addView(keepAliveView, params) }
             .onSuccess {

@@ -41,7 +41,7 @@ class PlaybackTransitionWakeLockTest {
         verifyNoInteractions(wakeLock)
 
         PlaybackTransitionWakeLock.acquire(contextWith(powerManager), requestToken = 2L, reason = "play")
-        verify(powerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "NeriPlayer:PlaybackTransition")
+        verify(powerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Timbre:PlaybackTransition")
         verify(wakeLock).setReferenceCounted(false)
         verify(wakeLock).acquire(PLAYBACK_TRANSITION_WAKE_LOCK_LEASE_MS)
         assertTrue(held)

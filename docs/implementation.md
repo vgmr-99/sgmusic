@@ -13,7 +13,7 @@
 - NDK `27.0.12077973`
 - CMake `3.22.1`，由 Android 构建脚本固定指定
 - 版本名格式：`<git短哈希>.<MMddHHmm>`
-- Release APK 文件名：`NeriPlayer-<versionName>[-abi].apk`
+- Release APK 文件名：`Timbre-<versionName>[-abi].apk`
 - 默认 Release APK 只打包 `arm64-v8a`；多 ABI 输出需加
   `-PbuildAllReleaseAbis=true`
 - `.github/workflows/android_native_ci.yml` 会在 Native 相关变更时运行

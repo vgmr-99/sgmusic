@@ -28,7 +28,7 @@ data class CarPlaybackSelection(
 )
 
 data class CarLibraryLabels(
-    val root: String = "NeriPlayer",
+    val root: String = "Timbre",
     val queue: String = "当前队列",
     val playlists: String = "本地歌单",
     val history: String = "最近播放",

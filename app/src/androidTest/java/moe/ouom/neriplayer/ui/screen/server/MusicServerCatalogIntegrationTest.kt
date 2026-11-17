@@ -260,7 +260,7 @@ class MusicServerCatalogIntegrationTest {
         val avd = instrumentation.uiAutomation.executeShellCommand("getprop ro.boot.qemu.avd_name").use {
             ParcelFileDescriptor.AutoCloseInputStream(it).bufferedReader().use { reader -> reader.readText().trim() }
         }
-        assumeTrue("catalog integration requires the dedicated PR511 AVD", avd == "NeriPlayer_PR511_Test")
+        assumeTrue("catalog integration requires the dedicated PR511 AVD", avd == "Timbre_PR511_Test")
         check(!report.exists() || report.delete()) { "Cannot replace the previous catalog fixture report" }
     }
 

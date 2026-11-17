@@ -147,7 +147,7 @@ class CarSessionPresentationRegressionTest {
             source.currentPlayback = playback(emptyList(), -1)
             fixture.owner.updateMetadata()
 
-            assertEquals("NeriPlayer", builders.string(1, MediaMetadata.METADATA_KEY_TITLE))
+            assertEquals("Timbre", builders.string(1, MediaMetadata.METADATA_KEY_TITLE))
             assertEquals("", builders.string(1, MediaMetadata.METADATA_KEY_ARTIST))
             assertNull(builders.string(1, MediaMetadata.METADATA_KEY_MEDIA_ID))
             assertEquals(0L, builders.long(1, MediaMetadata.METADATA_KEY_TRACK_NUMBER))

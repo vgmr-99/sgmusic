@@ -42,8 +42,8 @@ class LocalAudioImportFileNameIdentityTest {
             parseCommon(" Song - Artist - YouTube ")
         )
         assertEquals(
-            ParsedManagedDownloadFileName(title = "Song", artist = "Artist", album = "NeriPlayer-Download"),
-            parseCommon("Song - Artist - NeriPlayer-Download")
+            ParsedManagedDownloadFileName(title = "Song", artist = "Artist", album = "Timbre-Download"),
+            parseCommon("Song - Artist - Timbre-Download")
         )
     }
 

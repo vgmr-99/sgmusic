@@ -13,7 +13,7 @@ internal object GitHubArchiveCommit {
     const val MAX_CONTENT_BYTES = 3 * 1024 * 1024
     const val MAX_REQUEST_BYTES = 4 * 1024 * 1024
     private val objectId = Regex("[0-9a-f]{40}")
-    private const val MUTATION = "mutation NeriPlayerSyncCommit(\$input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: \$input) { clientMutationId commit { oid parents(first: 2) { nodes { oid } } } ref { name prefix repository { nameWithOwner } target { oid } } } }"
+    private const val MUTATION = "mutation TimbreSyncCommit(\$input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: \$input) { clientMutationId commit { oid parents(first: 2) { nodes { oid } } } ref { name prefix repository { nameWithOwner } target { oid } } } }"
 
     fun requestBody(
         owner: String,

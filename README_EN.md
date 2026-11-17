@@ -1,4 +1,4 @@
-<h1 align="center">拾光音乐 (Shiguang Music)</h1>
+<h1 align="center">拾光音乐 (Timbre)</h1>
 
 <div align="center">
 
@@ -16,7 +16,7 @@
 > **Fork notice**
 >
 > This repository is a fork (secondary development) of the upstream open-source project
-> **[NeriPlayer](https://github.com/cwuom/NeriPlayer)**. It is not affiliated with the upstream author.
+> **[Timbre](https://github.com/cwuom/NeriPlayer)**. It is not affiliated with the upstream author.
 > This README does not copy upstream documentation; see the [upstream repository](https://github.com/cwuom/NeriPlayer)
 > for full upstream docs.
 >
@@ -30,7 +30,7 @@
 
 ## About
 
-拾光音乐 is a native Android player built on NeriPlayer, unifying Netease, Bilibili, YouTube Music and local audio
+拾光音乐 is a native Android player built on Timbre, unifying Netease, Bilibili, YouTube Music and local audio
 in one queue, with **LX custom sources as the last-resort fallback**: only when built-in sources cannot resolve a
 playable URL do enabled LX scripts get tried in order.
 
@@ -78,6 +78,6 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`
 
 ## Credits & License
 
-- Thanks to the upstream **NeriPlayer** contributors: https://github.com/cwuom/NeriPlayer
+- Thanks to the upstream **Timbre** contributors: https://github.com/cwuom/NeriPlayer
 - This fork strictly follows the upstream **GPL-3.0** license; keep LICENSE, copyright notices and attribution
   when redistributing. Third-party notices: `THIRD_PARTY_LICENSES.md`.

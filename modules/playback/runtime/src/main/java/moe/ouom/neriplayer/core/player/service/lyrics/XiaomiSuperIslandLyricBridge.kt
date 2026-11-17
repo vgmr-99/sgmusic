@@ -58,7 +58,7 @@ import moe.ouom.neriplayer.data.model.lyrics.LyricEntry
  */
 internal class XiaomiSuperIslandLyricBridge(context: Context) {
     companion object {
-        const val TAG = "NeriPlayerSuperIsland"
+        const val TAG = "TimbreSuperIsland"
         const val CHANNEL_ID = "neriplayer_xiaomi_super_island_lyrics_v2"
         const val NOTIFICATION_ID = 0x454c4c53
         const val DEFAULT_ACCENT = 0xFF3482FF.toInt()

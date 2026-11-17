@@ -3,8 +3,8 @@ package moe.ouom.neriplayer.api.sync.github
 import moe.ouom.neriplayer.api.sync.http.SyncResponseBodyReader
 
 /*
- * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
- * Copyright (C) 2025-2025 NeriPlayer developers
+ * Timbre - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 Timbre developers
  * https://github.com/cwuom/NeriPlayer
  *
  * This software is free software: you can redistribute it and/or modify
@@ -78,7 +78,7 @@ class GitHubApiClient(
     /** GitHub API请求 - 创建仓库 */
     private data class GitHubCreateRepoRequest(
         val name: String,
-        val description: String = "NeriPlayer backup data",
+        val description: String = "Timbre backup data",
         val private: Boolean = true,
         @SerializedName("auto_init") val autoInit: Boolean = true
     )

@@ -713,7 +713,7 @@ class MainActivityMusicServerLayoutTest {
         val avd = instrumentation.uiAutomation.executeShellCommand("getprop ro.boot.qemu.avd_name").use {
             ParcelFileDescriptor.AutoCloseInputStream(it).bufferedReader().use { reader -> reader.readText().trim() }
         }
-        assumeTrue("real navigation fixture requires the dedicated AVD", avd == "NeriPlayer_PR511_Test")
+        assumeTrue("real navigation fixture requires the dedicated AVD", avd == "Timbre_PR511_Test")
         resultFile(style, phase).let { check(!it.exists() || it.delete()) }
         val file = File(context.cacheDir, "navidrome-test.json")
         assumeTrue("fixture credentials must be injected into private cache", file.isFile)

@@ -14,7 +14,7 @@ internal fun shouldRenewUsbExclusiveWakeLockLease(held: Boolean, elapsedSinceRen
 
 internal object UsbExclusiveWakeLock {
     private const val TAG = "NERI-UsbWakeLock"
-    private const val LOCK_TAG = "NeriPlayer:UsbExclusivePlayback"
+    private const val LOCK_TAG = "Timbre:UsbExclusivePlayback"
     private val lock = Any()
     private var wakeLock: PowerManager.WakeLock? = null
     private var leaseAcquiredAtMs = 0L

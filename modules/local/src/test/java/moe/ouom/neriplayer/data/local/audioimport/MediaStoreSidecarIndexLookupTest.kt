@@ -131,7 +131,7 @@ class MediaStoreSidecarIndexLookupTest {
         val index = ManagedMediaStoreSidecarIndex(snapshot = null, treeDocumentId = null)
 
         assertTrue(index.audioByName.isEmpty())
-        assertNull(index.resolve(relativePath = "Music/NeriPlayer", displayName = "song.mp3"))
+        assertNull(index.resolve(relativePath = "Music/Timbre", displayName = "song.mp3"))
         assertEquals(
             ManagedDownloadCandidatePublication.WITHHELD,
             index.publicationGate.evaluate(isInsideManagedRoot = true, displayName = "song.mp3")
@@ -144,7 +144,7 @@ class MediaStoreSidecarIndexLookupTest {
         val writing = FakeLibraryEntry(name = "writing.flac", isPendingAudioWrite = true)
         val index = ManagedMediaStoreSidecarIndex(
             snapshot = FakeLibrarySnapshot(audioEntries = listOf(song, writing)),
-            treeDocumentId = "primary:Music/NeriPlayer"
+            treeDocumentId = "primary:Music/Timbre"
         )
 
         assertEquals(mapOf("song.mp3" to song, "writing.flac" to writing), index.audioByName)

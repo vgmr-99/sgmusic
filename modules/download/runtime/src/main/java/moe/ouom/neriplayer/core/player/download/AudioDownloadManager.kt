@@ -2,8 +2,8 @@ package moe.ouom.neriplayer.core.player.download
 
 import moe.ouom.neriplayer.core.download.host.DownloadHosts
 /*
- * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
- * Copyright (C) 2025-2025 NeriPlayer developers
+ * Timbre - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 Timbre developers
  * https://github.com/cwuom/NeriPlayer
  *
  * This software is free software: you can redistribute it and/or modify
@@ -123,7 +123,7 @@ import java.util.concurrent.TimeUnit
 /**
  * 音频下载管理器: 解析来源 (网易云 / Bilibili) 并保存到本地目录
  * - 不依赖系统 DownloadManager, 直接用共享 OkHttpClient, 实现自定义 Header 与代理
- * - 默认保存路径: /Android/data/<package>/files/Music/NeriPlayer/<Artist - Title>.<ext>
+ * - 默认保存路径: /Android/data/<package>/files/Music/Timbre/<Artist - Title>.<ext>
  * - 支持通过 SAF 将下载目录切换到自定义文件夹
  */
 object AudioDownloadManager {

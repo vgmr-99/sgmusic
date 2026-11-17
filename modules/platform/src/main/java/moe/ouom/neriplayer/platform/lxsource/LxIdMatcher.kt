@@ -1,8 +1,8 @@
 package moe.ouom.neriplayer.platform.lxsource
 
 /*
- * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
- * Copyright (C) 2025-2025 NeriPlayer developers
+ * Timbre - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 Timbre developers
  * https://github.com/cwuom/NeriPlayer
  *
  * This software is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@ package moe.ouom.neriplayer.platform.lxsource
  */
 
 /**
- * LX 的 songmid/hash 是平台私有 ID，NeriPlayer 的曲目身份是平台化的。
+ * LX 的 songmid/hash 是平台私有 ID，Timbre 的曲目身份是平台化的。
  * 跨源必须做歌名/歌手/时长多级模糊匹配，参考洛雪 src/utils/musicSdk 的 findMusic 思路。
  * 参考 PlayerManagerNeteaseAutoSourceSwitch.scoreNeteaseAutoBiliText 的打分结构。
  */

@@ -41,7 +41,7 @@ class UsbExclusiveWakeLockLeaseTest {
         verifyNoInteractions(wakeLock)
 
         UsbExclusiveWakeLock.acquire(contextWith(powerManager), "tone_started", nowElapsedMs = 1_000L)
-        verify(powerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "NeriPlayer:UsbExclusivePlayback")
+        verify(powerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Timbre:UsbExclusivePlayback")
         verify(wakeLock).setReferenceCounted(false)
         verify(wakeLock).acquire(LEASE_TIMEOUT_MS)
         assertTrue(UsbExclusiveWakeLock.isHeld())

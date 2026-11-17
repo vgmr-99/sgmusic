@@ -40,7 +40,7 @@ internal class ListenTogetherBackgroundKeepAlive {
 
     private companion object {
         const val TAG = "NERI-ListenTogetherKeepAlive"
-        const val LOCK_TAG = "NeriPlayer:ListenTogether"
+        const val LOCK_TAG = "Timbre:ListenTogether"
         const val WAKE_LOCK_LEASE_MS = 2L * 60L * 1000L
     }
 }

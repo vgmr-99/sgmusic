@@ -17,7 +17,7 @@
 > [!IMPORTANT]
 > **二次开发声明 / Fork notice**
 >
-> 本仓库是基于上游开源项目 **[NeriPlayer（音理音理!）](https://github.com/cwuom/NeriPlayer)** 进行的二次开发（fork）。
+> 本仓库是基于上游开源项目 **[Timbre（音理音理!）](https://github.com/cwuom/NeriPlayer)** 进行的二次开发（fork）。
 > 上游作者与本仓库维护者无关联关系。本项目**不复制上游自述文档**，仅在此说明本 fork 的来源、改动与协议遵守情况；上游完整文档与功能介绍请以
 > [上游仓库](https://github.com/cwuom/NeriPlayer) 为准。
 >
@@ -30,7 +30,7 @@
 
 ## 项目简介
 
-拾光音乐是一款基于 NeriPlayer 构建的原生 Android 播放器。它把网易云音乐、Bilibili、YouTube Music、本地音频等来源统一到一个播放队列里，
+拾光音乐是一款基于 Timbre 构建的原生 Android 播放器。它把网易云音乐、Bilibili、YouTube Music、本地音频等来源统一到一个播放队列里，
 在此基础上把 **LX 自定义源** 作为**最后一环兜底**接入：内置来源都取不到播放地址时，才按顺序尝试已就绪的 LX 脚本。
 
 数据默认本地保存：缓存、下载、歌单、历史、统计、设置与授权信息默认留在设备上；歌单与统计可按需同步到你自己的 GitHub 仓库或 WebDAV 远端。
@@ -96,7 +96,7 @@ APK 产物：`app/build/outputs/apk/debug/app-debug.apk`。
 
 ## 致谢与协议
 
-- 感谢上游 **NeriPlayer** 团队的开源贡献：https://github.com/cwuom/NeriPlayer 。
+- 感谢上游 **Timbre** 团队的开源贡献：https://github.com/cwuom/NeriPlayer 。
 - 本 fork 严格遵守上游仓库的开源协议（GPL-3.0)，分发时须保留 LICENSE、版权声明与上游署名，不得以本项目名义冒充上游原作。
 - 第三方组件许可证汇总见 `THIRD_PARTY_LICENSES.md`（含本 fork 新增的 QuickJS 宿主 Apache-2.0 条目）。
 

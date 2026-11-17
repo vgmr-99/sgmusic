@@ -183,7 +183,7 @@ internal fun XiaomiSuperIslandLyricsSetting(
 
 /**
  * Explicit user action. Even if Android still reports a stale package permission grant after a
- * Shizuku restart/reinstall, send one real request so Shizuku Manager can register NeriPlayer in
+ * Shizuku restart/reinstall, send one real request so Shizuku Manager can register Timbre in
  * its authorized-app list again. Playback never calls this forced path.
  */
 private suspend fun requestShizukuForSuperIsland(context: Context): Boolean {

@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ManagedMigrationSafIdentityMatchTest {
-    private val documentId = "primary%3AMusic%2FNeriPlayer%2Fsong.flac"
+    private val documentId = "primary%3AMusic%2FTimbre%2Fsong.flac"
 
     @Test
     fun `tree and document uris of one saf document share a migration identity`() {
@@ -26,8 +26,8 @@ class ManagedMigrationSafIdentityMatchTest {
             "content://com.android.providers.downloads.documents/document/$documentId",
             "content:///document/$documentId",
             "content://com.android.externalstorage.documents",
-            "file:///storage/emulated/0/Music/NeriPlayer/song.flac",
-            "/storage/emulated/0/Music/NeriPlayer/song.flac",
+            "file:///storage/emulated/0/Music/Timbre/song.flac",
+            "/storage/emulated/0/Music/Timbre/song.flac",
             "://com.android.externalstorage.documents/document/$documentId"
         ).forEach { reference ->
             assertFalse(reference, sameManagedMigrationStoredEntryIdentity(document, entry(reference)))

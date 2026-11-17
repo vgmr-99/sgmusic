@@ -20,7 +20,7 @@ import rikka.shizuku.Shizuku
  * callbacks instead of polling, and transient bind failures back off up to one minute.
  */
 object ShizukuKeepAliveManager {
-    private const val TAG = "NeriPlayerShizukuKeepAlive"
+    private const val TAG = "TimbreShizukuKeepAlive"
     private const val SERVICE_PROCESS_SUFFIX = "shizuku"
     private const val SERVICE_TAG = "neriplayer_keepalive"
     private const val SERVICE_VERSION = 2

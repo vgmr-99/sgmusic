@@ -50,7 +50,7 @@ class LauncherLocaleResourceTest {
         }
         val resources = baseContext.createConfigurationContext(configuration).resources
 
-        val expectedAppName = if (BuildConfig.DEBUG) "NeriPlayer DEBUG" else "NeriPlayer"
+        val expectedAppName = if (BuildConfig.DEBUG) "Timbre DEBUG" else "Timbre"
         assertEquals(expectedAppName, resources.getString(CoreCommonR.string.app_name))
     }
 

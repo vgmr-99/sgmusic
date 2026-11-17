@@ -23,8 +23,8 @@ class ManagedDownloadStorageReferenceResolutionTest {
     fun `saf path segments expose the document id of tree and document uris`() {
         with(storage) {
             assertEquals(
-                "primary:Music/NeriPlayer/song.flac",
-                listOf("tree", "primary:Music", "document", "primary:Music/NeriPlayer/song.flac")
+                "primary:Music/Timbre/song.flac",
+                listOf("tree", "primary:Music", "document", "primary:Music/Timbre/song.flac")
                     .migrationDocumentIdFromSafPath()
             )
             assertEquals(
@@ -70,7 +70,7 @@ class ManagedDownloadStorageReferenceResolutionTest {
 
     @Test
     fun `playable uri keeps content references and turns absolute paths into file uris`() {
-        val path = "/storage/emulated/0/Music/NeriPlayer/song.flac"
+        val path = "/storage/emulated/0/Music/Timbre/song.flac"
         val fileUri = mock(Uri::class.java)
         doReturn("file://$path").`when`(fileUri).toString()
 
@@ -89,10 +89,10 @@ class ManagedDownloadStorageReferenceResolutionTest {
 
     @Test
     fun `migration refresh finds an entry only inside its own subdirectory listing`() {
-        val rootAudio = entry("song.flac", "/music/NeriPlayer/song.flac")
-        val otherAudio = entry("other.flac", "/music/NeriPlayer/other.flac")
-        val cover = entry("song.jpg", "/music/NeriPlayer/Covers/song.jpg")
-        val lyric = entry("song.lrc", "/music/NeriPlayer/Lyrics/song.lrc")
+        val rootAudio = entry("song.flac", "/music/Timbre/song.flac")
+        val otherAudio = entry("other.flac", "/music/Timbre/other.flac")
+        val cover = entry("song.jpg", "/music/Timbre/Covers/song.jpg")
+        val lyric = entry("song.lrc", "/music/Timbre/Lyrics/song.lrc")
         val refresh = ManagedDownloadTreeDirectories.ManagedMigrationEntriesRefresh(
             rootEntries = listOf(otherAudio, rootAudio),
             coverEntries = listOf(cover),
@@ -106,7 +106,7 @@ class ManagedDownloadStorageReferenceResolutionTest {
             assertEquals(lyric, refresh.entryFor(LYRIC_SUBDIRECTORY, lyric))
             assertNull(refresh.entryFor(COVER_SUBDIRECTORY, rootAudio))
             assertNull(refresh.entryFor("Playlists", rootAudio))
-            assertNull(refresh.entryFor(null, entry("missing.flac", "/music/NeriPlayer/missing.flac")))
+            assertNull(refresh.entryFor(null, entry("missing.flac", "/music/Timbre/missing.flac")))
         }
     }
 

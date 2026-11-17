@@ -13,7 +13,7 @@ For installation, capability boundaries and privacy see the README; for extensio
 - NDK `27.0.12077973`
 - CMake `3.22.1`, pinned by the Android build script
 - Version name format: `<git_short_hash>.<MMddHHmm>`
-- Release APK filename: `NeriPlayer-<versionName>[-abi].apk`
+- Release APK filename: `Timbre-<versionName>[-abi].apk`
 - Release APKs include `arm64-v8a` only by default. Use `-PbuildAllReleaseAbis=true`
   for multi-ABI output.
 - `.github/workflows/android_native_ci.yml` runs Release + `-Werror`,
@@ -312,7 +312,7 @@ Independent and aggregate gates retain the same scopes and threshold: a scoped C
   local playlist is created or enriched, the app can continue hydrating titles,
   artists, albums, and covers in the background while preserving edited local metadata.
 - Download "metadata post-processing" can be disabled separately. When disabled,
-  NeriPlayer still keeps management metadata, but stops writing tags, lyrics,
+  Timbre still keeps management metadata, but stops writing tags, lyrics,
   and covers back into the audio file itself.
 - `BackupManager` supports playlist JSON export/import and diff analysis.
 - Configuration exports exclude login state by default. You can include music-service authorization

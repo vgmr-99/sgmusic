@@ -20,7 +20,7 @@ class CarMediaLibraryTest {
             items.map { it.mediaId })
         assertTrue(items.all { it.isBrowsable && !it.isPlayable })
         assertEquals("Queue", items.first().title)
-        assertEquals("NeriPlayer", library.getItem(CarMediaIds.ROOT)?.title)
+        assertEquals("Timbre", library.getItem(CarMediaIds.ROOT)?.title)
         assertEquals(items.first(), library.getItem(CarMediaIds.QUEUE))
         assertTrue(library.children(CarMediaIds.QUEUE).isEmpty())
         assertNull(library.resolveId(CarMediaIds.QUEUE))

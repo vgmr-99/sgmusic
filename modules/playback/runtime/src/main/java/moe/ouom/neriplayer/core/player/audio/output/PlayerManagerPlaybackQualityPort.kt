@@ -15,17 +15,22 @@ internal object PlayerManagerPlaybackQualityPort : PlaybackQualityPort {
 
     override suspend fun persistPreferredQuality(source: PlaybackAudioSource, key: String) {
         if (source == PlaybackAudioSource.LOCAL || source == PlaybackAudioSource.SUBSONIC) return
-        writerFor(source)(key)
+        val writer = writerFor(source) ?: return
+        writer(key)
     }
 
-    private fun writerFor(source: PlaybackAudioSource): suspend (String) -> Unit {
+    private fun writerFor(source: PlaybackAudioSource): (suspend (String) -> Unit)? {
         val repository = settingsRepo
         val writers: Map<PlaybackAudioSource, suspend (String) -> Unit> = mapOf(
             PlaybackAudioSource.NETEASE to repository::setAudioQuality,
             PlaybackAudioSource.BILIBILI to repository::setBiliAudioQuality,
-            PlaybackAudioSource.YOUTUBE_MUSIC to repository::setYouTubeAudioQuality
+            PlaybackAudioSource.YOUTUBE_MUSIC to repository::setYouTubeAudioQuality,
+            // LX 自定义源也要能持久化音质偏好，否则播放页点音质会因缺 key 崩溃
+            PlaybackAudioSource.LX to repository::setLxSourceQuality
         )
-        return writers.getValue(source)
+        // 不再用 getValue：任何尚未接入的新音源都应安全地忽略，而不是抛
+        // NoSuchElementException 把切换音质变成闪退。
+        return writers[source]
     }
 
     override suspend fun refreshCurrentSong(source: PlaybackAudioSource, reason: String) {

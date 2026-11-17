@@ -168,7 +168,7 @@ SOURCE_OWNERS = {
 FORBIDDEN_IMPORT = re.compile(
     r'^import moe\.ouom\.neriplayer\.(?:'
     r'core\.di\.|core\.player\.PlayerManager\b|ui\.|activity\.|'
-    r'(?:R|BuildConfig|NeriPlayerApplication)\b)', re.MULTILINE
+    r'(?:R|BuildConfig|TimbreApplication)\b)', re.MULTILINE
 )
 PROJECT_SOURCE_REFERENCE = re.compile(
     r'\b(?:moe\.ouom\.neriplayer|io\.github\.proify\.lyricon|com\.hchen\.superlyricapi)'

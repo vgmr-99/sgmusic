@@ -21,7 +21,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NeriPlayer"
+rootProject.name = "Timbre"
 include(":app")
 fun includeOwnedLibrary(path: String) {
     include(path)

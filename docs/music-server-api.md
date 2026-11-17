@@ -43,7 +43,7 @@
 | t | `lowercaseHex(MD5(UTF8(password + salt)))` |
 | s | 每次请求重新生成的随机 salt；当前使用 16 随机字节的十六进制表示 |
 | v | `1.16.1` |
-| c | `NeriPlayer` |
+| c | `Timbre` |
 | f | `json` |
 
 例：配置 `https://music.example.com:4533/navidrome/`，生成路径 `/navidrome/rest/ping.view`。示意参数中的 `t=<token>&s=<salt>` 不能作为可保存播放地址。token 不是 OAuth 会话，不存在本方案可调用的“刷新 token”接口；每次根据凭据重新计算。HTTP 不加密传输，设置页应明确提示。

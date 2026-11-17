@@ -1,8 +1,8 @@
 package moe.ouom.neriplayer
 
 /*
- * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
- * Copyright (C) 2025-2025 NeriPlayer developers
+ * Timbre - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 Timbre developers
  * https://github.com/cwuom/NeriPlayer
  *
  * This software is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@ package moe.ouom.neriplayer
  * along with this software.
  * If not, see <https://www.gnu.org/licenses/>.
  *
- * File: moe.ouom.neriplayer/NeriPlayerApplication
+ * File: moe.ouom.neriplayer/TimbreApplication
  * Created: 2025/8/19
  */
 
@@ -60,7 +60,7 @@ import moe.ouom.neriplayer.core.startup.safemode.SafeModeManager
 import moe.ouom.neriplayer.ui.feedback.AppFeedback
 import moe.ouom.neriplayer.widget.PlaybackWidgetUpdater
 
-class NeriPlayerApplication : Application(), WorkConfiguration.Provider {
+class TimbreApplication : Application(), WorkConfiguration.Provider {
     @Volatile
     private var normalComponentsInitialized = false
 
@@ -107,7 +107,7 @@ class NeriPlayerApplication : Application(), WorkConfiguration.Provider {
         )
 
         NPLogger.i(
-            "NeriPlayerApplication",
+            "TimbreApplication",
             "startup plan: main=$runningInMainProcess safeMode=${startupPlan.enterSafeMode} " +
                 "initNormal=${startupPlan.shouldInitializeNormalComponents}"
         )
@@ -118,7 +118,7 @@ class NeriPlayerApplication : Application(), WorkConfiguration.Provider {
         if (shouldTrimUidtPendingJobs(runningInMainProcess, Build.VERSION.SDK_INT)) {
             AppContainer.launchBackgroundIo {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    UidtDownloadJobService.trimPendingJobs(this@NeriPlayerApplication)
+                    UidtDownloadJobService.trimPendingJobs(this@TimbreApplication)
                 }
             }
         }
@@ -147,7 +147,7 @@ class NeriPlayerApplication : Application(), WorkConfiguration.Provider {
     }
 
     internal fun initializeNormalComponents() {
-        NPLogger.i("NeriPlayerApplication", "initializeNormalComponents start")
+        NPLogger.i("TimbreApplication", "initializeNormalComponents start")
         if (normalComponentsInitialized) return
         synchronized(this) {
             if (normalComponentsInitialized) {
@@ -164,14 +164,14 @@ class NeriPlayerApplication : Application(), WorkConfiguration.Provider {
             }
             AppContainer.launchBackgroundIo {
                 val recoveredMetadataWrites = LocalMediaMetadataRecoveryStore.recoverInterruptedWrites(
-                    this@NeriPlayerApplication
+                    this@TimbreApplication
                 )
                 val recoveredTemporaryWrites = recoverInterruptedManagedTemporaryWrites(
-                    this@NeriPlayerApplication
+                    this@TimbreApplication
                 )
                 if (recoveredMetadataWrites > 0 || recoveredTemporaryWrites > 0) {
                     NPLogger.i(
-                        "NeriPlayerApplication",
+                        "TimbreApplication",
                         "启动恢复未完成写入: metadata=$recoveredMetadataWrites, " +
                             "temporary=$recoveredTemporaryWrites"
                     )
@@ -181,7 +181,7 @@ class NeriPlayerApplication : Application(), WorkConfiguration.Provider {
             // 后台预热收藏仓库: 首次构造会同步 loadFromDisk, 放到 IO 线程避免首个 UI 触达在主线程读盘
             AppContainer.launchBackgroundIo {
                 AppStartupWorkGate.awaitInteractiveContentOrTimeout()
-                FavoritePlaylistRepository.getInstance(this@NeriPlayerApplication)
+                FavoritePlaylistRepository.getInstance(this@TimbreApplication)
             }
             AppContainer.launchBackgroundIo {
                 AppStartupWorkGate.awaitInteractiveContentOrTimeout()
@@ -205,7 +205,7 @@ class NeriPlayerApplication : Application(), WorkConfiguration.Provider {
             AppContainer.launchBackgroundIo {
                 AppContainer.settingsRepo.usbDeviceAttachHandlingEnabledFlow.collect { enabled ->
                     UsbDeviceAttachHandling.applyComponentState(
-                        this@NeriPlayerApplication,
+                        this@TimbreApplication,
                         enabled
                     )
                 }

@@ -6,7 +6,7 @@ import android.os.Bundle
 import androidx.test.runner.AndroidJUnitRunner
 import moe.ouom.neriplayer.core.startup.app.InstrumentationTestRuntime
 
-class NeriPlayerInstrumentationTestRunner : AndroidJUnitRunner() {
+class TimbreInstrumentationTestRunner : AndroidJUnitRunner() {
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(withAdditionalExcludedTestClass(arguments))
     }

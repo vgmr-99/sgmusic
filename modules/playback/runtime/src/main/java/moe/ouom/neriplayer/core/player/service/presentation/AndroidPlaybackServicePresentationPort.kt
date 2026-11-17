@@ -120,7 +120,7 @@ internal class AndroidPlaybackServicePresentationPort(
     private var lastNotificationPublicationToken: String? = null
 
     override fun initializeSession(callback: MediaSession.Callback) {
-        mediaSession = MediaSession(context, "NeriPlayerSession").apply {
+        mediaSession = MediaSession(context, "TimbreSession").apply {
             setCallback(callback)
             setPlaybackToLocal(audioAttributes)
             isActive = true

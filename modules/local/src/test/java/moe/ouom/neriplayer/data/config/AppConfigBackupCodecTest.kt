@@ -113,7 +113,7 @@ class AppConfigBackupCodecTest {
             AppConfigBackupCodec.decode("""{"hello":"world"}""")
         }
 
-        assertTrue(error.message.orEmpty().contains("NeriPlayer config"))
+        assertTrue(error.message.orEmpty().contains("Timbre config"))
     }
 
     @Test
@@ -161,10 +161,10 @@ class AppConfigBackupCodecTest {
             assertThrows(IllegalArgumentException::class.java) { AppConfigBackupCodec.decodeForImport(json) }.message
         val settings = "\"settings\":{}"
 
-        assertEquals("Not a NeriPlayer config backup", failure("[]"))
-        assertEquals("Not a NeriPlayer config backup", failure("""{"kind":"other","formatVersion":1,$settings}"""))
-        assertEquals("Not a NeriPlayer config backup", failure("""{"kind":"$CONFIG_KIND",$settings}"""))
-        assertEquals("Not a NeriPlayer config backup", failure("""{"kind":"$CONFIG_KIND","formatVersion":"x",$settings}"""))
+        assertEquals("Not a Timbre config backup", failure("[]"))
+        assertEquals("Not a Timbre config backup", failure("""{"kind":"other","formatVersion":1,$settings}"""))
+        assertEquals("Not a Timbre config backup", failure("""{"kind":"$CONFIG_KIND",$settings}"""))
+        assertEquals("Not a Timbre config backup", failure("""{"kind":"$CONFIG_KIND","formatVersion":"x",$settings}"""))
         assertEquals("Unsupported config backup format: 0", failure("""{"kind":"$CONFIG_KIND","formatVersion":0,$settings}"""))
         assertEquals(
             "Unsupported config backup format: ${CONFIG_FORMAT_VERSION + 1}",

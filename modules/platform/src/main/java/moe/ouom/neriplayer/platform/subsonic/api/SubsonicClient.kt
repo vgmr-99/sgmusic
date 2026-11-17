@@ -52,7 +52,7 @@ class SubsonicClient(private val client: OkHttpClient) {
                 .addPathSegment("rest").addPathSegment("$method.view")
                 .addQueryParameter("u", profile.username).addQueryParameter("t", token)
                 .addQueryParameter("s", salt).addQueryParameter("v", "1.16.1")
-                .addQueryParameter("c", "NeriPlayer").addQueryParameter("f", "json")
+                .addQueryParameter("c", "Timbre").addQueryParameter("f", "json")
                 .apply { parameters.forEach { (key, value) -> addQueryParameter(key, value) } }.build()
         }
 

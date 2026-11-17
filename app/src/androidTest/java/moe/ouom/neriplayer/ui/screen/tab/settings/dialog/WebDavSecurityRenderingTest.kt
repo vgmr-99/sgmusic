@@ -50,7 +50,7 @@ class WebDavSecurityRenderingTest {
             mutableStateOf("http://dav.example.invalid"),
             mutableStateOf("example-user"),
             mutableStateOf("example-password"),
-            mutableStateOf("NeriPlayer")
+            mutableStateOf("Timbre")
         )
         composeRule.setContent {
             NeriTheme(

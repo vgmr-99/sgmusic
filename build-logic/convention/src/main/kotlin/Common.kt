@@ -49,7 +49,7 @@ object Common {
     }
 
     /**
-     * 对外版本号：直接使用语义化版本（如 1.4.1），不再是 <git短哈希>.<编译时间>。
+     * 对外版本号：直接使用语义化版本（如 1.4.2），不再是 <git短哈希>.<编译时间>。
      * 规则：大更新改第二位数，小更新改第三位数（见 gradle.properties 的 appVersion 注释）。
      * 构建身份改用 BuildConfig 的 BUILD_UUID / BUILD_TIMESTAMP 追溯，两者不冲突。
      */
@@ -58,8 +58,8 @@ object Common {
     }
 
     /**
-     * 对外语义化版本号，来自 gradle.properties 的 appVersion（默认 1.4.1）。
-     * 规则：大更新改第二位数（1.4.1 -> 1.5.0），小更新改第三位数（1.4.1 -> 1.4.2）。
+     * 对外语义化版本号，来自 gradle.properties 的 appVersion（默认 1.4.2）。
+     * 规则：大更新改第二位数（1.4.2 -> 1.5.0），小更新改第三位数（1.4.2 -> 1.4.3）。
      */
     fun getAppVersion(project: Project): String {
         val configured = project.findProperty("appVersion") as String?
@@ -67,6 +67,6 @@ object Common {
         return DEFAULT_APP_VERSION
     }
 
-    private const val DEFAULT_APP_VERSION = "1.4.1"
+    private const val DEFAULT_APP_VERSION = "1.4.2"
 }
 

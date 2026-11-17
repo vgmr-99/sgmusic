@@ -40,13 +40,13 @@ class ResumableHttpRangeEdgeCasesTest {
         val request = Request.Builder()
             .url("$baseUrl?clen=4096")
             .header("Range", "bytes=0-1")
-            .header("User-Agent", "NeriPlayer")
+            .header("User-Agent", "Timbre")
             .build()
 
         val chunk = ResumableHttpRangeSupport.buildChunkedRequest(request, start = 1_024L, length = 512L)
 
         assertEquals(listOf("bytes=1024-1535"), chunk.headers("Range"))
-        assertEquals("NeriPlayer", chunk.header("User-Agent"))
+        assertEquals("Timbre", chunk.header("User-Agent"))
         assertEquals(request.url, chunk.url)
     }
 

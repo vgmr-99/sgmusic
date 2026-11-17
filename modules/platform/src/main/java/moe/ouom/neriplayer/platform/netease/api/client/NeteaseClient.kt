@@ -1,8 +1,8 @@
 package moe.ouom.neriplayer.platform.netease.api.client
 
 /*
- * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
- * Copyright (C) 2025-2025 NeriPlayer developers
+ * Timbre - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 Timbre developers
  * https://github.com/cwuom/NeriPlayer
  *
  * This software is free software: you can redistribute it and/or modify
@@ -617,7 +617,7 @@ class NeteaseClient(
             .header("Connection", "keep-alive")
             .header("Referer", "https://music.163.com")
             .header("Host", requestUrl.host)
-            .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; NeriPlayer) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+            .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; Timbre) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
 
         builder.url(reqUrl)
 

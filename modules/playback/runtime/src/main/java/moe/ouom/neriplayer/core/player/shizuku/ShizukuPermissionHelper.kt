@@ -14,7 +14,7 @@ import kotlin.coroutines.resume
 
 /** Shared, serialized Shizuku permission request used by the Super Island integration. */
 object ShizukuPermissionHelper {
-    private const val TAG = "NeriPlayerShizuku"
+    private const val TAG = "TimbreShizuku"
     private const val BINDER_READY_RETRIES = 20
     private const val BINDER_READY_RETRY_DELAY_MS = 250L
     private const val PERMISSION_REQUEST_TIMEOUT_MS = 10_000L

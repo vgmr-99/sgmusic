@@ -113,7 +113,7 @@ class BiliVideoSkipPlaybackControllerTest {
     private fun song(id: Long) = SongItem(
         id = id,
         name = "Bili test $id",
-        artist = "NeriPlayer",
+        artist = "Timbre",
         album = "Bilibili",
         albumId = 0L,
         durationMs = 60_000L,

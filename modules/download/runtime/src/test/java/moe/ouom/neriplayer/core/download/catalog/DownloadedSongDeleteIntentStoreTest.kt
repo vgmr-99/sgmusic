@@ -35,14 +35,14 @@ class DownloadedSongDeleteIntentStoreTest {
         assertTrue(
             PersistentDownloadedSongDeleteIntentStore.begin(
                 context = context,
-                rootKey = "tree:primary%3ANeriPlayer",
+                rootKey = "tree:primary%3ATimbre",
                 songs = listOf(first, second, first)
             )
         )
         val intent = PersistentDownloadedSongDeleteIntentStore.read(context)
 
         requireNotNull(intent)
-        assertEquals("tree:primary%3ANeriPlayer", intent.rootKey)
+        assertEquals("tree:primary%3ATimbre", intent.rootKey)
         assertEquals(2, intent.targets.size)
         assertEquals(
             listOf(second, first),
@@ -70,7 +70,7 @@ class DownloadedSongDeleteIntentStoreTest {
         assertTrue(
             PersistentDownloadedSongDeleteIntentStore.begin(
                 context = context,
-                rootKey = "tree:primary%3ANeriPlayer",
+                rootKey = "tree:primary%3ATimbre",
                 songs = listOf(
                     downloadedSong(
                         id = 3L,

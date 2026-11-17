@@ -24,7 +24,7 @@ function script:adb {
         "shell cmd package resolve-activity *" { return "$neriAdbTestPackage/moe.ouom.neriplayer.activity.MainActivity" }
         "shell pm list instrumentation" {
             if ($neriAdbTestBootstrapMode -eq "missing") { return "instrumentation:unrelated.test/unrelated.Runner" }
-            return "instrumentation:$neriAdbTestPackage.test/moe.ouom.neriplayer.testing.NeriPlayerInstrumentationTestRunner"
+            return "instrumentation:$neriAdbTestPackage.test/moe.ouom.neriplayer.testing.TimbreInstrumentationTestRunner"
         }
         "shell am instrument *" {
             switch ($neriAdbTestBootstrapMode) {
@@ -147,7 +147,7 @@ function Invoke-ScriptScenario {
     }
     if ($Variant -eq "debug") {
         Assert-Command "install -r debug-androidTest.apk"
-        $bootstrapCommand = "shell am instrument -w -r -e class moe.ouom.neriplayer.testing.PerformanceStartupBootstrapTest -e preparePerformanceStartup true $package.test/moe.ouom.neriplayer.testing.NeriPlayerInstrumentationTestRunner"
+        $bootstrapCommand = "shell am instrument -w -r -e class moe.ouom.neriplayer.testing.PerformanceStartupBootstrapTest -e preparePerformanceStartup true $package.test/moe.ouom.neriplayer.testing.TimbreInstrumentationTestRunner"
         Assert-Command $bootstrapCommand
         $bootstrapIndex = $script:neriAdbTestCommands.IndexOf($bootstrapCommand)
         $firstLaunchIndex = $script:neriAdbTestCommands.IndexOf("shell am force-stop $package")

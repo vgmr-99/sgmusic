@@ -714,7 +714,7 @@ class AudioDownloadManagerTest : AudioDownloadManagerTestSupport() {
         )
         assertTrue(
             shouldUseDirectPresentLocalPlayback(
-                reference = "/storage/emulated/0/NeriPlayer/Song.flac",
+                reference = "/storage/emulated/0/Timbre/Song.flac",
                 isManagedDownload = true,
                 evidence = present
             )
@@ -766,7 +766,7 @@ class AudioDownloadManagerTest : AudioDownloadManagerTestSupport() {
         )
         assertTrue(
             shouldUseCompletedAudioReferenceDirectly(
-                reference = "/storage/emulated/0/NeriPlayer/Song.flac"
+                reference = "/storage/emulated/0/Timbre/Song.flac"
             )
         )
         assertFalse(

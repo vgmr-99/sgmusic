@@ -92,7 +92,7 @@ object AppConfigBackupCodec {
     private fun decodePlaintext(raw: String): DecodedAppConfigBackup {
         val root = parseRootObject(raw)
         val formatVersion = root.configFormatVersionOrNull()
-        require(formatVersion != null) { "Not a NeriPlayer config backup" }
+        require(formatVersion != null) { "Not a Timbre config backup" }
         require(formatVersion in 1..CONFIG_FORMAT_VERSION) {
             "Unsupported config backup format: $formatVersion"
         }
@@ -103,7 +103,7 @@ object AppConfigBackupCodec {
         val payload = try {
             configJson.decodeFromString(AppConfigBackup.serializer(), raw)
         } catch (_: SerializationException) {
-            throw IllegalArgumentException("Invalid NeriPlayer config backup")
+            throw IllegalArgumentException("Invalid Timbre config backup")
         }
         return DecodedAppConfigBackup(payload = payload, sections = sections)
     }
@@ -117,10 +117,10 @@ object AppConfigBackupCodec {
         val element = try {
             configJson.parseToJsonElement(raw)
         } catch (_: SerializationException) {
-            throw IllegalArgumentException("Invalid NeriPlayer config backup")
+            throw IllegalArgumentException("Invalid Timbre config backup")
         }
         return element as? JsonObject
-            ?: throw IllegalArgumentException("Not a NeriPlayer config backup")
+            ?: throw IllegalArgumentException("Not a Timbre config backup")
     }
 
     private fun JsonObject.configFormatVersionOrNull(): Int? =

@@ -9,7 +9,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-class NeriPlayerInstrumentationArgumentsTest {
+class TimbreInstrumentationArgumentsTest {
     @Test
     fun additionalExclusionPreservesExistingFiltersAndOriginalArguments() {
         val original = Bundle().apply {

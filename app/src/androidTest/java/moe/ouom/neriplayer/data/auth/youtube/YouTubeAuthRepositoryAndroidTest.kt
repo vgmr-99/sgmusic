@@ -50,7 +50,7 @@ class YouTubeAuthRepositoryAndroidTest {
                 ),
                 authorization = "SAPISIDHASH 1_signature",
                 xGoogAuthUser = "0",
-                userAgent = "NeriPlayerTest/1.0",
+                userAgent = "TimbreTest/1.0",
                 savedAt = savedAt
             )
         )
@@ -63,7 +63,7 @@ class YouTubeAuthRepositoryAndroidTest {
         assertTrue(storedAuth.cookieHeader.contains("SAPISID=sapisid-cookie"))
         assertEquals("SAPISIDHASH 1_signature", storedAuth.authorization)
         assertEquals("0", storedAuth.xGoogAuthUser)
-        assertEquals("NeriPlayerTest/1.0", storedAuth.userAgent)
+        assertEquals("TimbreTest/1.0", storedAuth.userAgent)
         assertEquals(YouTubeAuthState.Valid, recreatedRepository.getAuthHealth(now = savedAt + 1_000L).state)
 
         recreatedRepository.clear()

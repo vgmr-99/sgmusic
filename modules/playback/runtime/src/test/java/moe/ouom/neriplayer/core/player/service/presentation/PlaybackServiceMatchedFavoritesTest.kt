@@ -200,7 +200,7 @@ class PlaybackServiceMatchedFavoritesTest {
         val artwork = mock(PlaybackArtworkOwner::class.java)
         `when`(port.hasInstalledWidgets()).thenReturn(true)
         `when`(port.widgetLabels()).thenReturn(
-            ServiceWidgetLabels("NeriPlayer", "Idle", "Buffering", "Playing", "Paused", "Ready")
+            ServiceWidgetLabels("Timbre", "Idle", "Buffering", "Playing", "Paused", "Ready")
         )
         `when`(artwork.snapshotFor(current)).thenReturn(
             PlaybackArtworkSnapshot(null, null, null, false, false, false)

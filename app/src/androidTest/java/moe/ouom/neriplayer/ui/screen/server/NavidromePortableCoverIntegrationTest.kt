@@ -342,7 +342,7 @@ class NavidromePortableCoverIntegrationTest {
         val avd = instrumentation.uiAutomation.executeShellCommand("getprop ro.boot.qemu.avd_name").use {
             ParcelFileDescriptor.AutoCloseInputStream(it).bufferedReader().use { reader -> reader.readText().trim() }
         }
-        assumeTrue("portable artwork integration requires the dedicated PR511 AVD", avd == "NeriPlayer_PR511_Test")
+        assumeTrue("portable artwork integration requires the dedicated PR511 AVD", avd == "Timbre_PR511_Test")
         check(!report.exists() || report.delete()) { "Cannot replace the previous portable artwork report" }
     }
 

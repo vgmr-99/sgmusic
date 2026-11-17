@@ -155,7 +155,7 @@ class YouTubeMusicPlaybackLocalSmokeTest {
             configured,
             File(".ck/youtube-cookie.txt"),
             File("../.ck/youtube-cookie.txt"),
-            File("E:/AndroidProject/NeriPlayer/.ck/youtube-cookie.txt")
+            File("E:/AndroidProject/Timbre/.ck/youtube-cookie.txt")
         ).firstOrNull(File::exists)
     }
 

@@ -52,7 +52,7 @@ internal fun floatingLyricsActionIcon(enabled: Boolean): Int =
 internal fun floatingLyricsActionTitle(enabled: Boolean): Int =
     if (enabled) CoreCommonR.string.notification_hide_floating_lyrics else CoreCommonR.string.notification_show_floating_lyrics
 
-internal fun serviceNotificationTitle(song: SongItem?): String = song?.displayName() ?: "NeriPlayer"
+internal fun serviceNotificationTitle(song: SongItem?): String = song?.displayName() ?: "Timbre"
 
 internal fun serviceNotificationText(
     song: SongItem?,

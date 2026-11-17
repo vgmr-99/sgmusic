@@ -10,14 +10,14 @@ import kotlinx.coroutines.withContext
 import moe.ouom.neriplayer.core.player.shizuku.ShizukuHook
 
 /**
- * Capsulyric's retrying XMSF helper, adapted for NeriPlayer.
+ * Capsulyric's retrying XMSF helper, adapted for Timbre.
  *
  * The settings page owns the explicit permission request. Playback only waits
  * for a cold-start Shizuku binder and checks an already granted permission, so
  * a lyric update can never open a second permission dialog.
  */
 internal object ShizukuXmsfNetworkHelper {
-    private const val TAG = "NeriPlayerXmsf"
+    private const val TAG = "TimbreXmsf"
     private const val XMSF_PACKAGE = "com.xiaomi.xmsf"
     private const val MAX_RETRIES = 2
     private const val RETRY_DELAY_MS = 500L

@@ -13,7 +13,7 @@ internal const val ACTION_PLAYBACK_WIDGET_CONTROL =
     "moe.ouom.neriplayer.widget.action.PLAYBACK_CONTROL"
 internal const val EXTRA_PLAYBACK_WIDGET_SERVICE_ACTION = "playback_widget_service_action"
 
-abstract class NeriPlayerBaseWidgetProvider(
+abstract class TimbreBaseWidgetProvider(
     @LayoutRes private val layoutRes: Int,
 ) : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -86,14 +86,14 @@ abstract class NeriPlayerBaseWidgetProvider(
     }
 }
 
-class NeriPlayerPlaybackWidgetProvider : NeriPlayerBaseWidgetProvider(
+class TimbrePlaybackWidgetProvider : TimbreBaseWidgetProvider(
     R.layout.widget_playback_4x2,
 )
 
-class NeriPlayerCompactWidgetProvider : NeriPlayerBaseWidgetProvider(
+class TimbreCompactWidgetProvider : TimbreBaseWidgetProvider(
     R.layout.widget_playback_2x2,
 )
 
-class NeriPlayerStripWidgetProvider : NeriPlayerBaseWidgetProvider(
+class TimbreStripWidgetProvider : TimbreBaseWidgetProvider(
     R.layout.widget_playback_4x1,
 )

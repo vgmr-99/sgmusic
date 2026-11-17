@@ -6,7 +6,7 @@ android {
     namespace = "moe.ouom.neriplayer.common"
     testFixtures.enable = true
     buildFeatures.buildConfig = true
-    defaultConfig.buildConfigField("String", "TAG", "\"[NeriPlayer]\"")
+    defaultConfig.buildConfigField("String", "TAG", "\"[Timbre]\"")
 }
 
 dependencies {

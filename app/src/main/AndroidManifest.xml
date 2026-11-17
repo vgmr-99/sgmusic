@@ -43,8 +43,8 @@
         android:localeConfig="@xml/locales_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.NeriPlayer.Starting"
-        android:name=".NeriPlayerApplication"
+        android:theme="@style/Theme.Timbre.Starting"
+        android:name=".TimbreApplication"
         tools:targetApi="33">
 
         <provider
@@ -172,7 +172,7 @@
         </receiver>
 
         <receiver
-            android:name=".widget.NeriPlayerPlaybackWidgetProvider"
+            android:name=".widget.TimbrePlaybackWidgetProvider"
             android:exported="false"
             android:label="@string/widget_playback_4x2_label">
             <intent-filter>
@@ -185,7 +185,7 @@
         </receiver>
 
         <receiver
-            android:name=".widget.NeriPlayerCompactWidgetProvider"
+            android:name=".widget.TimbreCompactWidgetProvider"
             android:exported="false"
             android:label="@string/widget_playback_2x2_label">
             <intent-filter>
@@ -198,7 +198,7 @@
         </receiver>
         
         <receiver
-            android:name=".widget.NeriPlayerStripWidgetProvider"
+            android:name=".widget.TimbreStripWidgetProvider"
             android:exported="false"
             android:label="@string/widget_playback_4x1_label">
             <intent-filter>

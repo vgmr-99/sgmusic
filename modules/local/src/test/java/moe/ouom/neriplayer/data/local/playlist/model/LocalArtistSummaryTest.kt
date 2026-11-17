@@ -97,9 +97,9 @@ class LocalArtistSummaryTest {
             artist = "周杰伦",
             album = LocalSongSupport.LOCAL_ALBUM_IDENTITY,
             durationMs = 269_000L,
-            mediaUri = "/storage/emulated/0/Music/NeriPlayer/周杰伦 - 晴天.mp3",
+            mediaUri = "/storage/emulated/0/Music/Timbre/周杰伦 - 晴天.mp3",
             localFileName = "周杰伦 - 晴天.mp3",
-            localFilePath = "/storage/emulated/0/Music/NeriPlayer/周杰伦 - 晴天.mp3"
+            localFilePath = "/storage/emulated/0/Music/Timbre/周杰伦 - 晴天.mp3"
         )
 
         val summary = buildLocalArtistSummaries(
@@ -128,9 +128,9 @@ class LocalArtistSummaryTest {
             artist = "周杰伦",
             album = LocalSongSupport.LOCAL_ALBUM_IDENTITY,
             durationMs = 295_000L,
-            mediaUri = "/storage/emulated/0/Music/NeriPlayer/周杰伦 - 一路向北.mp3",
+            mediaUri = "/storage/emulated/0/Music/Timbre/周杰伦 - 一路向北.mp3",
             localFileName = "周杰伦 - 一路向北.mp3",
-            localFilePath = "/storage/emulated/0/Music/NeriPlayer/周杰伦 - 一路向北.mp3"
+            localFilePath = "/storage/emulated/0/Music/Timbre/周杰伦 - 一路向北.mp3"
         )
 
         val summary = buildLocalArtistSummaries(

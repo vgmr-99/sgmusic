@@ -1,8 +1,8 @@
 package moe.ouom.neriplayer.activity
 
 /*
- * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
- * Copyright (C) 2025-2025 NeriPlayer developers
+ * Timbre - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 Timbre developers
  * https://github.com/cwuom/NeriPlayer
  *
  * This software is free software: you can redistribute it and/or modify
@@ -132,7 +132,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import moe.ouom.neriplayer.NeriPlayerApplication
+import moe.ouom.neriplayer.TimbreApplication
 import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.core.di.AppContainer
 import moe.ouom.neriplayer.core.download.GlobalDownloadManager
@@ -1413,7 +1413,7 @@ class MainActivity : ComponentActivity() {
         runCatching {
             SafeModeRecoveryCoordinator(
                 initializeNormalComponents = {
-                    (application as? NeriPlayerApplication)?.initializeNormalComponents()
+                    (application as? TimbreApplication)?.initializeNormalComponents()
                 },
                 restoreNormalStartup = {
                     SafeModeManager.restoreNormalStartup(this)

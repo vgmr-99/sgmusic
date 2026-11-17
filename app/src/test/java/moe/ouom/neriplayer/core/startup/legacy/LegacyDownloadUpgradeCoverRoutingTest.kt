@@ -53,8 +53,8 @@ class LegacyDownloadUpgradeCoverRoutingTest {
     fun `stale managed tree uri is rebound by its current cover file name`() {
         val staleReference =
             "content://com.android.externalstorage.documents/" +
-                "tree/primary%3ANeriPlayer-Download/" +
-                "document/primary%3ANeriPlayer-Download%2FCovers%2F" +
+                "tree/primary%3ATimbre-Download/" +
+                "document/primary%3ATimbre-Download%2FCovers%2F" +
                 "Artist%20-%20Song-12345678.jpg"
 
         assertEquals(managedCover.name, legacyManagedCoverFileNameHint(staleReference))

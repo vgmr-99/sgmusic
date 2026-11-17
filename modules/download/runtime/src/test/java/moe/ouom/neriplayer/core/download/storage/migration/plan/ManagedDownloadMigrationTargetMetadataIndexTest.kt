@@ -64,9 +64,9 @@ class ManagedDownloadMigrationTargetMetadataIndexTest {
 
     private fun entry(name: String) = ManagedDownloadStorage.StoredEntry(
         name = name,
-        reference = "/music/NeriPlayer/$name",
-        mediaUri = "file:///music/NeriPlayer/$name",
-        localFilePath = "/music/NeriPlayer/$name",
+        reference = "/music/Timbre/$name",
+        mediaUri = "file:///music/Timbre/$name",
+        localFilePath = "/music/Timbre/$name",
         sizeBytes = 32L,
         lastModifiedMs = 1L,
         isDirectory = false

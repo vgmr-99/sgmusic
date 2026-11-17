@@ -239,7 +239,7 @@ class NavidromeDownloadIntegrationTest {
         val avd = instrumentation.uiAutomation.executeShellCommand("getprop ro.boot.qemu.avd_name").use {
             ParcelFileDescriptor.AutoCloseInputStream(it).bufferedReader().use { input -> input.readText().trim() }
         }
-        assumeTrue("fixture requires the dedicated PR511 AVD", avd == "NeriPlayer_PR511_Test")
+        assumeTrue("fixture requires the dedicated PR511 AVD", avd == "Timbre_PR511_Test")
         if (report.exists()) check(report.delete()) { "Cannot replace this fixture's previous diagnostic report" }
         val file = File(context.cacheDir, "navidrome-test.json")
         assumeTrue("fixture credentials must be supplied through private app storage", file.isFile)

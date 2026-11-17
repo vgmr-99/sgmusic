@@ -74,7 +74,7 @@ class TerminalTemporaryWriteOwnerIdentityTest {
         TerminalTemporaryWriteCleanupFinalizationPreparation(
             root = TerminalTemporaryWriteCleanupRoot(
                 type = TerminalTemporaryWriteCleanupRootType.FILE,
-                identity = "/storage/emulated/0/Download/NeriPlayer"
+                identity = "/storage/emulated/0/Download/Timbre"
             ),
             pendingAudioName = "song.mp3.npdl_pending.operation-1.pending",
             finalAudioName = "song.mp3",

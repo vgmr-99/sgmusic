@@ -11,16 +11,16 @@ class ManagedDownloadSnapshotRoomMapperCompatTest {
     @Test
     fun `empty media uri falls back to a local file reference`() {
         val restored = restore(
-            reference = "/storage/emulated/0/NeriPlayer-Download/song.mp3",
+            reference = "/storage/emulated/0/Timbre-Download/song.mp3",
             mediaUri = ""
         )
 
         assertEquals(
-            "/storage/emulated/0/NeriPlayer-Download/song.mp3",
+            "/storage/emulated/0/Timbre-Download/song.mp3",
             restored.mediaUri
         )
         assertEquals(
-            "/storage/emulated/0/NeriPlayer-Download/song.mp3",
+            "/storage/emulated/0/Timbre-Download/song.mp3",
             ManagedDownloadStorage.resolveStoredEntryPlaybackUri(restored)
         )
     }

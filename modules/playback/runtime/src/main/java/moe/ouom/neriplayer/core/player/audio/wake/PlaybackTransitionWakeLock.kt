@@ -8,7 +8,7 @@ import moe.ouom.neriplayer.core.player.policy.wake.shouldReleasePlaybackTransiti
 
 internal object PlaybackTransitionWakeLock {
     private const val TAG = "NERI-PlaybackWakeLock"
-    private const val LOCK_TAG = "NeriPlayer:PlaybackTransition"
+    private const val LOCK_TAG = "Timbre:PlaybackTransition"
     private val lock = Any()
     private var wakeLock: PowerManager.WakeLock? = null
     private var activeRequestToken: Long? = null

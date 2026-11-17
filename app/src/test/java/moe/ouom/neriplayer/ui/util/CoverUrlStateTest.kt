@@ -386,14 +386,14 @@ class CoverUrlStateTest {
             albumId = 0L,
             durationMs = 180_000L,
             coverUrl = "file:///data/user/0/moe.ouom.neriplayer/files/covers/track.jpg",
-            mediaUri = "/data/user/0/moe.ouom.neriplayer/files/NeriPlayer-Download/Track.mp3",
+            mediaUri = "/data/user/0/moe.ouom.neriplayer/files/Timbre-Download/Track.mp3",
             localFileName = "Track.mp3",
-            localFilePath = "/data/user/0/moe.ouom.neriplayer/files/NeriPlayer-Download/Track.mp3",
+            localFilePath = "/data/user/0/moe.ouom.neriplayer/files/Timbre-Download/Track.mp3",
             channelId = "local",
             audioId = "11"
         )
         val safSong = privateSong.copy(
-            mediaUri = "content://com.android.externalstorage.documents/document/primary%3ANeriPlayer-Download%2FTrack.mp3",
+            mediaUri = "content://com.android.externalstorage.documents/document/primary%3ATimbre-Download%2FTrack.mp3",
             localFilePath = null
         )
 
@@ -418,7 +418,7 @@ class CoverUrlStateTest {
             coverUrl = "content://new-tree/Covers/track.jpg",
             originalCoverUrl = "content://new-tree/Covers/track.jpg",
             mediaUri = "content://com.android.externalstorage.documents/document/" +
-                "primary%3ANeriPlayer%2FTrack.mp3",
+                "primary%3ATimbre%2FTrack.mp3",
             localFilePath = null
         )
 

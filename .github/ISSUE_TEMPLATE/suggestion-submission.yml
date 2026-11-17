@@ -1,5 +1,5 @@
 name: Suggestion Submission / 提交建议
-description: 提交对 NeriPlayer 的优化建议，助力产品体验提升 / Submit optimization suggestions for NeriPlayer to enhance user experience
+description: 提交对 Timbre 的优化建议，助力产品体验提升 / Submit optimization suggestions for Timbre to enhance user experience
 title: "[Suggestion] "
 labels: ["enhancement", "status: needs-triage"]
 
@@ -7,13 +7,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        非常感谢您为 NeriPlayer 提出优化建议！您的想法对产品改进至关重要。
+        非常感谢您为 Timbre 提出优化建议！您的想法对产品改进至关重要。
         为了让开发者更清晰地理解您的建议，请按以下模板填写信息。
         此模板用于改进现有功能、交互或性能；全新能力请使用“功能请求”模板。
         请说明当前痛点和改进后的收益，附件中请移除账号和密钥等隐私信息。
         下拉框中的“请选择”仅为填写提示，请改为实际情况后再提交。
 
-        Thank you very much for submitting optimization suggestions for NeriPlayer! Your ideas are crucial to product improvement.
+        Thank you very much for submitting optimization suggestions for Timbre! Your ideas are crucial to product improvement.
         To help developers better understand your suggestion, please fill in the information according to the following template.
         Use this form to improve existing behavior, UX, or performance.
         Describe the pain point and concrete benefit, and redact private data from attachments.

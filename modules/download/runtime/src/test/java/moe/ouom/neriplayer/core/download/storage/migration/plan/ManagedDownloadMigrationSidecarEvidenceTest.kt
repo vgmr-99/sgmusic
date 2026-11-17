@@ -38,9 +38,9 @@ class ManagedDownloadMigrationSidecarEvidenceTest {
 
     private fun entry(name: String, isDirectory: Boolean) = ManagedDownloadStorage.StoredEntry(
         name = name,
-        reference = "/music/NeriPlayer/$name",
-        mediaUri = "file:///music/NeriPlayer/$name",
-        localFilePath = "/music/NeriPlayer/$name",
+        reference = "/music/Timbre/$name",
+        mediaUri = "file:///music/Timbre/$name",
+        localFilePath = "/music/Timbre/$name",
         sizeBytes = if (isDirectory) 0L else 32L,
         lastModifiedMs = 1L,
         isDirectory = isDirectory

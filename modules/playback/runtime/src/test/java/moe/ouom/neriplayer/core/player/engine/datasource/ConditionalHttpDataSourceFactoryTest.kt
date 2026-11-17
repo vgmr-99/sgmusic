@@ -13,12 +13,12 @@ class ConditionalHttpDataSourceFactoryTest {
                 "Authorization" to "Bearer token",
                 "range" to "bytes=1048576-2097151",
                 "Range" to "bytes=2097152-3145727",
-                "User-Agent" to "NeriPlayer"
+                "User-Agent" to "Timbre"
             )
         )
 
         assertFalse(headers.keys.any { it.equals("Range", ignoreCase = true) })
         assertEquals("Bearer token", headers["Authorization"])
-        assertEquals("NeriPlayer", headers["User-Agent"])
+        assertEquals("Timbre", headers["User-Agent"])
     }
 }

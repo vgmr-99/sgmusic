@@ -95,7 +95,7 @@ class LocalMediaStorePlaybackReferenceTest {
                 ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
                     put(MediaStore.MediaColumns.MIME_TYPE, "audio/wav")
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, "Music/NeriPlayer-tests")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "Music/Timbre-tests")
                     put(MediaStore.MediaColumns.IS_PENDING, 1)
                 }
             )

@@ -19,7 +19,7 @@ internal class GitHubGraphQlException(
 internal object GitHubArchiveRefUpdate {
     const val MAX_RESPONSE_BYTES = 64 * 1024
     private val gson = GsonBuilder().setStrictness(Strictness.STRICT).create()
-    private const val MUTATION = "mutation NeriPlayerSyncPublish(\$input: UpdateRefsInput!) { updateRefs(input: \$input) { clientMutationId } }"
+    private const val MUTATION = "mutation TimbreSyncPublish(\$input: UpdateRefsInput!) { updateRefs(input: \$input) { clientMutationId } }"
 
     fun endpoint(apiBase: String): HttpUrl {
         val base = apiBase.trimEnd('/').toHttpUrl()

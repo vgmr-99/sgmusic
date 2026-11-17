@@ -4,5 +4,5 @@
       测试版沿用「拾光音乐」品牌名，只保留测试版标识。
       与正式版靠 applicationIdSuffix（.debug）区分，可同时安装。
     -->
-    <string name="app_name">Shiguang Music · Debug</string>
+    <string name="app_name">Timbre · Debug</string>
 </resources>

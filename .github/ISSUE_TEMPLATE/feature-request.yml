@@ -7,12 +7,12 @@ body:
   - type: markdown
     attributes:
       value: |
-        感谢您给 NeriPlayer 提出建议！
+        感谢您给 Timbre 提出建议！
         为了使我们更好地帮助您，请提供以下信息。
         只需说明要解决的问题、使用场景、期望功能和涉及模块，无需提供应用版本、构建 UUID 或安装来源。
         优化已有体验请使用“提交建议”模板；附件中请移除账号和密钥等隐私信息。
 
-        Thank you for providing suggestions for NeriPlayer!
+        Thank you for providing suggestions for Timbre!
         To help us assist you better, please provide the following information.
         Describe the problem, use case, proposed feature, and affected areas. No app version, Build UUID, or distribution details are needed.
         Use the suggestion form for existing behavior and redact private data from attachments.

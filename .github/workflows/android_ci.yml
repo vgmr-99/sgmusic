@@ -1,4 +1,4 @@
-name: NeriPlayer Android CI
+name: Timbre Android CI
 
 on:
   push:

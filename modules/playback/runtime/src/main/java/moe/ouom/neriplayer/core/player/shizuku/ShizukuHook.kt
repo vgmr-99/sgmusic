@@ -26,7 +26,7 @@ import rikka.shizuku.ShizukuBinderWrapper
 import rikka.shizuku.SystemServiceHelper
 
 /**
- * Capsulyric's Shizuku hook path, adapted for NeriPlayer.
+ * Capsulyric's Shizuku hook path, adapted for Timbre.
  *
  * The important detail here is that the binder is wrapped before the hidden
  * service interface is reconstructed. This lets the privileged Shizuku binder
@@ -34,7 +34,7 @@ import rikka.shizuku.SystemServiceHelper
  * proxy directly.
  */
 internal object ShizukuHook {
-    private const val TAG = "NeriPlayerShizukuHook"
+    private const val TAG = "TimbreShizukuHook"
     private val hookedServiceCache = ConcurrentHashMap<String, Any>()
 
     @Volatile

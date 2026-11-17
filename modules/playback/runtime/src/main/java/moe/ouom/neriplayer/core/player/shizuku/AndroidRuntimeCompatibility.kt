@@ -5,7 +5,7 @@ import org.lsposed.hiddenapibypass.HiddenApiBypass
 
 /** Process-local Android compatibility setup used before any hidden framework API is touched. */
 object AndroidRuntimeCompatibility {
-    private const val TAG = "NeriPlayerRuntime"
+    private const val TAG = "TimbreRuntime"
 
     fun installHiddenApiExemptions() {
         runCatching { HiddenApiBypass.addHiddenApiExemptions("") }

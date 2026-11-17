@@ -275,9 +275,9 @@ class SettingsDownloadDirectoryFlowContractTest {
 
     @Test
     fun `pending change releases only a distinct previous grant and warns for a populated custom target`() {
-        val previous = "content://com.android.externalstorage.documents/tree/primary%3AMusic%2FNeriPlayer"
-        val equivalent = previous + "/document/primary%3AMusic%2FNeriPlayer"
-        val different = "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FNeriPlayer"
+        val previous = "content://com.android.externalstorage.documents/tree/primary%3AMusic%2FTimbre"
+        val equivalent = previous + "/document/primary%3AMusic%2FTimbre"
+        val different = "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FTimbre"
         val pending = PendingDownloadDirectoryChange(previous, different, "Downloads", true, true)
 
         assertTrue(pending.shouldReleasePreviousPermission)
@@ -476,9 +476,9 @@ class SettingsDownloadDirectoryFlowContractTest {
 
     @Test
     fun `blocked picker releases only a newly acquired distinct permission`() {
-        val previous = "content://com.android.externalstorage.documents/tree/primary%3AMusic%2FNeriPlayer"
-        val equivalent = previous + "/document/primary%3AMusic%2FNeriPlayer"
-        val different = "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FNeriPlayer"
+        val previous = "content://com.android.externalstorage.documents/tree/primary%3AMusic%2FTimbre"
+        val equivalent = previous + "/document/primary%3AMusic%2FTimbre"
+        val different = "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FTimbre"
 
         assertTrue(shouldReleaseBlockedDirectoryGrant(previous, different, true))
         assertFalse(shouldReleaseBlockedDirectoryGrant(previous, equivalent, true))

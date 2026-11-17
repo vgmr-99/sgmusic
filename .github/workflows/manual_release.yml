@@ -1,4 +1,4 @@
-name: NeriPlayer Manual Release
+name: Timbre Manual Release
 
 on:
   workflow_dispatch:
@@ -75,11 +75,11 @@ jobs:
           set -euo pipefail
           short_sha="$(git rev-parse --short HEAD)"
           target_sha="$(git rev-parse HEAD)"
-          tag_name="NeriPlayer-${short_sha}.${BUILD_VERSION_TIMESTAMP}"
+          tag_name="Timbre-${short_sha}.${BUILD_VERSION_TIMESTAMP}"
           if [[ "$TEST_RELEASE" == "true" ]]; then
             tag_name="${tag_name}-test-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           fi
-          previous_tag="$(git for-each-ref --merged HEAD --sort=-creatordate --format='%(refname:short)' 'refs/tags/NeriPlayer-*' | head -n 1 || true)"
+          previous_tag="$(git for-each-ref --merged HEAD --sort=-creatordate --format='%(refname:short)' 'refs/tags/Timbre-*' | head -n 1 || true)"
           {
             echo "tag_name=${tag_name}"
             echo "target_sha=${target_sha}"

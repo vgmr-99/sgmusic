@@ -1,8 +1,8 @@
 package moe.ouom.neriplayer.platform.lxsource
 
 /*
- * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
- * Copyright (C) 2025-2025 NeriPlayer developers
+ * Timbre - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 Timbre developers
  * https://github.com/cwuom/NeriPlayer
  *
  * This software is free software: you can redistribute it and/or modify
@@ -183,7 +183,7 @@ class LxHttpClient(
         private const val MIN_TIMEOUT_MS = 1_000L
         private const val MAX_TIMEOUT_MS = 120_000L
         private const val DEFAULT_USER_AGENT =
-            "Mozilla/5.0 (Linux; Android 14) NeriPlayer/LxSource"
+            "Mozilla/5.0 (Linux; Android 14) Timbre/LxSource"
 
         /**
          * 派生一份不校验证书的 client。

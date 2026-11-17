@@ -14,7 +14,7 @@ import org.mockito.Mockito.mock
 class ManagedDownloadSnapshotRootKeyTest {
     @Test
     fun `file roots are keyed by their absolute path`() {
-        val directory = File("/storage/emulated/0/Music/NeriPlayer")
+        val directory = File("/storage/emulated/0/Music/Timbre")
 
         assertEquals(
             "file:${directory.absolutePath}",

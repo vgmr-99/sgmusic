@@ -2,10 +2,10 @@
 <paths>
     <files-path
         name="managed_local_media_internal"
-        path="NeriPlayer/" />
+        path="Timbre/" />
     <external-files-path
         name="managed_local_media_external"
-        path="Music/NeriPlayer/" />
+        path="Music/Timbre/" />
     <cache-path
         name="shared_local_media"
         path="shared_media_exports/" />

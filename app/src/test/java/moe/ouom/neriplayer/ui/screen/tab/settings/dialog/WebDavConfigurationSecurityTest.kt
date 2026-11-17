@@ -33,7 +33,7 @@ class WebDavConfigurationSecurityTest {
         mutableStateOf("http://dav.example.invalid"),
         mutableStateOf("user"),
         mutableStateOf("password"),
-        mutableStateOf("NeriPlayer")
+        mutableStateOf("Timbre")
     )
 
     @Test

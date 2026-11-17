@@ -15,15 +15,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +48,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import moe.ouom.neriplayer.common.R as CoreCommonR
@@ -52,15 +60,11 @@ import moe.ouom.neriplayer.data.model.playback.PlaybackQualityOption
 import moe.ouom.neriplayer.data.model.lyrics.LyricEntry
 import moe.ouom.neriplayer.ui.component.lyrics.LyricSeekHapticFeedback
 import moe.ouom.neriplayer.ui.component.lyrics.rememberLyricSeekHapticFeedback
-import moe.ouom.neriplayer.ui.component.overlay.DensityScaledAlertDialog as AlertDialog
 import moe.ouom.neriplayer.ui.component.playback.WaveformSlider
 import moe.ouom.neriplayer.ui.component.playback.rememberDelayedPlaybackWaiting
 import moe.ouom.neriplayer.ui.component.sheet.bottomSheetDragBlocker
 import moe.ouom.neriplayer.ui.haptic.HapticFeedbackEffect
-import moe.ouom.neriplayer.ui.haptic.HapticTextButton
 import moe.ouom.neriplayer.ui.haptic.performHapticFeedback
-import moe.ouom.neriplayer.ui.theme.NeriDesign
-import moe.ouom.neriplayer.ui.theme.cleanTintedAccent
 import moe.ouom.neriplayer.ui.theme.neriRoundedShape
 import moe.ouom.neriplayer.ui.screen.playback.resolveLyricPreviewTimeMs
 import moe.ouom.neriplayer.ui.screen.playback.shouldReleaseLyricSeekPreview
@@ -374,6 +378,10 @@ private fun progressInfoColor(highlighted: Boolean, highlight: Color): Color =
     if (highlighted) highlight.copy(alpha = 0.92f)
     else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
 
+/**
+ * 音质选择小窗：居中、圆角、每项「档位名 / 补充说明（如文件大小）」两行 + 选中打勾。
+ * 点击档位即切换并关闭，不需要额外的确定/关闭按钮。
+ */
 @Composable
 fun NowPlayingQualityOptionsDialog(
     title: String,
@@ -382,41 +390,71 @@ fun NowPlayingQualityOptionsDialog(
     onDismiss: () -> Unit,
     onSelect: (PlaybackQualityOption) -> Unit
 ) {
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column {
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
+            tonalElevation = 6.dp,
+            shadowElevation = 12.dp,
+            modifier = Modifier
+                .wrapContentSize()
+                .width(210.dp)
+                .padding(horizontal = 8.dp)
+        ) {
+            Column(modifier = Modifier.padding(vertical = 10.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                )
                 options.forEach { option ->
-                    ListItem(
-                        headlineContent = { Text(option.label) },
-                        trailingContent = {
-                            if (option.key == selectedKey) {
+                    val selected = option.key == selectedKey
+                    val detailText = option.detail?.takeIf { it.isNotBlank() }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onSelect(option) }
+                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = option.label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface
+                            )
+                            if (detailText != null) {
                                 Text(
-                                    text = stringResource(CoreCommonR.string.common_selected),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    style = MaterialTheme.typography.labelMedium
+                                    text = detailText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                        },
-                        modifier = Modifier
-                            .clip(neriRoundedShape(12.dp))
-                            .clickable { onSelect(option) },
-                        colors = ListItemDefaults.colors(
-                            containerColor = if (NeriDesign.isClean && option.key == selectedKey) {
-                                MaterialTheme.colorScheme.cleanTintedAccent()
-                            } else Color.Transparent
-                        )
-                    )
+                        }
+                        if (selected) {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = stringResource(CoreCommonR.string.common_selected),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 6.dp)
+                            )
+                        }
+                    }
                 }
             }
-        },
-        confirmButton = {
-            HapticTextButton(onClick = onDismiss) {
-                Text(stringResource(CoreCommonR.string.action_close))
-            }
         }
-    )
+    }
 }
 
 @Composable

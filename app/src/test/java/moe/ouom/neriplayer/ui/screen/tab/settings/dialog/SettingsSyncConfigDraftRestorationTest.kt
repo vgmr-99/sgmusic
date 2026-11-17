@@ -30,7 +30,7 @@ class SettingsSyncConfigDraftRestorationTest {
                 loadServerUrl = { loads += "serverUrl"; "https://dav.stored.example" },
                 loadUsername = { loads += "username"; "stored-user" },
                 loadPassword = { loads += "password"; "stored-password" },
-                loadBasePath = { loads += "basePath"; "NeriPlayer" }
+                loadBasePath = { loads += "basePath"; "Timbre" }
             )
         }
 

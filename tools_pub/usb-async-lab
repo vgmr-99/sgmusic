@@ -930,11 +930,11 @@ self_check() {
     done
     [[ -n "${manifest}" ]] || die "self-check requires --manifest"
     validate_manifest "${manifest}"
-    [[ "$(resolve_path 'D:/review/NeriPlayer/manifest.yaml')" == \
-        'D:/review/NeriPlayer/manifest.yaml' ]] ||
+    [[ "$(resolve_path 'D:/review/Timbre/manifest.yaml')" == \
+        'D:/review/Timbre/manifest.yaml' ]] ||
         die "Windows absolute path self-check failed"
-    [[ "$(resolve_path 'D:\review\NeriPlayer\manifest.yaml')" == \
-        'D:/review/NeriPlayer/manifest.yaml' ]] ||
+    [[ "$(resolve_path 'D:\review\Timbre\manifest.yaml')" == \
+        'D:/review/Timbre/manifest.yaml' ]] ||
         die "Windows separator self-check failed"
     [[ "$(resolve_path '/tmp/manifest.yaml')" == '/tmp/manifest.yaml' ]] ||
         die "POSIX absolute path self-check failed"

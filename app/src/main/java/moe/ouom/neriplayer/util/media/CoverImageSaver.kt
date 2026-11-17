@@ -16,7 +16,7 @@ import java.io.InputStream
 import java.net.URLConnection
 import java.text.Normalizer
 
-private val coverRelativePath = "${Environment.DIRECTORY_PICTURES}/NeriPlayer"
+private val coverRelativePath = "${Environment.DIRECTORY_PICTURES}/Timbre"
 
 /**
  * 下载远程封面并保存到系统图片目录，便于相册直接可见
@@ -110,7 +110,7 @@ private fun saveToLegacyPictures(
     mimeType: String
 ): String {
     val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-    val targetDir = File(picturesDir, "NeriPlayer").apply {
+    val targetDir = File(picturesDir, "Timbre").apply {
         if (!exists() && !mkdirs()) {
             throw IOException("failed to create pictures directory")
         }

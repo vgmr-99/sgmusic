@@ -13,7 +13,9 @@ enum class PlaybackAudioSource {
 
 data class PlaybackQualityOption(
     val key: String,
-    val label: String
+    val label: String,
+    /** 档位补充说明，如文件大小「9.98MB」；无数据时留空。 */
+    val detail: String? = null
 )
 
 data class PlaybackAudioInfo(

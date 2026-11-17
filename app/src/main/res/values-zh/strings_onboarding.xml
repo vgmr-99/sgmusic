@@ -5,7 +5,7 @@
     <string name="disclaimer_intro">请确认应用如何连接第三方服务、保存数据与请求权限</string>
     <string name="disclaimer_button_title">免责声明</string>
     <string name="disclaimer_project_title">拾光音乐补充说明</string>
-    <string name="disclaimer_project_license_body">本项目基于上游 NeriPlayer 二次开发，遵循 GPLv3 协议发布。二次开发部分的著作权归本项目作者所有。</string>
+    <string name="disclaimer_project_license_body">本项目基于上游 Timbre 二次开发，遵循 GPLv3 协议发布。二次开发部分的著作权归本项目作者所有。</string>
     <string name="disclaimer_project_source_body">本项目源码仅供个人学习与研究使用，不提供任何形式的商业服务，也不针对特定平台批量抓取或二次分发内容。</string>
     <string name="disclaimer_project_no_media_body">本应用不托管、不存储、不预先内置任何音频或视频文件，所有内容均来自你主动访问的第三方平台或你自行导入的本地文件。</string>
     <string name="disclaimer_project_local_data_body">设置、播放历史、下载记录与本地诊断信息默认仅保存在你自己的设备上，不会用于广告投放或行为画像。</string>

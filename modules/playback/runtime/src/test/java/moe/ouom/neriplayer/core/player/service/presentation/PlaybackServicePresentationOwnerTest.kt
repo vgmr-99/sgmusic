@@ -191,7 +191,7 @@ class PlaybackServicePresentationOwnerTest {
         val artwork = mock(PlaybackArtworkOwner::class.java)
         `when`(port.hasInstalledWidgets()).thenReturn(true)
         `when`(port.widgetLabels()).thenReturn(
-            ServiceWidgetLabels("NeriPlayer", "Idle", "Buffering", "Playing", "Paused", "Ready")
+            ServiceWidgetLabels("Timbre", "Idle", "Buffering", "Playing", "Paused", "Ready")
         )
         `when`(artwork.snapshotFor(current)).thenReturn(artwork(null))
         val owner = owner(source, backgroundScope, port, artwork)
@@ -223,7 +223,7 @@ class PlaybackServicePresentationOwnerTest {
         val artwork = mock(PlaybackArtworkOwner::class.java)
         `when`(port.hasInstalledWidgets()).thenReturn(true)
         `when`(port.widgetLabels()).thenReturn(
-            ServiceWidgetLabels("NeriPlayer", "Idle", "Buffering", "Playing", "Paused", "Ready")
+            ServiceWidgetLabels("Timbre", "Idle", "Buffering", "Playing", "Paused", "Ready")
         )
         `when`(artwork.snapshotFor(current)).thenReturn(artwork(null))
         val owner = owner(source, backgroundScope, port, artwork)
@@ -243,7 +243,7 @@ class PlaybackServicePresentationOwnerTest {
         val artwork = mock(PlaybackArtworkOwner::class.java)
         `when`(port.hasInstalledWidgets()).thenReturn(true)
         `when`(port.widgetLabels()).thenReturn(
-            ServiceWidgetLabels("NeriPlayer", "Idle", "Buffering", "Playing", "Paused", "Ready")
+            ServiceWidgetLabels("Timbre", "Idle", "Buffering", "Playing", "Paused", "Ready")
         )
         `when`(artwork.snapshotFor(current)).thenReturn(artwork(null))
         val owner = owner(source, backgroundScope, port, artwork)

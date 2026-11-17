@@ -76,7 +76,7 @@ class TagLibM4aWriteProbeTest {
                 put("NERI_STABLE_KEY", arrayOf("probe-key"))
                 put("NERI_MEDIA_URI", arrayOf("file:///probe.m4a"))
                 put("NERI_SOURCE", arrayOf("BILIBILI"))
-                put("COMMENT", arrayOf("{\"app\":\"NeriPlayer\"}"))
+                put("COMMENT", arrayOf("{\"app\":\"Timbre\"}"))
             }
             val saveProperties = properties?.let {
                 ParcelFileDescriptor.open(work, ParcelFileDescriptor.MODE_READ_WRITE).use { descriptor ->
@@ -402,7 +402,7 @@ class TagLibM4aWriteProbeTest {
             ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
                 put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp4")
-                put(MediaStore.MediaColumns.RELATIVE_PATH, "Music/NeriPlayerTagLibProbe")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "Music/TimbreTagLibProbe")
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
         ) ?: error("Unable to create MediaStore probe entry")

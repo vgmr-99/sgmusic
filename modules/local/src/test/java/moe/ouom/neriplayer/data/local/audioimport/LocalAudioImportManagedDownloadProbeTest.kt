@@ -49,9 +49,9 @@ class LocalAudioImportManagedDownloadProbeTest {
 
         downloads.configuredUri = DocumentsContract.buildTreeDocumentUri(
             "com.android.externalstorage.documents",
-            "primary:Music/NeriPlayer"
+            "primary:Music/Timbre"
         ).toString()
-        assertEquals("primary:Music/NeriPlayer", LocalAudioImportManager.configuredManagedDownloadTreeDocumentId())
+        assertEquals("primary:Music/Timbre", LocalAudioImportManager.configuredManagedDownloadTreeDocumentId())
     }
 
     @Test

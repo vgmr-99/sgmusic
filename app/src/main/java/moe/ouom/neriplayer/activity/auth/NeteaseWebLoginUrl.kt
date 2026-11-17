@@ -5,7 +5,7 @@ import moe.ouom.neriplayer.util.platform.PHONE_SMALLEST_SCREEN_WIDTH_DP
 internal const val NETEASE_MOBILE_LOGIN_URL = "https://music.163.com/m/login"
 internal const val NETEASE_DESKTOP_LOGIN_URL = "https://music.163.com/"
 internal const val NETEASE_MOBILE_WEB_USER_AGENT =
-    "Mozilla/5.0 (Linux; Android 10; NeriPlayer) AppleWebKit/537.36 " +
+    "Mozilla/5.0 (Linux; Android 10; Timbre) AppleWebKit/537.36 " +
         "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 internal const val NETEASE_DESKTOP_WEB_USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +

@@ -321,8 +321,8 @@ class ManagedDownloadNamingTest {
             durationMs = 1000L,
             coverUrl = null,
             localFileName = "netease - 原歌手 - 原标题 (1).flac",
-            localFilePath = "/storage/emulated/0/Music/NeriPlayer/netease - 原歌手 - 原标题 (1).flac",
-            mediaUri = "/storage/emulated/0/Music/NeriPlayer/netease - 原歌手 - 原标题 (1).flac"
+            localFilePath = "/storage/emulated/0/Music/Timbre/netease - 原歌手 - 原标题 (1).flac",
+            mediaUri = "/storage/emulated/0/Music/Timbre/netease - 原歌手 - 原标题 (1).flac"
         )
 
         val candidates = candidateManagedDownloadBaseNames(song)

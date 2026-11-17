@@ -64,7 +64,7 @@ class PlaybackWidgetRemoteViewsTest {
     @Test
     @androidx.test.filters.SdkSuppress(minSdkVersion = 31)
     fun responsiveHostSwitchesShapeAndRefreshesProgressAfterResize() {
-        val provider = ComponentName(context, NeriPlayerPlaybackWidgetProvider::class.java)
+        val provider = ComponentName(context, TimbrePlaybackWidgetProvider::class.java)
         val info = AppWidgetManager.getInstance(context).installedProviders.first { it.provider == provider }
         instrumentation.runOnMainSync {
             val sizes = listOf(PlaybackWidgetSize(250, 110), PlaybackWidgetSize(344, 180))
@@ -408,7 +408,7 @@ class PlaybackWidgetRemoteViewsTest {
         val fallback = PendingIntent.getActivity(context, 9997, Intent("widget.test.OPEN").setPackage(context.packageName),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         fun control(action: String) = PlaybackWidgetUpdater.enabledPlaybackPendingIntent(
-            context, action, 9998, true, fallback, NeriPlayerStripWidgetProvider::class.java)
+            context, action, 9998, true, fallback, TimbreStripWidgetProvider::class.java)
         val play = control(AudioPlayerService.ACTION_PLAY)
         val pause = control(AudioPlayerService.ACTION_PAUSE)
         try {
@@ -445,8 +445,8 @@ class PlaybackWidgetRemoteViewsTest {
         instrumentation.runOnMainSync {
             if (InstrumentationRegistry.getArguments().getString("publish_widget_previews") == "true") {
                 val manager = AppWidgetManager.getInstance(context)
-                listOf(NeriPlayerPlaybackWidgetProvider::class.java, NeriPlayerCompactWidgetProvider::class.java,
-                    NeriPlayerStripWidgetProvider::class.java).forEach { provider ->
+                listOf(TimbrePlaybackWidgetProvider::class.java, TimbreCompactWidgetProvider::class.java,
+                    TimbreStripWidgetProvider::class.java).forEach { provider ->
                     manager.getAppWidgetIds(ComponentName(context, provider)).forEach { id ->
                         println("Launcher widget $id (${provider.simpleName}): ${manager.getAppWidgetOptions(id)}")
                     }
@@ -515,7 +515,7 @@ class PlaybackWidgetRemoteViewsTest {
     private fun dp(ctx: Context, value: Int): Int = (value * ctx.resources.displayMetrics.density).roundToInt()
 
     private fun state(position: Long): PlaybackWidgetState = buildPlaybackWidgetState(
-        title = "夜空与城市的呼吸", subtitle = "NeriPlayer · Evening Sessions", status = "正在播放",
+        title = "夜空与城市的呼吸", subtitle = "Timbre · Evening Sessions", status = "正在播放",
         positionMs = position, durationMs = 180_000, hasSong = true, isPlaying = true,
         isFavorite = true, canToggleFavorite = true, isFloatingLyricsEnabled = false, artworkReady = true,
     )

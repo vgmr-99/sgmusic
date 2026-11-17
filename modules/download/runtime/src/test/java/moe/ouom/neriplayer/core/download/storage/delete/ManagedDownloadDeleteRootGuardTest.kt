@@ -16,7 +16,7 @@ class ManagedDownloadDeleteRootGuardTest {
 
     @Test
     fun `file references are deletable only below a managed root`() {
-        val root = tempFolder.newFolder("NeriPlayer")
+        val root = tempFolder.newFolder("Timbre")
         val nested = File(root, "Lyrics/song.lrc").path
         val outside = tempFolder.newFile("song.flac").path
         val traversal = File(root, "../song.flac").path
@@ -29,7 +29,7 @@ class ManagedDownloadDeleteRootGuardTest {
 
     @Test
     fun `unresolvable file paths are never deletable`() {
-        val root = tempFolder.newFolder("NeriPlayer")
+        val root = tempFolder.newFolder("Timbre")
 
         assertFalse(guard.isFileReferenceUnderManagedRoot(File(root, "bad\u0000name").path, root.path))
         assertFalse(guard.isFileReferenceUnderManagedRoot(File(root, "song.flac").path, "bad\u0000root"))
@@ -56,7 +56,7 @@ class ManagedDownloadDeleteRootGuardTest {
     @Test
     fun `document references need enumeration evidence regardless of the configured tree`() {
         val treeRoot = "content://com.android.externalstorage.documents/tree/primary%3AMusic"
-        val document = "$treeRoot/document/primary%3AMusic%2FNeriPlayer%2Fsong.flac"
+        val document = "$treeRoot/document/primary%3AMusic%2FTimbre%2Fsong.flac"
         val reported = mutableListOf<String>()
         val report: (String) -> Unit = { reference -> reported += reference }
 

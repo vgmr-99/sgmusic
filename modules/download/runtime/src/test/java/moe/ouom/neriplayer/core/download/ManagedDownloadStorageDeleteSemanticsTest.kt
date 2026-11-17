@@ -288,13 +288,13 @@ class ManagedDownloadStorageDeleteSemanticsTest {
     @Test
     fun `saf delete guard requires trusted enumeration instead of document id containment`() {
         val managedTree =
-            "content://com.android.externalstorage.documents/tree/primary%3AMusic%2FNeriPlayer"
+            "content://com.android.externalstorage.documents/tree/primary%3AMusic%2FTimbre"
         val managedChild =
-            "content://com.android.externalstorage.documents/tree/primary%3AMusic%2FNeriPlayer/document/primary%3AMusic%2FNeriPlayer%2FCovers%2Fsong.jpg"
+            "content://com.android.externalstorage.documents/tree/primary%3AMusic%2FTimbre/document/primary%3AMusic%2FTimbre%2FCovers%2Fsong.jpg"
         val outsideTreeChild =
-            "content://com.android.externalstorage.documents/tree/primary%3AMusic%2FNeriPlayer/document/primary%3AMusic%2FOther%2Fsong.jpg"
+            "content://com.android.externalstorage.documents/tree/primary%3AMusic%2FTimbre/document/primary%3AMusic%2FOther%2Fsong.jpg"
         val crossAuthorityChild =
-            "content://com.example.documents/tree/primary%3AMusic%2FNeriPlayer/document/primary%3AMusic%2FNeriPlayer%2FCovers%2Fsong.jpg"
+            "content://com.example.documents/tree/primary%3AMusic%2FTimbre/document/primary%3AMusic%2FTimbre%2FCovers%2Fsong.jpg"
 
         assertFalse(
             ManagedDownloadStorage.isReferenceAllowedForManagedDelete(
@@ -351,7 +351,7 @@ class ManagedDownloadStorageDeleteSemanticsTest {
     @Test
     fun `saf delete guard rejects opaque pure document references without a matching tree token`() {
         val managedTree =
-            "content://com.android.externalstorage.documents/tree/primary%3AMusic%2FNeriPlayer"
+            "content://com.android.externalstorage.documents/tree/primary%3AMusic%2FTimbre"
         val outsideDocument =
             "content://com.android.externalstorage.documents/document/primary%3ADCIM"
 

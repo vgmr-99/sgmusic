@@ -1,8 +1,8 @@
 [English](./CONTRIBUTING_EN.md) | [中文](./CONTRIBUTING.md)
 
-## Contributing to NeriPlayer
+## Contributing to Timbre
 
-Thank you for contributing to NeriPlayer.
+Thank you for contributing to Timbre.
 This document describes the **current Android client and Listen Together Worker
 implementation**. Keep documentation aligned with the source code and runtime behavior.
 
@@ -10,7 +10,7 @@ implementation**. Keep documentation aligned with the source code and runtime be
 
 ### Scope
 
-- NeriPlayer is a **native Android audio player**, not a public cloud music service.
+- Timbre is a **native Android audio player**, not a public cloud music service.
 - Online source capabilities mainly come from **NetEase Cloud Music**,
   **Bilibili**, and **YouTube Music**.
 - Playback metadata and lyrics completion currently use **NetEase + QQ Music**,
@@ -35,7 +35,7 @@ When maintaining docs, split them by audience:
 | [Kotlin helpers](docs/kotlin-helpers_EN.md) | Usage and boundaries for request generations, units, player reads, and coroutine results. |
 | [Music server API](docs/music-server-api.md) | **Preview feature; not sufficiently tested.** Current music-server HTTP endpoints, authentication, identity, and cache contracts (Chinese); see the platform README for core file responsibilities. |
 | [Quality gates](tools_pub/quality/README_EN.md) | Scope, commands, and verification limits for CRAP, source ownership, and dependency checks. |
-| [Native source licensing](modules/native/src/main/cpp/README.md) | Alternative-license scope for NeriPlayer-owned native source, third-party exclusions, and the explicit dual-license statement required for external contributions to enter that scope. |
+| [Native source licensing](modules/native/src/main/cpp/README.md) | Alternative-license scope for Timbre-owned native source, third-party exclusions, and the explicit dual-license statement required for external contributions to enter that scope. |
 | [Native USB host gate](modules/native/src/main/cpp/tests/usb/config/host-gate-contract.md) | Public native USB host gate, CI coverage, and real-device boundary. |
 | [USB test corpus](modules/native/src/main/cpp/tests/usb/corpus/README.md) and [fixtures](modules/native/src/main/cpp/tests/usb/fixtures/README.md) | Public test corpus and fixtures must use synthetic or auditable sources; device-derived evidence stays in the private evidence tree. |
 | [Listen Together server](https://github.com/TheSmallHanCat/NeriPlayer-LTW#readme) | For server deployers: Worker API, event model, deployment, and local checks. |
@@ -59,7 +59,7 @@ If it affects extension paths, tests, or module boundaries, update CONTRIBUTING.
 | CMake | `3.22.1`, pinned by the Android build script |
 | Node.js | 22, for Listen Together Worker checks |
 | Version name format | `<git_short_hash>.<MMddHHmm>` |
-| Release APK filename | `NeriPlayer-<versionName>[-abi].apk` |
+| Release APK filename | `Timbre-<versionName>[-abi].apk` |
 
 Additional notes:
 
@@ -81,7 +81,7 @@ Additional notes:
 
 ### Quality Guardrails
 
-NeriPlayer covers a broad product surface. Protect these paths first:
+Timbre covers a broad product surface. Protect these paths first:
 
 - **Playback**: `PlayerManager`, playback resolution, cache, URL refresh,
   playback fallback, long-form progress memory, BilibiliSponsorBlock skip
@@ -126,7 +126,7 @@ for the new behavior.
 1. Clone the repository:
    ```bash
    git clone --recursive https://github.com/cwuom/NeriPlayer.git
-   cd NeriPlayer
+   cd Timbre
    ```
 2. Build the Debug APK:
    ```bash
@@ -179,7 +179,7 @@ extra Gradle property.
 
 4. Artifacts are generated in `app/build/outputs/apk/release/`:
    ```text
-   NeriPlayer-<git_short_hash>.<MMddHHmm>[-abi].apk
+   Timbre-<git_short_hash>.<MMddHHmm>[-abi].apk
    ```
 
 Security reminders:
@@ -215,7 +215,7 @@ Libraries with Kotlin/Java production sources use `build-logic.android.feature-l
 
 #### Android client key paths
 
-- `app/src/main/java/moe/ouom/neriplayer/NeriPlayerApplication.kt`
+- `app/src/main/java/moe/ouom/neriplayer/TimbreApplication.kt`
   - Application initialization. Handles language, crash handling, `AppContainer`,
     Lyricon, global downloads, and the shared image loader.
 
@@ -987,13 +987,13 @@ Use this for cover, lyrics, and track metadata completion, not for `Explore`.
 Common command:
 
 ```bash
-adb logcat | findstr NeriPlayer
+adb logcat | findstr Timbre
 ```
 
 Linux / macOS:
 
 ```bash
-adb logcat | grep NeriPlayer
+adb logcat | grep Timbre
 ```
 
 ---
@@ -1178,7 +1178,7 @@ Commit messages should follow Conventional Commits when possible, for example:
 - By submitting contributions, you agree to distribute your changes at least
   under GPL-3.0.
 - The alternative license in `modules/native/src/main/cpp/README.md` covers only the listed
-  NeriPlayer-owned native source, not third-party code or other repository content.
+  Timbre-owned native source, not third-party code or other repository content.
 - A native PR does not itself grant the alternative license. Contributors who
   agree to dual licensing must record the README's statement in the PR, commit,
   or another auditable form accepted by the copyright holder.

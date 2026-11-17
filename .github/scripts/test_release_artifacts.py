@@ -44,7 +44,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
         )
         self.apk_dir = self.root / "apks"
         self.apk_dir.mkdir()
-        self.apk = self.apk_dir / "NeriPlayer-abcdef12.10212020-arm64-v8a.apk"
+        self.apk = self.apk_dir / "Timbre-abcdef12.10212020-arm64-v8a.apk"
         self.write_apk(BUILD_UUID)
 
     def write_apk(self, build_uuid, abis=("arm64-v8a",)):
@@ -155,7 +155,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
         self.assertIn("x86_64", result.stderr)
 
     def test_stage_identifies_single_abi_without_a_filename_suffix(self):
-        self.apk = self.apk.rename(self.apk_dir / "NeriPlayer-abcdef12.10212020.apk")
+        self.apk = self.apk.rename(self.apk_dir / "Timbre-abcdef12.10212020.apk")
         result = self.stage()
         self.assertEqual(result.returncode, 0, result.stderr)
         metadata = json.loads((self.root / "release-assets/build-metadata.json").read_text())
@@ -176,7 +176,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
         self.assertIn("ABI", result.stderr)
 
     def test_stage_marks_only_multiple_native_abis_as_universal(self):
-        self.apk = self.apk.rename(self.apk_dir / "NeriPlayer-abcdef12.10212020.apk")
+        self.apk = self.apk.rename(self.apk_dir / "Timbre-abcdef12.10212020.apk")
         self.write_apk(BUILD_UUID, ("arm64-v8a", "x86_64"))
         result = self.stage()
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -195,7 +195,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
 
     def test_stage_accepts_exactly_four_single_abi_splits(self):
         for abi in ("armeabi-v7a", "x86", "x86_64"):
-            self.apk = self.apk_dir / f"NeriPlayer-abcdef12.10212020-{abi}.apk"
+            self.apk = self.apk_dir / f"Timbre-abcdef12.10212020-{abi}.apk"
             self.write_apk(BUILD_UUID, (abi,))
         result = self.stage("--expected-abis", "arm64-v8a,armeabi-v7a,x86,x86_64")
         self.assertEqual(result.returncode, 0, result.stderr)

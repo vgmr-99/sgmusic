@@ -11,9 +11,9 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ManagedTemporaryWriteTerminalCleanupPlanTest {
-    private val parent = StorageReference.FileRef("/music/NeriPlayer")
-    private val target = StorageTarget.FileTarget("/music/NeriPlayer/Song.flac")
-    private val sibling = StorageTarget.FileTarget("/music/NeriPlayer/Other.flac")
+    private val parent = StorageReference.FileRef("/music/Timbre")
+    private val target = StorageTarget.FileTarget("/music/Timbre/Song.flac")
+    private val sibling = StorageTarget.FileTarget("/music/Timbre/Other.flac")
     private val leases = mutableListOf<ManagedTemporaryWriteLease>()
 
     @After
@@ -102,7 +102,7 @@ class ManagedTemporaryWriteTerminalCleanupPlanTest {
     private fun file(name: String) = stat(name, isDirectory = false)
 
     private fun stat(name: String, isDirectory: Boolean) = StorageStat(
-        reference = StorageReference.FileRef("/music/NeriPlayer/$name"),
+        reference = StorageReference.FileRef("/music/Timbre/$name"),
         displayName = name,
         sizeBytes = if (isDirectory) null else 16L,
         lastModifiedMs = 1L,

@@ -1,8 +1,8 @@
 package moe.ouom.neriplayer.ui.screen.tab.settings.dialog
 
 /*
- * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
- * Copyright (C) 2025-2025 NeriPlayer developers
+ * Timbre - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 Timbre developers
  * https://github.com/cwuom/NeriPlayer
  *
  * This software is free software: you can redistribute it and/or modify
@@ -67,7 +67,7 @@ import moe.ouom.neriplayer.ui.sync.upgrade.syncProtocolStartupConfigurationGate
 import moe.ouom.neriplayer.util.platform.tryStartActivity
 
 internal const val GITHUB_TOKEN_CREATION_URL =
-    "https://github.com/settings/tokens/new?scopes=repo&description=NeriPlayer%20Backup"
+    "https://github.com/settings/tokens/new?scopes=repo&description=Timbre%20Backup"
 
 internal fun openGitHubTokenCreationPage(context: Context) {
     val intent = Intent(Intent.ACTION_VIEW, GITHUB_TOKEN_CREATION_URL.toUri())

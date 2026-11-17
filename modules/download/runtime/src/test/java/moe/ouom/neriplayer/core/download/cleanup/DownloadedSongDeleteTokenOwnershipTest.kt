@@ -29,7 +29,7 @@ class DownloadedSongDeleteTokenOwnershipTest {
     @Test
     fun `a token only owns songs whose trimmed identity it started`() {
         val first = song(id = 1L, mediaUri = " content://downloads/1 ")
-        val second = song(id = 2L, filePath = "/music/NeriPlayer/2.flac")
+        val second = song(id = 2L, filePath = "/music/Timbre/2.flac")
         val token = visibility.begin(listOf(first))
         visibility.begin(listOf(second))
 
@@ -40,7 +40,7 @@ class DownloadedSongDeleteTokenOwnershipTest {
     private fun song(
         id: Long,
         mediaUri: String? = null,
-        filePath: String = "/music/NeriPlayer/$id.flac"
+        filePath: String = "/music/Timbre/$id.flac"
     ) = DownloadedSong(
         id = id,
         name = "Song $id",

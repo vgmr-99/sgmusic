@@ -18,9 +18,9 @@ class ManagedMigrationEntryReadFailureMappingTest {
     private val context = mock(Context::class.java)
     private val entry = ManagedDownloadStorage.StoredEntry(
         name = "song.flac",
-        reference = "/music/NeriPlayer/song.flac",
-        mediaUri = "file:///music/NeriPlayer/song.flac",
-        localFilePath = "/music/NeriPlayer/song.flac",
+        reference = "/music/Timbre/song.flac",
+        mediaUri = "file:///music/Timbre/song.flac",
+        localFilePath = "/music/Timbre/song.flac",
         sizeBytes = 32L,
         lastModifiedMs = 1L
     )

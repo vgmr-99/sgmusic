@@ -20,7 +20,7 @@ class NeteaseLyricApiLocalSmokeTest {
         val cookieFile = listOf(
             File(".ck/netease-cookie.txt"),
             File("../.ck/netease-cookie.txt"),
-            File("E:/AndroidProject/NeriPlayer/.ck/netease-cookie.txt")
+            File("E:/AndroidProject/Timbre/.ck/netease-cookie.txt")
         ).firstOrNull(File::exists)
         assumeTrue("NetEase cookie file not found.", cookieFile != null)
 

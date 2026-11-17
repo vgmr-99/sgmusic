@@ -59,7 +59,7 @@ class PlaybackNotificationWidgetPresentationTest {
         assertEquals("content://covers/current.jpg", snapshot.coverSource)
         assertTrue(snapshot.largeIconReady)
         assertTrue(snapshot.isFavorite)
-        assertEquals("NeriPlayer", serviceNotificationTitle(null))
+        assertEquals("Timbre", serviceNotificationTitle(null))
         assertNull(serviceNotificationSnapshot(
             song = null,
             text = "",
@@ -137,7 +137,7 @@ class PlaybackNotificationWidgetPresentationTest {
     @Test
     fun `widget projection uses idle labels without a song`() {
         val state = servicePlaybackWidgetState(widgetInputs(song = null, artwork = artwork(null)))
-        assertEquals("NeriPlayer", state.title)
+        assertEquals("Timbre", state.title)
         assertEquals("Idle", state.subtitle)
         assertEquals("Ready", state.status)
         assertFalse(state.hasSong)
@@ -212,7 +212,7 @@ class PlaybackNotificationWidgetPresentationTest {
         canToggleFavorite = false,
         floatingLyricsEnabled = false,
         artwork = artwork,
-        labels = ServiceWidgetLabels("NeriPlayer", "Idle", "Buffering", "Playing", "Paused", "Ready"),
+        labels = ServiceWidgetLabels("Timbre", "Idle", "Buffering", "Playing", "Paused", "Ready"),
     )
 
     private fun ServiceWidgetInputs.copyFor(

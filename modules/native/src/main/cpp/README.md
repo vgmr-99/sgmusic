@@ -1,22 +1,22 @@
-# NeriPlayer Native Source License / Native 源码授权说明
+# Timbre Native Source License / Native 源码授权说明
 
 Last updated / 最后更新：2026-10-21
 
-This directory contains NeriPlayer native source code, and also includes
+This directory contains Timbre native source code, and also includes
 third-party native source code used by the build.
 
-本目录包含 NeriPlayer 的 native 源码，也包含随项目构建使用的第三方
+本目录包含 Timbre 的 native 源码，也包含随项目构建使用的第三方
 native 源码。
 
 ## Scope / 授权范围
 
-This extra license applies only to NeriPlayer-owned portions of the current
+This extra license applies only to Timbre-owned portions of the current
 native source and native-test paths listed below. Future files under these
-paths are covered only when the NeriPlayer project author owns the copyright
+paths are covered only when the Timbre project author owns the copyright
 or otherwise has the right to offer this alternative license.
 
-下面的额外授权仅适用于下列路径中由 NeriPlayer 项目拥有版权的 native
-源码和 native 测试文件。以后新增到这些路径的文件，也只有在 NeriPlayer
+下面的额外授权仅适用于下列路径中由 Timbre 项目拥有版权的 native
+源码和 native 测试文件。以后新增到这些路径的文件，也只有在 Timbre
 项目作者拥有版权或有权提供本替代授权时，才会被纳入：
 
 All paths below are relative to `modules/native/src/main/cpp/`.
@@ -32,12 +32,12 @@ All paths below are relative to `modules/native/src/main/cpp/`.
 - `usb/pcm/`
 - `usb/uac1/`
 - `usb/uac2/`
-- `tests/usb/` and `tests/dsp/`, for NeriPlayer-owned host tests and supporting test files
-- `tests/usb/` 和 `tests/dsp/`，仅限 NeriPlayer 自有的 host 测试及其配套测试文件
-- `cmake/`, for NeriPlayer-owned shared native build configuration
-- `cmake/`，仅限 NeriPlayer 自有的共享 native 构建配置
-- NeriPlayer-owned portions of the following CMake entry points and build adapters
-- 以下 CMake 入口和构建适配文件中由 NeriPlayer 自有的部分：
+- `tests/usb/` and `tests/dsp/`, for Timbre-owned host tests and supporting test files
+- `tests/usb/` 和 `tests/dsp/`，仅限 Timbre 自有的 host 测试及其配套测试文件
+- `cmake/`, for Timbre-owned shared native build configuration
+- `cmake/`，仅限 Timbre 自有的共享 native 构建配置
+- Timbre-owned portions of the following CMake entry points and build adapters
+- 以下 CMake 入口和构建适配文件中由 Timbre 自有的部分：
   - `CMakeLists.txt`
   - `crash/CMakeLists.txt`
   - `dsp/CMakeLists.txt`
@@ -66,17 +66,17 @@ copyright or license notice.
 - Any other file with an explicit third-party copyright or license notice
 - 其他明确标注了独立许可证或第三方版权信息的文件
 
-The entry for `third_party/libusb/CMakeLists.txt` covers only NeriPlayer's
+The entry for `third_party/libusb/CMakeLists.txt` covers only Timbre's
 own build adapter. It does not relicense the libusb sources or headers.
 
-`third_party/libusb/CMakeLists.txt` 这一项仅覆盖 NeriPlayer 自有的构建适配，
+`third_party/libusb/CMakeLists.txt` 这一项仅覆盖 Timbre 自有的构建适配，
 不会改变 libusb 源码或头文件的许可证。
 
-If a file contains both NeriPlayer-owned code and third-party code, the
+If a file contains both Timbre-owned code and third-party code, the
 third-party parts still follow their original licenses. A file-specific
 copyright or license notice takes precedence over the path list above.
 
-如果某个文件同时包含 NeriPlayer 自有代码和第三方代码，第三方代码仍按其
+如果某个文件同时包含 Timbre 自有代码和第三方代码，第三方代码仍按其
 原许可证处理。文件自身明确标注的版权或许可证声明优先于上述路径列表。
 
 ## External Contributions / 外部贡献
@@ -90,8 +90,8 @@ contribution:
 
 - GPL-3.0, as provided in the repository root `LICENSE` file
 - 根目录 `LICENSE` 中的 GPL-3.0 协议
-- The NeriPlayer Native Attribution License described in this README
-- 本 README 中描述的 NeriPlayer Native Attribution License / 署名授权
+- The Timbre Native Attribution License described in this README
+- 本 README 中描述的 Timbre Native Attribution License / 署名授权
 
 Submitting a pull request, patch, or commit by itself does not create this
 alternative-license grant. The dual-license agreement must be recorded in the
@@ -105,11 +105,11 @@ copyright holder.
 Suggested contribution statement / 建议的贡献声明：
 
 ```text
-I license my contribution under both GPL-3.0 and the NeriPlayer Native
+I license my contribution under both GPL-3.0 and the Timbre Native
 Attribution License in modules/native/src/main/cpp/README.md.
 
 我同意将本次贡献同时按 GPL-3.0 和 modules/native/src/main/cpp/README.md 中的
-NeriPlayer Native Attribution License 授权。
+Timbre Native Attribution License 授权。
 ```
 
 If a native contribution is accepted without this dual-license grant, that
@@ -128,12 +128,12 @@ that permission.
 
 ## Attribution License / 署名授权
 
-For NeriPlayer-owned native source code included in the Scope above and not
+For Timbre-owned native source code included in the Scope above and not
 excluded by a file-specific or third-party notice, the copyright holder grants
 the following alternative license in addition to the GPL-3.0 license in the
 repository root `LICENSE` file.
 
-对于纳入上述授权范围、且未被文件自身声明或第三方声明排除的 NeriPlayer
+对于纳入上述授权范围、且未被文件自身声明或第三方声明排除的 Timbre
 自有 native 源码，除了根目录 `LICENSE` 中的 GPL-3.0 授权外，版权持有人
 额外授予以下替代授权：
 
@@ -149,19 +149,19 @@ native source code, as long as all conditions below are met.
 
 Required conditions / 必须满足的条件：
 
-1. Show NeriPlayer project information in a place that end users can easily see
-   在最终产品中用户容易看到的位置展示 NeriPlayer 项目信息
+1. Show Timbre project information in a place that end users can easily see
+   在最终产品中用户容易看到的位置展示 Timbre 项目信息
 2. The information must include the project name, project link, and original author
    项目信息至少包含项目名称、项目链接和原作者信息
-3. Do not imply that NeriPlayer or the original author endorses or certifies your project
-   不得暗示 NeriPlayer 或原作者为你的项目提供背书、认证或担保
+3. Do not imply that Timbre or the original author endorses or certifies your project
+   不得暗示 Timbre 或原作者为你的项目提供背书、认证或担保
 4. Do not remove existing copyright, license, or third-party notices from the source code
    不得移除源码中已有的版权、许可证或第三方声明
 
 Recommended notice / 推荐展示格式：
 
 ```text
-This product uses native source code from NeriPlayer.
+This product uses native source code from Timbre.
 Project: https://github.com/cwuom/NeriPlayer
 Original author: cwuom / ouom
 ```
@@ -183,10 +183,10 @@ see does not satisfy this condition.
 不视为满足该条件。
 
 If you cannot or do not want to meet the attribution condition above, the
-NeriPlayer-owned native source code remains licensed under GPL-3.0 as
+Timbre-owned native source code remains licensed under GPL-3.0 as
 provided in the repository root `LICENSE` file.
 
-如果你不能或不愿满足上述署名展示条件，则这些 NeriPlayer 自有 native
+如果你不能或不愿满足上述署名展示条件，则这些 Timbre 自有 native
 源码仍按根目录 `LICENSE` 中的 GPL-3.0 协议授权。
 
 ## No Warranty / 无担保
