@@ -1506,7 +1506,16 @@ private fun PlayerManager.observePlaybackSettings() {
     }
     ioScope.launch {
         settingsRepo.lxSourceQualityFlow.collect { quality ->
+            val previousQuality = lxSourceQuality
             lxSourceQuality = quality
+            // 与网易云/YouTube/B站一致：音质变了要立即重新解析当前歌曲的播放地址，
+            // 否则用户在播放页选了档位只保存了偏好，当前这首仍在放旧档位，看着像"点了没反应"。
+            if (previousQuality != quality) {
+                scheduleQualityRefresh(
+                    source = PlaybackAudioSource.LX,
+                    reason = "lx_quality_changed"
+                )
+            }
         }
     }
     ioScope.launch {

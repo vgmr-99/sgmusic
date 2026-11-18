@@ -2,6 +2,6 @@
 <resources>
     <!-- About: 拾光音乐 fork of Timbre, GPLv3 -->
     
-    <string name="about_app_name">Timbre · Timber</string>
-    <string name="about_app_footer">Secondary development based on the upstream Timbre project</string>
+    <string name="about_app_name">Shiguang Music · Timbre</string>
+    <string name="about_app_footer">Based on the upstream NeriPlayer project\nThanks to the upstream team for their open-source contribution!</string>
 </resources>

@@ -4,8 +4,8 @@ import moe.ouom.neriplayer.data.sync.dataset.disk.FileSyncPlaybackDatasetStore
 import moe.ouom.neriplayer.data.sync.store.github.SecureTokenStorage
 
 /*
- * Timbre - A unified Android player for streaming music and videos from multiple online platforms.
- * Copyright (C) 2025-2025 Timbre developers
+ * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 NeriPlayer developers
  * https://github.com/cwuom/NeriPlayer
  *
  * This software is free software: you can redistribute it and/or modify

@@ -1,8 +1,8 @@
 package moe.ouom.neriplayer.ui.screen.tab.explore
 
 /*
- * Timbre - A unified Android player for streaming music and videos from multiple online platforms.
- * Copyright (C) 2025-2025 Timbre developers
+ * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 NeriPlayer developers
  * https://github.com/cwuom/NeriPlayer
  *
  * This software is free software: you can redistribute it and/or modify
@@ -319,8 +319,7 @@ private val EXPLORE_SEARCH_TYPE_BAR_SOURCES = setOf(
     SearchSource.NETEASE,
     SearchSource.YOUTUBE_MUSIC,
     SearchSource.QQ_MUSIC,
-    SearchSource.KUGOU,
-    SearchSource.QISHUI
+    SearchSource.KUGOU
 )
 private const val EXPLORE_SEARCH_TYPE_BAR_ENTER_DURATION_MS = 180
 private const val EXPLORE_SEARCH_TYPE_BAR_EXIT_DURATION_MS = 140

@@ -1,8 +1,8 @@
 package moe.ouom.neriplayer.platform.lxsource
 
 /*
- * Timbre - A unified Android player for streaming music and videos from multiple online platforms.
- * Copyright (C) 2025-2025 Timbre developers
+ * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 NeriPlayer developers
  * https://github.com/cwuom/NeriPlayer
  *
  * This software is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ import moe.ouom.neriplayer.data.model.SongItem
 import moe.ouom.neriplayer.data.model.playback.PlaybackAudioInfo
 import moe.ouom.neriplayer.data.model.playback.PlaybackAudioSource
 import moe.ouom.neriplayer.data.model.playback.PlaybackQualityOption
+import moe.ouom.neriplayer.data.model.playback.deriveCodecLabel
 import moe.ouom.neriplayer.data.model.playback.SongUrlResult
 import moe.ouom.neriplayer.common.logging.NPLogger
 
@@ -52,15 +53,16 @@ class LxSourceResolver(
         ) {
             is LxResult.Ok -> {
                 NPLogger.w("LxSource", "resolved song=${song.name} via LX platform=${effectivePlatform.code} quality=${quality.code}")
+                val mimeType = when (quality) {
+                    LxQuality.FLAC, LxQuality.FLAC24 -> "audio/flac"
+                    else -> "audio/mpeg"
+                }
                 SongUrlResult.Success(
                     url = r.value.url,
                     // 脚本要求带的请求头（部分音源的地址要 Referer 才能拉流）
                     headers = r.value.headers,
                     durationMs = song.durationMs.takeIf { it > 0 },
-                    mimeType = when (quality) {
-                        LxQuality.FLAC, LxQuality.FLAC24 -> "audio/flac"
-                        else -> "audio/mpeg"
-                    },
+                    mimeType = mimeType,
                     audioInfo = PlaybackAudioInfo(
                         source = PlaybackAudioSource.LX,
                         qualityKey = quality.code,
@@ -68,10 +70,12 @@ class LxSourceResolver(
                         // 只列出脚本声明支持的音质档位（保持界面固定顺序），
                         // 没声明时不提供切换，避免列出点了也取不到流的档位。
                         qualityOptions = lxQualityOptions(r.value.supportedQualities),
-                        mimeType = when (quality) {
-                            LxQuality.FLAC, LxQuality.FLAC24 -> "audio/flac"
-                            else -> "audio/mpeg"
-                        },
+                        mimeType = mimeType,
+                        // 播放页信息行要显示「音质 · 编码 · 码率」：编码从 mimeType 派生，
+                        // 码率取档位自带数值（128k/320k 是明确的）；FLAC/Hi-Res 等无损档
+                        // 真实码率随曲而异，不从档位强行推断，留空避免显示假数据。
+                        codecLabel = deriveCodecLabel(mimeType),
+                        bitrateKbps = lxBitrateKbps(quality),
                     ),
                     cacheKeyOverride = "lx-${effectivePlatform.code}-${song.name}-${quality.code}",
                 )
@@ -84,6 +88,17 @@ class LxSourceResolver(
     }
 
     internal companion object {
+        /**
+         * 档位自带的确定码率（128k/320k），用于播放页信息行显示。
+         * 无损/高解析档的真实码率随曲而异，返回 null 让界面留空而不是显示假数值。
+         */
+        fun lxBitrateKbps(quality: LxQuality): Int? = when (quality) {
+            LxQuality.Q128 -> 128
+            LxQuality.Q192 -> 192
+            LxQuality.Q320 -> 320
+            else -> null
+        }
+
         /**
          * 脚本声明的音质 -> 播放页可选项。
          * 顺序固定为 128k / 320k / 无损 / 高解析，只保留脚本真正声明的档位；

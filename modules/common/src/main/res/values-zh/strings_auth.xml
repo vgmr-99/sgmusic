@@ -41,11 +41,21 @@
     <string name="settings_netease_auto_source_switch_desc">默认关闭；开启后，网易云歌曲无权限或仅返回试听片段时，自动在哔哩哔哩查找音源</string>
     <string name="settings_netease_local_source_fallback">本地音频兜底</string>
     <string name="settings_netease_local_source_fallback_desc">默认关闭；开启后，网易云歌曲无权限或仅返回试听片段时，优先播放已匹配相同歌曲信息的本地音频</string>
-    <string name="settings_lx_source">LX 自定义源兜底</string>
-    <string name="settings_lx_source_desc">默认关闭；开启后，网易云不可播时按最后一档尝试洛雪音乐自定义源解析播放地址</string>
-    <string name="settings_lx_source_enabled">LX 自定义源兜底开关</string>
+    <string name="settings_lx_source">自定义源</string>
+    <string name="settings_lx_source_desc">导入并管理自定义音乐源脚本，用于扩展歌曲解析与音质选择；脚本需自行准备并承担相应风险</string>
+
+    <string name="settings_lx_guide_button">自定义音乐源 · 支持项与使用说明</string>
+    <string name="settings_lx_guide_title">自定义音乐源 · 支持项与使用说明</string>
+    <string name="settings_lx_guide_intro">自定义音乐源用于扩展本软件的歌曲解析能力。本软件不内置这些脚本，也不对其内容负责，请自行判断并承担使用风险。</string>
+    <string name="settings_lx_guide_support_title">支持项</string>
+    <string name="settings_lx_guide_support_body">支持洛雪音乐（LX Music）协议的 JS 音源脚本，可提供歌曲播放地址解析、音质档位与切换、封面与歌词获取。常见平台包括网易云音乐、QQ音乐、酷狗音乐、酷我音乐、咪咕音乐等，具体以脚本自身声明为准。注意：脚本只扩展解析能力，不提供搜索；搜歌仍由本软件自身的平台接口完成。</string>
+    <string name="settings_lx_guide_usage_title">使用方法</string>
+    <string name="settings_lx_guide_usage_body">1. 点击「从文件导入脚本」选择本地 .js 文件，或点击「导入链接脚本」粘贴在线地址。\n2. 导入后在列表里确认脚本状态为「已就绪」；若显示失败，多为脚本本身失效或网络问题。\n3. 打开脚本右侧开关启用它；可点烧瓶图标做音质检测，确认各平台各档位能否取到播放地址。\n4. 在「播放源」里保持自定义源兜底开启，网易云等平台不可播时会自动用自定义源解析。</string>
+    <string name="settings_lx_guide_risk_title">风险与免责</string>
+    <string name="settings_lx_guide_risk_body">自定义脚本来自第三方，本软件不对脚本的安全性、可用性、内容合法性作任何承诺。脚本可能失效、需要卡密或付费，也可能把你的请求信息发送给第三方。请只导入你信任的来源，并遵守当地法律法规，支持正版。使用自定义源产生的任何后果由使用者自行承担。</string>
+    <string name="settings_lx_source_enabled">自定义源开关</string>
     <string name="settings_lx_source_enabled_desc">默认关闭；开启后作为换源链最后一档，需要在“自定义源”中导入已启用的脚本</string>
-    <string name="settings_lx_source_quality">LX 自定义源默认音质</string>
+    <string name="settings_lx_source_quality">自定义源默认音质</string>
     <string name="settings_lx_source_quality_desc">默认 320k；实际音质以脚本声明的 qualitys 为准，不支持则逐级降级</string>
     <string name="settings_lx_import_file">从文件导入脚本</string>
     <string name="settings_lx_import_url">导入链接脚本</string>

@@ -2,6 +2,6 @@
 <resources>
     <!-- 关于：拾光音乐基于上游 Timbre 二次开发，GPLv3 -->
     
-    <string name="about_app_name">拾光音乐 · Timber</string>
-    <string name="about_app_footer">基于上游Timbre项目二次开发</string>
+    <string name="about_app_name">拾光音乐 · Timbre</string>
+    <string name="about_app_footer">基于上游 NeriPlayer项目二次开发\n感谢上游团队的开源贡献！</string>
 </resources>

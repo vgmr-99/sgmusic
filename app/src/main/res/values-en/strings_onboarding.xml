@@ -5,7 +5,7 @@
     <string name="disclaimer_intro">Please review how the app connects to services, stores data, and requests permissions.</string>
     <string name="disclaimer_button_title">Disclaimer</string>
     <string name="disclaimer_project_title">About this project</string>
-    <string name="disclaimer_project_license_body">This project is a secondary development of Timbre, released under the GPLv3 license. Copyright of the secondary development belongs to the project author.</string>
+    <string name="disclaimer_project_license_body">This project is a secondary development of NeriPlayer, released under the GPLv3 license. Copyright of the secondary development belongs to the project author.</string>
     <string name="disclaimer_project_source_body">The source code is provided for personal study and research only. No commercial service is offered, and no content is bulk-scraped or redistributed for any platform.</string>
     <string name="disclaimer_project_no_media_body">The app hosts, stores and ships no audio or video files. All content comes from third-party platforms you access yourself, or from local files you import.</string>
     <string name="disclaimer_project_local_data_body">Settings, play history, download records and local diagnostics are stored on your device only, and are never used for advertising or behavioural profiling.</string>

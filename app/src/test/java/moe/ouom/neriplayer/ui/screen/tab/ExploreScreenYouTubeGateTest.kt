@@ -25,12 +25,12 @@ class ExploreScreenYouTubeGateTest {
         )
 
         assertFalse(sources.contains(SearchSource.YOUTUBE_MUSIC))
+        assertFalse("汽水接口长期失效，不应出现在平台分类", sources.contains(SearchSource.QISHUI))
         assertEquals(
             listOf(
                 SearchSource.NETEASE,
                 SearchSource.QQ_MUSIC,
                 SearchSource.KUGOU,
-                SearchSource.QISHUI,
                 SearchSource.KUWO,
                 SearchSource.MIGU,
                 SearchSource.BILIBILI,
@@ -52,7 +52,6 @@ class ExploreScreenYouTubeGateTest {
                 SearchSource.NETEASE,
                 SearchSource.QQ_MUSIC,
                 SearchSource.KUGOU,
-                SearchSource.QISHUI,
                 SearchSource.KUWO,
                 SearchSource.MIGU,
                 SearchSource.BILIBILI,

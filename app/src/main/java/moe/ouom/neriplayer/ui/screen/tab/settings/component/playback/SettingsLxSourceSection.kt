@@ -1,8 +1,8 @@
 package moe.ouom.neriplayer.ui.screen.tab.settings.component.playback
 
 /*
- * Timbre - A unified Android player for streaming music and videos from multiple online platforms.
- * Copyright (C) 2025-2025 Timbre developers
+ * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 NeriPlayer developers
  * https://github.com/cwuom/NeriPlayer
  *
  * This software is free software: you can redistribute it and/or modify
@@ -23,18 +23,27 @@ package moe.ouom.neriplayer.ui.screen.tab.settings.component.playback
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteForever
+import androidx.compose.material.icons.outlined.FileOpen
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Science
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,7 +68,6 @@ import moe.ouom.neriplayer.platform.lxsource.LxSourceTestReport
 import moe.ouom.neriplayer.platform.lxsource.LxTestMode
 import moe.ouom.neriplayer.ui.feedback.AppFeedback
 import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsSwitch
-import moe.ouom.neriplayer.ui.screen.tab.settings.miuix.MiuixSettingsTextButton
 
 /**
  * LX 自定义源兜底 页：脚本列表（导入、启停、删除、检测）。
@@ -85,6 +93,7 @@ internal fun SettingsLxSourceSection(
     var testProbes by remember { mutableStateOf<List<LxQualityProbe>>(emptyList()) }
     var testReport by remember { mutableStateOf<LxSourceTestReport?>(null) }
     var showUrlImport by remember { mutableStateOf(false) }
+    var showGuide by remember { mutableStateOf(false) }
     val testCancelFlag = remember { AtomicBoolean(false) }
 
     val scriptPicker = rememberLauncherForActivityResult(
@@ -146,15 +155,20 @@ internal fun SettingsLxSourceSection(
             modifier = Modifier.padding(vertical = 8.dp)
         )
 
-        // 两个导入入口并排，避免长列表里被拉开距离
+        // 两个导入入口并排，做成实心按钮，比原来的纯文字入口更清晰、更好点
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            MiuixSettingsTextButton(
+            FilledTonalButton(
                 onClick = { scriptPicker.launch(arrayOf("text/javascript", "text/plain", "*/*")) },
                 modifier = Modifier.weight(1f)
             ) {
+                Icon(
+                    Icons.Outlined.FileOpen,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
                 Text(
                     text = stringResource(CoreCommonR.string.settings_lx_import_file),
                     style = MaterialTheme.typography.labelLarge,
@@ -162,15 +176,35 @@ internal fun SettingsLxSourceSection(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            MiuixSettingsTextButton(
+            FilledTonalButton(
                 onClick = { showUrlImport = true },
                 modifier = Modifier.weight(1f)
             ) {
+                Icon(
+                    Icons.Outlined.Link,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
                 Text(
                     text = stringResource(CoreCommonR.string.settings_lx_import_url),
                     style = MaterialTheme.typography.labelLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // 免责声明式按钮：集中放「支持项 / 使用方法 / 风险提示」的教程正文
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            FilledTonalButton(onClick = { showGuide = true }) {
+                Text(
+                    text = stringResource(CoreCommonR.string.settings_lx_guide_button),
+                    style = MaterialTheme.typography.labelLarge
                 )
             }
         }
@@ -304,5 +338,68 @@ internal fun SettingsLxSourceSection(
                 }
             )
         }
+
+        if (showGuide) {
+            LxSourceGuideDialog(onDismiss = { showGuide = false })
+        }
     }
+}
+
+/**
+ * 自定义音乐源说明弹窗：支持项 / 使用方法 / 风险免责。
+ * 样式与「关于」页的免责声明一致（可滚动正文 + 确定按钮）。
+ */
+@Composable
+private fun LxSourceGuideDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = stringResource(CoreCommonR.string.settings_lx_guide_title),
+                style = MaterialTheme.typography.titleLarge
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = stringResource(CoreCommonR.string.settings_lx_guide_intro),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = stringResource(CoreCommonR.string.settings_lx_guide_support_title),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(
+                    text = stringResource(CoreCommonR.string.settings_lx_guide_support_body),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    text = stringResource(CoreCommonR.string.settings_lx_guide_usage_title),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(
+                    text = stringResource(CoreCommonR.string.settings_lx_guide_usage_body),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    text = stringResource(CoreCommonR.string.settings_lx_guide_risk_title),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(
+                    text = stringResource(CoreCommonR.string.settings_lx_guide_risk_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(CoreCommonR.string.action_confirm))
+            }
+        }
+    )
 }

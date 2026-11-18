@@ -1,8 +1,8 @@
 package moe.ouom.neriplayer.ui.screen.tab.explore
 
 /*
- * Timbre - A unified Android player for streaming music and videos from multiple online platforms.
- * Copyright (C) 2025-2025 Timbre developers
+ * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
+ * Copyright (C) 2025-2025 NeriPlayer developers
  * https://github.com/cwuom/NeriPlayer
  *
  * This software is free software: you can redistribute it and/or modify
@@ -199,12 +199,14 @@ internal fun exploreSearchSourceDisplayOrder(
     isInternational: Boolean,
     youtubeEnabled: Boolean
 ): List<SearchSource> {
+    // 汽水音乐(QISHUI)：其服务端已把按关键词搜歌与分类浏览接口定向封锁，
+    // 搜索/浏览长期为空且 LX 脚本普遍不提供搜索兜底，继续展示只会给用户一个坏入口，
+    // 故从平台分类中移除。枚举与底层实现保留，避免破坏持久化状态与数据结构。
     return if (!youtubeEnabled) {
         listOf(
             SearchSource.NETEASE,
             SearchSource.QQ_MUSIC,
             SearchSource.KUGOU,
-            SearchSource.QISHUI,
             SearchSource.KUWO,
             SearchSource.MIGU,
             SearchSource.BILIBILI,
@@ -216,7 +218,6 @@ internal fun exploreSearchSourceDisplayOrder(
             SearchSource.NETEASE,
             SearchSource.QQ_MUSIC,
             SearchSource.KUGOU,
-            SearchSource.QISHUI,
             SearchSource.KUWO,
             SearchSource.MIGU,
             SearchSource.BILIBILI,
@@ -227,7 +228,6 @@ internal fun exploreSearchSourceDisplayOrder(
             SearchSource.NETEASE,
             SearchSource.QQ_MUSIC,
             SearchSource.KUGOU,
-            SearchSource.QISHUI,
             SearchSource.KUWO,
             SearchSource.MIGU,
             SearchSource.BILIBILI,
