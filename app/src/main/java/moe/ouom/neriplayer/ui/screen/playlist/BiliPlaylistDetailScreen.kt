@@ -27,6 +27,7 @@ import moe.ouom.neriplayer.ui.theme.neriRoundedShape
 import moe.ouom.neriplayer.data.sync.mapping.toSongItem
 import android.app.Application
 import android.content.res.Resources
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -165,10 +166,10 @@ fun BiliPlaylistDetailScreen(
         )
         return
     }
-    val currentSong by PlayerManager.currentSongFlow.collectAsState()
-    val isPlaying by PlayerManager.isPlayingFlow.collectAsState()
-    val shuffleEnabled by PlayerManager.shuffleModeFlow.collectAsState()
-    val repeatMode by PlayerManager.repeatModeFlow.collectAsState()
+    val currentSong by PlayerManager.currentSongFlow.collectAsStateWithLifecycle()
+    val isPlaying by PlayerManager.isPlayingFlow.collectAsStateWithLifecycle()
+    val shuffleEnabled by PlayerManager.shuffleModeFlow.collectAsStateWithLifecycle()
+    val repeatMode by PlayerManager.repeatModeFlow.collectAsStateWithLifecycle()
 
     // 保存最新的header和videos数据，用于在Screen销毁时更新使用记录
     var latestHeader by remember { mutableStateOf<BiliPlaylist?>(null) }
@@ -201,7 +202,7 @@ fun BiliPlaylistDetailScreen(
 
     // 下载进度
     var showDownloadManager by remember { mutableStateOf(false) }
-    val downloadTaskSummary by GlobalDownloadManager.downloadTaskSummary.collectAsState()
+    val downloadTaskSummary by GlobalDownloadManager.downloadTaskSummary.collectAsStateWithLifecycle()
     val hasDownloadManagerEntry = downloadTaskSummary.hasDownloadManagerEntry
 
     val repo = remember(context) { LocalPlaylistRepository.getInstance(context) }
@@ -212,7 +213,7 @@ fun BiliPlaylistDetailScreen(
     val playlistSource = "bili"
     val playlistId = ui.header?.mediaId ?: playlist.mediaId
     val favoriteRepo = remember(context) { FavoritePlaylistRepository.getInstance(context) }
-    val favorites by favoriteRepo.favorites.collectAsState()
+    val favorites by favoriteRepo.favorites.collectAsStateWithLifecycle()
     val isFavorite = remember(favorites, playlistId) {
         favoriteRepo.isFavorite(playlistId, playlistSource)
     }
@@ -974,7 +975,7 @@ fun BiliPlaylistDetailScreen(
 
             // 下载管理器
             if (showDownloadManager) {
-                val downloadTasks by GlobalDownloadManager.downloadTasks.collectAsState()
+                val downloadTasks by GlobalDownloadManager.downloadTasks.collectAsStateWithLifecycle()
                 BatchDownloadManagerSheet(
                     downloadTasks = downloadTasks,
                     onDismiss = { showDownloadManager = false }

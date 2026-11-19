@@ -3,6 +3,7 @@ package moe.ouom.neriplayer.ui.screen.playlist
 import moe.ouom.neriplayer.ui.theme.neriRoundedShape
 import moe.ouom.neriplayer.data.identity.stableKey
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -184,8 +185,8 @@ fun LocalArtistDetailScreen(
 ) {
     val context = LocalContext.current
     val repo = remember(context) { LocalPlaylistRepository.getInstance(context) }
-    val playlists by repo.playlists.collectAsState()
-    val localPlaylistsReady by repo.initializationReadyFlow.collectAsState()
+    val playlists by repo.playlists.collectAsStateWithLifecycle()
+    val localPlaylistsReady by repo.initializationReadyFlow.collectAsStateWithLifecycle()
     val artistKey = remember(artistName) { localArtistStableKey(artistName) }
     val unknownArtist = stringResource(CoreCommonR.string.music_unknown_artist)
     val artistSnapshot by produceState<LocalArtistDetailSnapshot?>(
@@ -241,9 +242,9 @@ fun LocalArtistDetailScreen(
     var selectedKeys by remember(artistKey) { mutableStateOf<Set<String>>(emptySet()) }
     var showExportSheet by remember(artistKey) { mutableStateOf(false) }
     var showDownloadManager by remember(artistKey) { mutableStateOf(false) }
-    val downloadTaskSummary by GlobalDownloadManager.downloadTaskSummary.collectAsState()
+    val downloadTaskSummary by GlobalDownloadManager.downloadTaskSummary.collectAsStateWithLifecycle()
     val hasDownloadManagerEntry = downloadTaskSummary.hasDownloadManagerEntry
-    val downloadPresenceVersion by GlobalDownloadManager.downloadPresenceVersion.collectAsState()
+    val downloadPresenceVersion by GlobalDownloadManager.downloadPresenceVersion.collectAsStateWithLifecycle()
     val selectedSongsForAction by remember(songs, selectedKeys) {
         derivedStateOf {
             selectedSongsInSourceOrder(songs, selectedKeys)
@@ -570,7 +571,7 @@ fun LocalArtistDetailScreen(
         }
 
         if (showDownloadManager) {
-            val downloadTasks by GlobalDownloadManager.downloadTasks.collectAsState()
+            val downloadTasks by GlobalDownloadManager.downloadTasks.collectAsStateWithLifecycle()
             BatchDownloadManagerSheet(
                 downloadTasks = downloadTasks,
                 onDismiss = { showDownloadManager = false }

@@ -5,6 +5,7 @@ import moe.ouom.neriplayer.data.ltw.validation.format
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.res.Resources
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -80,7 +81,7 @@ private fun collectSettingsListenTogetherValues(
     preferences: ListenTogetherPreferences,
     sessionManager: ListenTogetherSessionManager
 ): SettingsListenTogetherObservedValues = SettingsListenTogetherObservedValues(
-    session = sessionManager.sessionState.collectAsState(),
+    session = sessionManager.sessionState.collectAsStateWithLifecycle(),
     nickname = preferences.nicknameFlow.collectAsState(initial = "")
 )
 

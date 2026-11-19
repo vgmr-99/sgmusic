@@ -156,17 +156,17 @@ fun ListenTogetherRoomPanel(
     val clipboardScope = rememberCoroutineScope()
     val sessionManager = remember { AppContainer.listenTogetherSessionManager }
     val preferences = remember { AppContainer.listenTogetherPreferences }
-    val sessionState by sessionManager.sessionState.collectAsState()
-    val roomState by sessionManager.roomState.collectAsState()
+    val sessionState by sessionManager.sessionState.collectAsStateWithLifecycle()
+    val roomState by sessionManager.roomState.collectAsStateWithLifecycle()
     val savedBaseUrlInput by preferences.workerBaseUrlInputFlow.collectAsState(initial = "")
     val savedUserUuid by preferences.userUuidFlow.collectAsState(initial = "")
     val savedNickname by preferences.nicknameFlow.collectAsState(initial = "")
     val savedAllowMemberControl by preferences.allowMemberControlFlow.collectAsState(initial = true)
     val savedAutoPauseOnMemberChange by preferences.autoPauseOnMemberChangeFlow.collectAsState(initial = true)
     val savedShareAudioLinks by preferences.shareAudioLinksFlow.collectAsState(initial = true)
-    val currentQueue by PlayerManager.currentQueueFlow.collectAsState()
-    val currentSong by PlayerManager.currentSongFlow.collectAsState()
-    val isPlaying by PlayerManager.isPlayingFlow.collectAsState()
+    val currentQueue by PlayerManager.currentQueueFlow.collectAsStateWithLifecycle()
+    val currentSong by PlayerManager.currentSongFlow.collectAsStateWithLifecycle()
+    val isPlaying by PlayerManager.isPlayingFlow.collectAsStateWithLifecycle()
     val positionMs by PlayerManager.playbackPositionFlow.collectAsStateWithLifecycle()
 
     var baseUrl by rememberSaveable { mutableStateOf("") }

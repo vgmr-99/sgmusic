@@ -30,6 +30,7 @@ import android.app.Application
 import android.content.ClipData
 import android.content.Context
 import android.content.res.Resources
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -344,13 +345,13 @@ fun DetailScreen(
 
     // 下载进度
     var showDownloadManager by remember { mutableStateOf(false) }
-    val downloadTaskSummary by GlobalDownloadManager.downloadTaskSummary.collectAsState()
+    val downloadTaskSummary by GlobalDownloadManager.downloadTaskSummary.collectAsStateWithLifecycle()
     val hasDownloadManagerEntry = downloadTaskSummary.hasDownloadManagerEntry
 
-    val currentSong by PlayerManager.currentSongFlow.collectAsState()
-    val isPlaying by PlayerManager.isPlayingFlow.collectAsState()
-    val shuffleEnabled by PlayerManager.shuffleModeFlow.collectAsState()
-    val repeatMode by PlayerManager.repeatModeFlow.collectAsState()
+    val currentSong by PlayerManager.currentSongFlow.collectAsStateWithLifecycle()
+    val isPlaying by PlayerManager.isPlayingFlow.collectAsStateWithLifecycle()
+    val shuffleEnabled by PlayerManager.shuffleModeFlow.collectAsStateWithLifecycle()
+    val repeatMode by PlayerManager.repeatModeFlow.collectAsStateWithLifecycle()
     val listState = rememberSaveable(playlistId, saver = LazyListState.Saver) {
         LazyListState(firstVisibleItemIndex = 0, firstVisibleItemScrollOffset = 0)
     }
@@ -371,7 +372,7 @@ fun DetailScreen(
 
     // 多选与导出到本地歌单
     val repo = remember(context) { LocalPlaylistRepository.getInstance(context) }
-    val allPlaylists by repo.playlists.collectAsState()
+    val allPlaylists by repo.playlists.collectAsStateWithLifecycle()
     val favoriteSongLookup = remember(allPlaylists, context) {
         FavoriteSongLookup(FavoritesPlaylist.firstOrNull(allPlaylists, context)?.songs.orEmpty())
     }
@@ -386,7 +387,7 @@ fun DetailScreen(
 
     // 收藏歌单
     val favoriteRepo = remember(context) { FavoritePlaylistRepository.getInstance(context) }
-    val favorites by favoriteRepo.favorites.collectAsState()
+    val favorites by favoriteRepo.favorites.collectAsStateWithLifecycle()
     val isFavorite = remember(favorites, playlistId) {
         favoriteRepo.isFavorite(playlistId, playlistSource)
     }
@@ -1062,7 +1063,7 @@ fun DetailScreen(
 
     // 下载管理器
     if (showDownloadManager) {
-        val downloadTasks by GlobalDownloadManager.downloadTasks.collectAsState()
+        val downloadTasks by GlobalDownloadManager.downloadTasks.collectAsStateWithLifecycle()
         BatchDownloadManagerSheet(
             downloadTasks = downloadTasks,
             onDismiss = { showDownloadManager = false }

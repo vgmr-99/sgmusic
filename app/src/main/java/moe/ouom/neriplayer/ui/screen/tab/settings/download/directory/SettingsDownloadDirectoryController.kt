@@ -3,6 +3,7 @@ package moe.ouom.neriplayer.ui.screen.tab.settings.download.directory
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -180,7 +181,7 @@ internal fun rememberDownloadDirectorySettingsController(
     val localState = rememberDownloadDirectoryLocalState()
     val libraryProcessingState = ManagedLibraryProcessingCoordinator.state.collectAsState()
     val hasActiveDownloadOperationsState =
-        GlobalDownloadManager.activeDownloadOperationsFlow.collectAsState()
+        GlobalDownloadManager.activeDownloadOperationsFlow.collectAsStateWithLifecycle()
     val currentSummaryState = rememberDownloadDirectorySummaryState(
         downloadDirectoryUri, defaultDirectorySummary
     )

@@ -37,6 +37,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -346,7 +347,7 @@ fun LocalPlaylistDetailScreen(
     }
     val scanPreviewState by vm.scanPreviewState.collectAsState()
     val metadataProcessingState by vm.metadataProcessingState.collectAsState()
-    val downloadedSongs by GlobalDownloadManager.downloadedSongs.collectAsState()
+    val downloadedSongs by GlobalDownloadManager.downloadedSongs.collectAsStateWithLifecycle()
     val downloadedPlaybackCoverCandidates = remember(downloadedSongs) {
         downloadedSongs.map { it.toPlaybackSongItem() }
     }
@@ -481,13 +482,13 @@ fun LocalPlaylistDetailScreen(
             val isFavorites = FavoritesPlaylist.isSystemPlaylist(playlist, context)
             val isLocalFilesPlaylist = LocalFilesPlaylist.isSystemPlaylist(playlist, context)
             val isSystemPlaylist = isFavorites || isLocalFilesPlaylist
-            val isPlaying by PlayerManager.isPlayingFlow.collectAsState()
-            val downloadPresenceVersion by GlobalDownloadManager.downloadPresenceVersion.collectAsState()
-            val shuffleEnabled by PlayerManager.shuffleModeFlow.collectAsState()
-            val repeatMode by PlayerManager.repeatModeFlow.collectAsState()
+            val isPlaying by PlayerManager.isPlayingFlow.collectAsStateWithLifecycle()
+            val downloadPresenceVersion by GlobalDownloadManager.downloadPresenceVersion.collectAsStateWithLifecycle()
+            val shuffleEnabled by PlayerManager.shuffleModeFlow.collectAsStateWithLifecycle()
+            val repeatMode by PlayerManager.repeatModeFlow.collectAsStateWithLifecycle()
 
             val repo = remember(context) { LocalPlaylistRepository.getInstance(context) }
-            val allPlaylists by repo.playlists.collectAsState()
+            val allPlaylists by repo.playlists.collectAsStateWithLifecycle()
             val favoriteSongs = remember(allPlaylists, context) {
                 FavoritesPlaylist.firstOrNull(allPlaylists, context)?.songs.orEmpty()
             }
@@ -541,7 +542,7 @@ fun LocalPlaylistDetailScreen(
             val keyboardController = LocalSoftwareKeyboardController.current
             
             // 下载进度
-            val downloadTaskSummary by GlobalDownloadManager.downloadTaskSummary.collectAsState()
+            val downloadTaskSummary by GlobalDownloadManager.downloadTaskSummary.collectAsStateWithLifecycle()
             val hasDownloadManagerEntry = downloadTaskSummary.hasDownloadManagerEntry
 
             // Snackbar状态
@@ -1270,7 +1271,7 @@ fun LocalPlaylistDetailScreen(
             }
 
             // 当前播放 & FAB
-            val currentSong by PlayerManager.currentSongFlow.collectAsState()
+            val currentSong by PlayerManager.currentSongFlow.collectAsStateWithLifecycle()
             val currentSongLookup = remember(currentSong) {
                 SongIdentityLookup(listOfNotNull(currentSong))
             }

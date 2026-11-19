@@ -1165,7 +1165,7 @@ internal fun LocalPlaylistDetailModernContent(
 
                 // 下载管理器
                 if (showDownloadManager) {
-                    val downloadTasks by GlobalDownloadManager.downloadTasks.collectAsState()
+                    val downloadTasks by GlobalDownloadManager.downloadTasks.collectAsStateWithLifecycle()
                     BatchDownloadManagerSheet(
                         downloadTasks = downloadTasks,
                         onDismiss = { showDownloadManager = false }

@@ -30,6 +30,7 @@ import moe.ouom.neriplayer.ui.screen.tab.settings.component.LazyAnimatedVisibili
 import moe.ouom.neriplayer.ui.screen.tab.settings.component.playback.QualityOptionsDialog
 import moe.ouom.neriplayer.ui.screen.tab.settings.component.rememberAutoSettingSpecRepository
 import moe.ouom.neriplayer.ui.screen.tab.settings.component.settingsItemClickable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -132,8 +133,8 @@ private fun SettingsDownloadExpandedContent(
     highlightPulse: Int,
     onHighlightFinished: (() -> Unit)?
 ) {
-    val batchDownloadProgress by GlobalDownloadManager.batchDownloadProgressFlow.collectAsState()
-    val taskSummary by GlobalDownloadManager.downloadTaskSummary.collectAsState()
+    val batchDownloadProgress by GlobalDownloadManager.batchDownloadProgressFlow.collectAsStateWithLifecycle()
+    val taskSummary by GlobalDownloadManager.downloadTaskSummary.collectAsStateWithLifecycle()
     val visibleProgress = batchDownloadProgress?.takeIf { taskSummary.hasPendingTasks }
 
     Column(
