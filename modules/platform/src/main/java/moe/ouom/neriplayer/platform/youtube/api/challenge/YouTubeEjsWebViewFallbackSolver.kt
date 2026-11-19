@@ -11,6 +11,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.core.net.toUri
 import androidx.webkit.WebViewAssetLoader
+import moe.ouom.neriplayer.common.logging.NPLogger
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.IOException
@@ -116,13 +117,25 @@ internal class YouTubeEjsWebViewFallbackSolver(
     private val appContext = context.applicationContext
     private val sessionLock = Mutex()
     private val pageDirectory = File(appContext.cacheDir, YOUTUBE_EJS_WEBVIEW_CACHE_DIRECTORY)
-    private val assetLoader = WebViewAssetLoader.Builder()
-        .addPathHandler(
-            "/youtube-ejs/",
-            WebViewAssetLoader.InternalStoragePathHandler(appContext, pageDirectory)
-        )
-        .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(appContext))
-        .build()
+
+    // InternalStoragePathHandler 构造时要求目录已存在，且需要真实的 Android canonical path 语义。
+    // 改为 lazy：目录由 writeDocument() 创建后再构造，避免实例化 solver 就触碰 handler；
+    // 也避免 Robolectric 等测试环境下目录尚未就绪时构造失败。
+    private val assetLoader: WebViewAssetLoader by lazy {
+        if (!pageDirectory.exists() && !pageDirectory.mkdirs()) {
+            NPLogger.w(
+                "YouTubeEjsSolver",
+                "could not create EJS WebView cache directory: ${pageDirectory.path}"
+            )
+        }
+        WebViewAssetLoader.Builder()
+            .addPathHandler(
+                "/youtube-ejs/",
+                WebViewAssetLoader.InternalStoragePathHandler(appContext, pageDirectory)
+            )
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(appContext))
+            .build()
+    }
     private var session: Session? = null
 
     suspend fun warm(playerJsUrl: String, playerScript: String) {

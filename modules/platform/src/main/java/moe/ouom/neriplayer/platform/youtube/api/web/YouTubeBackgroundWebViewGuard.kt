@@ -32,7 +32,10 @@ internal fun buildYouTubeBackgroundMediaSessionGuardScript(): String {
             };
             patch(globalThis.MediaSession?.prototype);
             patch(mediaSession);
-          } catch (error) {}
+          } catch (error) {
+            // 页面未开放 MediaSession 或属性不可配置属预期；仅提示，不影响播放
+            console.warn('[YouTubeGuard] MediaSession patch skipped: ' + error);
+          }
         })();
     """.trimIndent()
 }

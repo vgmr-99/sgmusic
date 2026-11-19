@@ -618,7 +618,10 @@ class YouTubeWebPoTokenProvider(
                           return candidate;
                         }
                       }
-                    } catch (error) {}
+                    } catch (error) {
+                      // 跨域窗口属性不可读属预期；留痕便于排查取不到 PoToken 客户端的原因
+                      console.warn('[YouTubePoToken] topWindow scan failed: ' + error);
+                    }
                     return null;
                   };
                   const webPlayerContexts = getConfig('WEB_PLAYER_CONTEXT_CONFIGS') || {};
@@ -678,7 +681,9 @@ class YouTubeWebPoTokenProvider(
                         return candidate;
                       }
                     }
-                  } catch (error) {}
+                  } catch (error) {
+                    console.warn('[YouTubePoToken] nested window scan failed: ' + error);
+                  }
                   return null;
                 };
                 const factory = findFactory();

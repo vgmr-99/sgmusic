@@ -4,6 +4,7 @@ import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import kotlin.math.pow
 import moe.ouom.neriplayer.data.model.bilibili.auth.BiliQrLoginCheckResult
 import moe.ouom.neriplayer.data.model.bilibili.auth.BiliQrLoginSession
 import moe.ouom.neriplayer.common.logging.NPLogger
@@ -26,6 +27,9 @@ private const val BILI_WEB_UA =
         "Chrome/124.0.0.0 Safari/537.36"
 private const val BILI_QR_NETWORK_RETRY_COUNT = 3
 private const val BILI_QR_NETWORK_RETRY_DELAY_MS = 100L
+// 指数退避：第 1 次 100ms、第 2 次 200ms；再叠加最多 25% 抖动，避免并发请求同步重试形成尖峰。
+private const val BILI_QR_RETRY_BACKOFF_FACTOR = 2
+private const val BILI_QR_RETRY_JITTER_MAX_RATIO = 0.25
 
 class BiliQrLoginClient {
     private val cookieStore: LinkedHashMap<String, String> = linkedMapOf()
@@ -101,12 +105,18 @@ class BiliQrLoginClient {
                 if (!error.isRetryableNetworkError() || attemptIndex == BILI_QR_NETWORK_RETRY_COUNT - 1) {
                     throw error
                 }
+                // 只在 IO 协程里被调用（见 BiliQrLoginActivity 的 withContext(Dispatchers.IO)），
+                // 因此这里用 Thread.sleep 不会卡主线程；改动点是固定间隔 -> 带抖动的指数退避。
+                val exponentialDelayMs = (BILI_QR_NETWORK_RETRY_DELAY_MS *
+                    BILI_QR_RETRY_BACKOFF_FACTOR.toDouble().pow(attemptIndex)).toLong()
+                val jitterMs = (exponentialDelayMs * BILI_QR_RETRY_JITTER_MAX_RATIO * Math.random()).toLong()
+                val delayMs = exponentialDelayMs + jitterMs
                 NPLogger.w(
                     BILI_QR_LOG_TAG,
                     "Retry QR HTTP GET url=${url.encodedPath} attempt=${attemptIndex + 1} " +
-                        "reason=${error.message.orEmpty().compactForLog()}"
+                        "delayMs=$delayMs reason=${error.message.orEmpty().compactForLog()}"
                 )
-                Thread.sleep(BILI_QR_NETWORK_RETRY_DELAY_MS)
+                Thread.sleep(delayMs)
             }
         }
         throw lastError ?: IOException("Bilibili QR request failed")

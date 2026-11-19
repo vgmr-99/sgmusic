@@ -300,7 +300,10 @@ object LxScriptConverter {
               if (/^https?:\/\//i.test(response)) {
                 return { source: payload.source, action: payload.action, data: { type: payload.info.type, url: response } };
               }
-              try { response = JSON.parse(response); } catch (e) {}
+              try { response = JSON.parse(response); } catch (e) {
+                // 非 JSON 字符串按原始播放地址处理（下方归一化为 url）；留痕便于排查脚本返回异常格式
+                console.warn('[LxAdapter] musicUrl result is not JSON, treating as raw url: ' + (e && e.message ? e.message : e));
+              }
             }
 
             function parseNested(value) {
@@ -454,7 +457,9 @@ object LxScriptConverter {
               if (normalizedEvent === 'updatealert' || normalizedEvent === 'update') {
                 if (!__lxUpdateAlertSent) {
                   __lxUpdateAlertSent = true;
-                  try { __lxGlobal.__lx_updateAlert = data; } catch (e) {}
+                  try { __lxGlobal.__lx_updateAlert = data; } catch (e) {
+                    console.warn('[LxAdapter] failed to publish updateAlert: ' + (e && e.message ? e.message : e));
+                  }
                 }
                 return Promise.resolve();
               }
