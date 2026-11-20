@@ -100,10 +100,19 @@ internal fun shouldShowActiveGlassScene(
 internal fun settingsHomeSelectedPage(page: SettingsPage?): SettingsPage? =
     page?.backTargetPage() ?: page
 
-internal fun LazyListScope.settingsHomePageItems(navigation: SettingsNavigationState) {
+/**
+ * 设置首页的条目。
+ *
+ * @param onPageClickOverride 覆盖默认的"切换子页"行为。独立路由的入口（比如关于页
+ *        有自己的折叠头页面）用它来跳到独立路由，而不是渲染设置页内嵌的子页。
+ */
+internal fun LazyListScope.settingsHomePageItems(
+    navigation: SettingsNavigationState,
+    onPageClickOverride: ((SettingsPage) -> Boolean)? = null
+) {
     settingsHomeSearchFieldItem(navigation)
     settingsHomeSearchResultsItem(navigation)
-    settingsHomePageGroupItems(navigation)
+    settingsHomePageGroupItems(navigation, onPageClickOverride)
 }
 
 private fun LazyListScope.settingsHomeSearchFieldItem(navigation: SettingsNavigationState) {
@@ -125,12 +134,19 @@ private fun LazyListScope.settingsHomeSearchResultsItem(navigation: SettingsNavi
     }
 }
 
-private fun LazyListScope.settingsHomePageGroupItems(navigation: SettingsNavigationState) {
+private fun LazyListScope.settingsHomePageGroupItems(
+    navigation: SettingsNavigationState,
+    onPageClickOverride: ((SettingsPage) -> Boolean)? = null
+) {
     SettingsHomePageGroups.forEachIndexed { groupIndex, pages ->
         item(key = "settings_group_$groupIndex") {
             MiuixSettingsPageGroupCard(
                 pages = pages,
-                onPageClick = { page -> navigation.activePage = page },
+                onPageClick = { page ->
+                    // 拦截器返回 true 表示已自行处理，不再切子页
+                    val handled = onPageClickOverride?.invoke(page) == true
+                    if (!handled) navigation.activePage = page
+                },
                 selectedPage = settingsHomeSelectedPage(navigation.activePage),
                 modifier = Modifier.animateItem()
             )

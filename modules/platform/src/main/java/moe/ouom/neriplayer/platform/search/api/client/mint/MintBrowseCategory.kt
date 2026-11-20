@@ -120,10 +120,14 @@ internal object MintProviderLookup {
      * 既匹配枚举的 code（netease / kugou / qq / kw / mg），
      * 也匹配它的 lxCode（wy / kg / tx / kw / mg）。
      *
-     * 暂时没有对应枚举时退回占位来源，保证卡片与曲目的 provider 字段非空。
+     * 找不到就**抛异常**而不是兜底成某个平台：
+     * 兜底会让「写错了一个字母的来源代号」变成「卡片被当成另一个平台的歌」，
+     * 界面上看不出来，但点开就报错、甚至会去请求错误的平台接口。
+     * 现在这样至少在开发期第一时间炸出来。
      */
     fun providerOf(providerCode: String): PlatformSearchProvider =
-        providerOfOrNull(providerCode) ?: PlatformSearchProvider.QISHUI
+        providerOfOrNull(providerCode)
+            ?: throw IllegalArgumentException("未知的 Mint 来源代号: $providerCode")
 
     /** 按来源代号找对应的搜索平台枚举；没有对应条目时返回 null。 */
     fun providerOfOrNull(providerCode: String): PlatformSearchProvider? =

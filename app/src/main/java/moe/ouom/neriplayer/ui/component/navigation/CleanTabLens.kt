@@ -119,8 +119,11 @@ internal fun CleanTabIndicator(
     hostCoordinates: () -> LayoutCoordinates?,
     barLayer: GraphicsLayer,
     barHeightPx: Float,
-    dark: Boolean
+    dark: Boolean,
+    /** 底栏收紧时这枚选中药丸要跟着淡出——圆钮本身就是新的选中指示。 */
+    alpha: Float = 1f
 ) {
+    if (alpha <= 0.01f) return
     val density = LocalDensity.current
     val rect = tabDrag.indicatorRect(barHeightPx, density) ?: return
     val bar = tabDrag.bar ?: return
@@ -146,6 +149,7 @@ internal fun CleanTabIndicator(
             .offset { IntOffset((barOffset.x + rect.left).roundToInt(), (barOffset.y + rect.top).roundToInt()) }
             .size(with(density) { rect.width.toDp() }, with(density) { rect.height.toDp() })
             .graphicsLayer {
+                this.alpha = alpha
                 shape = CircleShape
                 clip = false
                 shadowElevation = LensElevation.toPx() * glassProgress

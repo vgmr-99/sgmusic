@@ -38,6 +38,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -288,7 +289,12 @@ private fun PlatformBrowseCardGrid(
                 }
             }
 
-            else -> items(browse.cards, key = { it.provider.code + "-" + it.id }) { card ->
+            else -> itemsIndexed(
+                items = browse.cards,
+                // key 带 index 做第二层保险：上游万一又返回重复卡片，
+                // Compose 也不会因为 key 冲突抛 IllegalArgumentException 把 App 打死。
+                key = { index, card -> "${card.provider.code}-${card.id}-$index" }
+            ) { _, card ->
                 PlaylistCard(
                     playlist = card.toPlaylistSummary(),
                     isFavorite = false,

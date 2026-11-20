@@ -23,12 +23,16 @@ package moe.ouom.neriplayer.ui.component.playback
  * Created: 2025/8/8
  */
 
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.SideEffect
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -74,6 +78,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -98,9 +103,17 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import moe.ouom.neriplayer.ui.animation.LocalSharedCoverFlight
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import moe.ouom.neriplayer.ui.component.navigation.CompactDockButtonGap
+import moe.ouom.neriplayer.ui.component.navigation.CompactDockButtonSize
+import moe.ouom.neriplayer.ui.component.navigation.DockBarHorizontalMargin
+import moe.ouom.neriplayer.ui.component.navigation.LocalBottomDockProgress
+import moe.ouom.neriplayer.ui.component.navigation.navCompactProgress
+import moe.ouom.neriplayer.ui.component.navigation.navCompactProgress
 import moe.ouom.neriplayer.ui.theme.LocalHasCustomBackground
 import moe.ouom.neriplayer.ui.theme.NeriDesign
+import moe.ouom.neriplayer.ui.theme.NeriMotion
 import moe.ouom.neriplayer.ui.theme.supportsContinuousCornerOutline
+import moe.ouom.neriplayer.ui.component.navigation.LocalBottomDockMode
 import moe.ouom.neriplayer.ui.playback.visual.shouldUseNowPlayingContainerMorph
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -128,12 +141,26 @@ object NeriMiniPlayerDefaults {
     internal val TabletProgressHeight = 12.dp
     internal val TabletProgressThickness = 4.dp
     internal val TabletMetadataVerticalPadding = 2.dp
-    internal val ContentVerticalPadding = 8.dp
+    internal val ContentVerticalPadding = 6.dp
     internal val ContentHorizontalPadding = 12.dp
     internal val ContentSpacing = 12.dp
     internal val CoverSize = 40.dp
     internal val ControlButtonSize = 48.dp
+
+    /**
+     * 播放栏玻璃面和它所占槽位之间的下边距。
+     *
+     * 槽位比玻璃面高这么多，所以"槽位底边"和"玻璃面底边"不是同一个位置：
+     * 展开态玻璃面底边要留在导航栏上方一点，收紧态玻璃面底边要和右侧圆钮底边齐平，
+     * 两种情况都要拿这个值换算。
+     */
+    internal val SurfaceBottomGap = 6.dp
+
+    /** 播放键尺寸：白色圆形实心底。 */
+    internal val PlayButtonSize = 40.dp
     internal val MinMetadataWidthWithSkipControls = 144.dp
+    /** 紧凑态下迷你条占屏宽的比例：够放一颗封面加播放键 */
+    internal const val CompactWidthFraction = 0.42f
 }
 
 internal fun shouldShowMiniPlayerSkipControls(
@@ -150,8 +177,8 @@ internal fun shouldShowMiniPlayerSkipControls(
 
 private const val MINI_PLAYER_COVER_CLEAR_DELAY_MS = 900L
 private const val MINI_PLAYER_METADATA_LINE_HEIGHT_EM = 1.5f
-private const val MINI_PLAYER_TITLE_LINE_HEIGHT_DP = 24f
-private const val MINI_PLAYER_ARTIST_LINE_HEIGHT_DP = 20f
+private const val MINI_PLAYER_TITLE_LINE_HEIGHT_DP = 22.5f
+private const val MINI_PLAYER_ARTIST_LINE_HEIGHT_DP = 16.5f
 private const val MINI_PLAYER_TITLE_MIN_VISUAL_FONT_SIZE_SP = 10f
 private const val MINI_PLAYER_ARTIST_MIN_VISUAL_FONT_SIZE_SP = 9f
 private const val MINI_PLAYER_METADATA_AUTO_SIZE_STEP_SP = 0.25f
@@ -503,6 +530,16 @@ fun NeriMiniPlayer(
     } else {
         MaterialTheme.colorScheme.onSecondaryContainer
     }
+    // 底部两栏的收紧进度：页面向下滚动后导航栏收成右侧一颗圆钮，播放栏跟着收窄并下移。
+    // 播放栏用的是和导航栏同一段进度（收窄的那一段），这样两者的动作是同步的。
+    val dockProgress = LocalBottomDockProgress.current
+    val compactProgress by animateFloatAsState(
+        targetValue = if (useTabletControls) 0f else navCompactProgress(dockProgress),
+        animationSpec = NeriMotion.smooth(),
+        label = "mini_player_compact_progress"
+    )
+    // 播放栏本身始终保持长条形态：收紧时只是宽度收窄，给右侧那颗圆钮让出位置，
+    // 内容（封面 / 歌名 / 播放键）的比例和间距完全不变。
     val shape = when {
         useTabletControls -> RectangleShape
         cleanStyle -> NeriDesign.tokens.miniPlayerShape
@@ -751,6 +788,22 @@ fun NeriMiniPlayer(
         }
     }
 
+    // 紧凑态：迷你条收成一顆圆形封面钮（直径与底栏收紧后的圆钮相同），
+    // 停靠到底栏圆钮左侧，两者并排靠右。
+    // 歌名始终可见：收紧只影响宽度，播放栏内容不变
+    val compactMetadataAlpha = 1f
+    // 播放键的配色：浅色主题用白底深字，深色主题用浅底深字
+    val playButtonBackground = if (miniContentColor.luminance() > 0.5f) {
+        Color.White
+    } else {
+        Color.White.copy(alpha = 0.92f)
+    }
+    val playButtonIconColor = Color(0xFF1A1A1A)
+    // 宽度交给外层那一行（播放栏 + 右侧圆钮）来分配，
+    // 这里不再自己算，避免两边各算一套对不齐。
+    // 封面尺寸和形状保持不变：播放栏只是宽度收窄，内容不动
+    val compactCoverSize = NeriMiniPlayerDefaults.CoverSize
+
     val coverCornerRadius = if (cleanStyle) 10.dp else 8.dp
     val coverShape = if (cleanStyle) NeriDesign.tokens.coverSmallShape else RoundedCornerShape(8.dp)
     val coverSizePx = with(density) { NeriMiniPlayerDefaults.CoverSize.toPx() }
@@ -758,7 +811,7 @@ fun NeriMiniPlayer(
     val cover: @Composable () -> Unit = {
         Box(
             modifier = Modifier
-                .size(NeriMiniPlayerDefaults.CoverSize)
+                .size(compactCoverSize)
                 .sharedCoverSource(coverCornerRadius, visibleFrame?.decodedBitmap, continuousCoverCorners)
                 .background(
                     color = if (visibleFrame != null) {
@@ -870,12 +923,17 @@ fun NeriMiniPlayer(
     SideEffect { sharedCoverFlight?.miniPlayerContainerColor = capsuleColor }
     AdvancedGlassSurface(
         role = AdvancedGlassRole.MiniPlayer,
-        modifier = modifier
+        modifier = Modifier
+            // width 必须排在传入的 modifier 之前：链上先出现的尺寸约束优先，
+            // 否则 modifier 里自带的 fillMaxWidth 会把收紧后的宽度顶回去。
+            // 用 fillMaxWidth：padding 跟在 width 之后会把玻璃背景一起缩窄，
+            // 实际宽度会少一截，和导航栏对不齐。
             .fillMaxWidth()
+            .then(modifier)
             .height(if (useTabletControls) NeriMiniPlayerDefaults.TabletHeight else NeriMiniPlayerDefaults.Height)
             // aligned with the floating tab bar's side margins, with a small gap above it
             .padding(horizontal = if (useTabletControls) 0.dp else if (cleanStyle) 16.dp else 8.dp)
-            .padding(bottom = if (cleanStyle && !useTabletControls) 6.dp else 0.dp)
+            .padding(bottom = if (cleanStyle && !useTabletControls) NeriMiniPlayerDefaults.SurfaceBottomGap else 0.dp)
             .onGloballyPositioned { coordinates ->
                 sharedCoverFlight?.reportMiniPlayerContainer(coordinates.boundsInWindow())
             }
@@ -1042,6 +1100,8 @@ fun NeriMiniPlayer(
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     // 窄窗口优先保留歌曲文字，切歌仍可使用原来的左右滑动
                     val showSkipControls = shouldShowMiniPlayerSkipControls(smallestScreenWidthDp, maxWidth)
+                    // 紧凑态隐藏切歌按钮，把位置让给收拢后的圆钮
+                    val showSkipControlsEffective = showSkipControls && compactProgress < 0.5f
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(NeriMiniPlayerDefaults.ContentSpacing),
@@ -1052,6 +1112,9 @@ fun NeriMiniPlayer(
                                 scaleX = 1f - offsetRatio * 0.025f
                                 scaleY = 1f - offsetRatio * 0.025f
                             }
+                            // 内外边距不随收紧进度变化：播放栏收窄的是整条宽度，
+                            // 里面的封面 / 文字 / 播放键保持同一套间距和比例，
+                            // 否则一收紧封面就贴到卡片边角上，比例全乱了。
                             .padding(
                                 horizontal = NeriMiniPlayerDefaults.ContentHorizontalPadding,
                                 vertical = NeriMiniPlayerDefaults.ContentVerticalPadding
@@ -1059,7 +1122,12 @@ fun NeriMiniPlayer(
                     ) {
                         cover()
 
-                        Column(modifier = Modifier.weight(1f).testTag("miniPlayerMetadata")) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("miniPlayerMetadata")
+                                .graphicsLayer { alpha = compactMetadataAlpha }
+                        ) {
                             EllipsizingMiniPlayerText(
                                 text = title,
                                 style = MaterialTheme.typography.titleMedium,
@@ -1079,7 +1147,7 @@ fun NeriMiniPlayer(
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (showSkipControls) {
+                            if (showSkipControlsEffective) {
                                 HapticIconButton(
                                     onClick = onPrevious,
                                     modifier = Modifier
@@ -1093,14 +1161,16 @@ fun NeriMiniPlayer(
                                     )
                                 }
                             }
-                            HapticIconButton(
-                                onClick = { onPlayPause() },
-                                enabled = playPauseEnabled,
-                                modifier = (if (showSkipControls) {
-                                    Modifier.size(NeriMiniPlayerDefaults.ControlButtonSize)
-                                } else {
-                                    Modifier
-                                }).testTag("miniPlayerPlayPause")
+                            // 播放键：白色圆形实心底 + 深色图标，
+                            // 和参考实现一致（用一个实心圆把播放指示器托起来）
+                            Box(
+                                modifier = Modifier
+                                    .size(NeriMiniPlayerDefaults.PlayButtonSize)
+                                    .clip(CircleShape)
+                                    .background(playButtonBackground)
+                                    .clickable(enabled = playPauseEnabled) { onPlayPause() }
+                                    .testTag("miniPlayerPlayPause"),
+                                contentAlignment = Alignment.Center
                             ) {
                                 PlaybackControlIndicator(
                                     isPlaying = isPlaying,
@@ -1110,12 +1180,12 @@ fun NeriMiniPlayer(
                                     pauseContentDescription = stringResource(CoreCommonR.string.lyrics_pause),
                                     restoreVolumeContentDescription = stringResource(CoreCommonR.string.player_restore_volume),
                                     waitingContentDescription = stringResource(CoreCommonR.string.player_waiting),
-                                    color = miniContentColor,
+                                    color = playButtonIconColor,
                                     progressIndicatorSize = 22.dp,
                                     progressStrokeWidth = 2.dp
                                 )
                             }
-                            if (showSkipControls) {
+                            if (showSkipControlsEffective) {
                                 HapticIconButton(
                                     onClick = onNext,
                                     modifier = Modifier

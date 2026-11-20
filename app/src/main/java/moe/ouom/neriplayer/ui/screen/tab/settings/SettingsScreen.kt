@@ -104,6 +104,7 @@ import moe.ouom.neriplayer.ui.screen.tab.settings.page.SettingsPage
 import moe.ouom.neriplayer.ui.screen.tab.settings.page.miuixSettingsSectionCardItem
 import moe.ouom.neriplayer.ui.screen.tab.settings.page.settingsHighlightTarget
 import moe.ouom.neriplayer.ui.feedback.AppFeedback
+import moe.ouom.neriplayer.ui.screen.about.LocalAboutPageNavigator
 import moe.ouom.neriplayer.ui.screen.tab.settings.about.SettingsAboutPageContent
 import moe.ouom.neriplayer.ui.screen.tab.settings.appearance.SettingsUiStyleSelector
 import moe.ouom.neriplayer.ui.screen.tab.settings.appearance.SettingsNowPlayingStyleSelector
@@ -325,11 +326,25 @@ internal fun SettingsScreen(
             )
         }
     }
-    val settingsHomeContent: LazyListScope.() -> Unit = {
-        settingsHomePageItems(navigation)
+    // 关于页有独立路由（大 LOGO 折叠头），从设置首页点"关于"直接跳过去
+    val openStandaloneAboutPage = LocalAboutPageNavigator.current
+    val settingsPageNavigator: (SettingsPage) -> Unit = { page ->
+        if (page == SettingsPage.About && openStandaloneAboutPage != null) {
+            openStandaloneAboutPage()
+        } else {
+            navigation.activePage = page
+        }
     }
-
-    val settingsPageNavigator: (SettingsPage) -> Unit = { page -> navigation.activePage = page }
+    val settingsHomeContent: LazyListScope.() -> Unit = {
+        settingsHomePageItems(navigation) { page ->
+            // 返回 true 表示已跳独立路由，不再切内嵌子页
+            page == SettingsPage.About && openStandaloneAboutPage != null &&
+                run {
+                    openStandaloneAboutPage()
+                    true
+                }
+        }
+    }
     val settingsPageContent: @Composable (SettingsPage?) -> Unit = { requestedPage ->
         CompositionLocalProvider(LocalSettingsPageNavigator provides settingsPageNavigator) {
         SettingsPageScaffold(
@@ -1186,7 +1201,8 @@ internal fun SettingsScreen(
                                     devModeEnabled = appearanceState.theme.devModeEnabled,
                                     onDevModeChange = appearanceActions.onDevModeChange,
                                     onInlineMessageChange = { inlineMsg = UiText.Literal(it) },
-                                    onShowMessage = ::showSettingsMessage
+                                    onShowMessage = ::showSettingsMessage,
+                                    onOpenStandaloneAbout = openStandaloneAboutPage
                                 )
                             }
                         }

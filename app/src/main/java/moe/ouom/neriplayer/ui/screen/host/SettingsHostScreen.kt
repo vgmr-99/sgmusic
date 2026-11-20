@@ -35,17 +35,21 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.launch
 import moe.ouom.neriplayer.ui.settings.route.AppSettingsHostBindings
 import moe.ouom.neriplayer.ui.effect.glass.advancedGlassHostNavigationTransition
 import moe.ouom.neriplayer.ui.effect.glass.animateAdvancedGlassSceneMotion
 import moe.ouom.neriplayer.ui.screen.download.DownloadManagerScreen
 import moe.ouom.neriplayer.ui.screen.download.DownloadProgressScreen
 import moe.ouom.neriplayer.ui.screen.tab.settings.SettingsScreen
+import moe.ouom.neriplayer.ui.component.navigation.ReportBottomDockScroll
+import moe.ouom.neriplayer.ui.component.navigation.firstVisibleItemTopPx
 
 internal enum class SettingsScreenState {
     Settings,
@@ -117,6 +121,8 @@ internal fun SettingsHostScreen(
     var screenState by rememberSaveable { mutableStateOf(SettingsScreenState.Settings) }
     var requestedScreenState by rememberSaveable { mutableStateOf(SettingsScreenState.Settings) }
     val saveableStateHolder = rememberSaveableStateHolder()
+    // 底栏收紧成圆钮后，点它回到本页顶部
+    val dockScope = rememberCoroutineScope()
 
     // 保存设置页面的滚动状态，使用正确的Saver
     val listStateSaver: Saver<LazyListState, *> = LazyListState.Saver
@@ -241,6 +247,16 @@ internal fun SettingsHostScreen(
             ) {
                     saveableStateHolder.SaveableStateProvider(state.saveableKey()) {
                         val settingsPage: @Composable () -> Unit = {
+                            ReportBottomDockScroll(
+                                {
+                                    dockScope.launch { settingsListState.scrollToItem(0) }
+                                    dockScope.launch { downloadManagerListState.scrollToItem(0) }
+                                    dockScope.launch { downloadProgressListState.scrollToItem(0) }
+                                },
+                                { settingsListState.firstVisibleItemTopPx() },
+                                { downloadManagerListState.firstVisibleItemTopPx() },
+                                { downloadProgressListState.firstVisibleItemTopPx() }
+                            )
                             SettingsScreen(
                                 listState = settingsListState,
                                 bindings = bindings,

@@ -81,6 +81,8 @@ import moe.ouom.neriplayer.ui.viewmodel.tab.BiliPlaylist
 import moe.ouom.neriplayer.ui.viewmodel.tab.PlaylistSummary
 import moe.ouom.neriplayer.ui.viewmodel.tab.YouTubeMusicPlaylist
 import moe.ouom.neriplayer.util.media.CoverArtColorCache
+import moe.ouom.neriplayer.ui.component.navigation.ReportBottomDockScroll
+import moe.ouom.neriplayer.ui.component.navigation.firstVisibleItemTopPx
 
 // 探索页选中项
 internal sealed class ExploreSelectedItem {
@@ -342,6 +344,10 @@ fun ExploreHostScreen(
                                     detailCloseRootRevealFraction
                                 )
                         ) {
+                            ReportBottomDockScroll(
+                                { scope.launch { gridState.scrollToItem(0) } },
+                                { gridState.firstVisibleItemTopPx() }
+                            )
                             ExploreScreen(
                                 gridState = gridState,
                                 topAppBarState = topAppBarState,

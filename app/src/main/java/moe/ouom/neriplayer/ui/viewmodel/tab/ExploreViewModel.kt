@@ -137,6 +137,20 @@ internal fun exploreSourceSupports(source: SearchSource, capability: ExploreCapa
  */
 internal fun dedupeHotSearchEntries(entries: List<HotSearchEntry>): List<HotSearchEntry> =
     entries.distinctBy { "${it.source.name}|${it.title}" }
+
+/**
+ * 平台浏览卡片去重。
+ *
+ * 各家平台的浏览接口返回的是「推荐流」，同一个歌单 / 榜单可能在流里出现多次
+ * （汽水的场景歌单搜索最明显）。浏览页用「平台 + 卡片 id」当 LazyVerticalGrid 的 key，
+ * 重复 id 会让 Compose 抛 IllegalArgumentException —— 那是直接崩 App 的级别，
+ * 而且 App 崩完会进安全模式，用户根本不知道自己点了哪个平台。
+ *
+ * 这里在数据进 state 之前统一去重，UI 侧的 key 再带 index 做第二层保险。
+ */
+internal fun dedupePlatformBrowseCards(cards: List<PlatformBrowseCard>): List<PlatformBrowseCard> =
+    cards.distinctBy { "${it.provider.code}|${it.id}" }
+
 private const val PLATFORM_SEARCH_PAGE_SIZE = 20
 private const val YOUTUBE_MUSIC_SEARCH_LIMIT = 30
 private const val BILI_RESOURCE_TYPE_COLLECTION = 21
@@ -1058,13 +1072,15 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                 TAG,
                 "platform browse cache hit: $source/$realCategory cards=${cachedCards.size}"
             )
+            // 旧版本缓存里可能存着重复卡片（去重是后加的保险），这里再过一遍
+            val uniqueCachedCards = dedupePlatformBrowseCards(cachedCards)
             _uiState.value = _uiState.value.copy(
                 platformBrowseSource = source,
                 platformBrowseLoading = false,
                 platformBrowseError = null,
                 platformBrowseCategory = realCategory,
                 platformBrowseCategories = categories,
-                platformBrowseCards = cachedCards,
+                platformBrowseCards = uniqueCachedCards,
                 platformBrowseTracks = emptyList(),
                 platformBrowseTrackTitle = "",
                 platformBrowseTrackWebUrl = null,
@@ -1108,24 +1124,35 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                     )
                     return@launch
                 }
+                // 各家接口都可能返回重复卡片（推荐流里同一歌单出现多次）。
+                // 重复 id 会撞上界面侧 LazyVerticalGrid 的 key，
+                // Compose 抛 IllegalArgumentException 直接把 App 打死，
+                // 所以在数据进 state 之前统一按「平台 + 卡片 id」去重。
+                val uniqueCards = dedupePlatformBrowseCards(cards)
+                if (uniqueCards.size != cards.size) {
+                    NPLogger.w(
+                        TAG,
+                        "platform browse deduped: $source/$realCategory ${cards.size} -> ${uniqueCards.size}"
+                    )
+                }
                 // 空结果不写缓存：接口偶发返回空（随机 device_id 被风控）时，
                 // 缓存下来会让用户在 TTL 内一直看到空页，重试也没用
-                if (cards.isNotEmpty()) {
+                if (uniqueCards.isNotEmpty()) {
                     platformBrowseCache[cacheKey] = PlatformBrowseCacheEntry(
                         timestamp = System.currentTimeMillis(),
-                        cards = cards
+                        cards = uniqueCards
                     )
                 }
                 NPLogger.d(
                     TAG,
-                    "platform browse ready: $source/$realCategory cards=${cards.size} in ${System.currentTimeMillis() - startedAt}ms"
+                    "platform browse ready: $source/$realCategory cards=${uniqueCards.size} in ${System.currentTimeMillis() - startedAt}ms"
                 )
                 _uiState.value = _uiState.value.copy(
                     platformBrowseSource = source,
                     platformBrowseLoading = false,
                     platformBrowseError = null,
                     platformBrowseCategory = realCategory,
-                    platformBrowseCards = cards
+                    platformBrowseCards = uniqueCards
                 )
             } catch (e: CancellationException) {
                 throw e

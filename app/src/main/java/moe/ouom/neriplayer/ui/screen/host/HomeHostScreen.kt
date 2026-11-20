@@ -93,6 +93,8 @@ import moe.ouom.neriplayer.ui.util.savedNonBlankString
 import moe.ouom.neriplayer.ui.util.savedNumber
 import moe.ouom.neriplayer.ui.util.toSaveMap
 import moe.ouom.neriplayer.util.media.CoverArtColorCache
+import moe.ouom.neriplayer.ui.component.navigation.ReportBottomDockScroll
+import moe.ouom.neriplayer.ui.component.navigation.firstVisibleItemTopPx
 
 // 用密封类承载四种目标
 internal sealed class HomeSelectedItem {
@@ -412,6 +414,10 @@ fun HomeHostScreen(
                                     detailCloseRootRevealFraction
                                 )
                         ) {
+                            ReportBottomDockScroll(
+                                { scope.launch { gridState.scrollToItem(0) } },
+                                { gridState.firstVisibleItemTopPx() }
+                            )
                             HomeScreen(
                                 showContinueCard = showContinueCard,
                                 showTrendingCard = showTrendingCard,

@@ -3,12 +3,14 @@ package moe.ouom.neriplayer.ui.settings.route
 import android.app.Application
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import moe.ouom.neriplayer.core.di.AppContainer
 import moe.ouom.neriplayer.data.model.settings.playback.PlaybackPreferenceSnapshot
 import moe.ouom.neriplayer.data.settings.SettingsRepository
 import moe.ouom.neriplayer.data.model.settings.appearance.ThemePreferenceSnapshot
+import moe.ouom.neriplayer.ui.screen.about.LocalAboutPageNavigator
 import moe.ouom.neriplayer.ui.screen.host.SettingsHostScreen
 
 @Composable
@@ -20,6 +22,7 @@ internal fun AppSettingsRoute(
     environment: AppSettingsHostEnvironment,
     onBackgroundImageAlphaPreview: (Float) -> Unit,
     snackbarHostState: SnackbarHostState,
+    onOpenStandaloneAbout: () -> Unit,
     renderScene: @Composable (Float, Float, Float, Int, @Composable () -> Unit) -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -34,6 +37,11 @@ internal fun AppSettingsRoute(
     val currentQqOffset = rememberUpdatedState(
         settingsState.lyrics.lyricOffsets.qqMusicLyricDefaultOffsetMs
     )
+    // 设置页是主 Tab 的独立渲染路径，不在 NavHost 里，
+    // 所以关于页的跳转回调要在这里单独提供
+    CompositionLocalProvider(
+        LocalAboutPageNavigator provides onOpenStandaloneAbout
+    ) {
     SettingsHostScreen(
         bindings = AppSettingsHostBindings(
             repository = repo,
@@ -59,4 +67,5 @@ internal fun AppSettingsRoute(
         ),
         renderScene = renderScene
     )
+    }
 }

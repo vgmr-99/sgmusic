@@ -1,5 +1,19 @@
 package moe.ouom.neriplayer.ui.navigation
 
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.width
+import moe.ouom.neriplayer.ui.component.navigation.CompactDockButton
+import moe.ouom.neriplayer.ui.component.navigation.CompactDockButtonGap
+import moe.ouom.neriplayer.ui.component.navigation.CompactDockButtonSize
+import moe.ouom.neriplayer.ui.component.navigation.DockBarBottomMargin
+import moe.ouom.neriplayer.ui.component.navigation.DockBarHorizontalMargin
+import moe.ouom.neriplayer.ui.component.navigation.LocalBottomDockProgress
+import moe.ouom.neriplayer.ui.component.navigation.navCompactProgress
 import moe.ouom.neriplayer.ui.theme.NeriDesign
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -59,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hierarchy
 import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.core.download.processing.ManagedLibraryProcessingCoordinator
 import moe.ouom.neriplayer.core.download.ManagedDownloadStorage
@@ -66,12 +81,18 @@ import moe.ouom.neriplayer.core.player.PlayerManager
 import moe.ouom.neriplayer.data.local.media.displayArtist
 import moe.ouom.neriplayer.data.local.media.displayName
 import moe.ouom.neriplayer.navigation.Destinations
+import moe.ouom.neriplayer.ui.component.navigation.BottomDockMode
+import moe.ouom.neriplayer.ui.component.navigation.BottomDockScrollReporter
+import moe.ouom.neriplayer.ui.component.navigation.DefaultBottomDockCompactThreshold
+import moe.ouom.neriplayer.ui.component.navigation.LocalBottomDockMode
+import moe.ouom.neriplayer.ui.component.navigation.LocalBottomDockScrollReporter
 import moe.ouom.neriplayer.ui.component.navigation.NeriBottomBar
 import moe.ouom.neriplayer.ui.component.navigation.resolveBottomBarSelectionAlpha
 import moe.ouom.neriplayer.ui.component.playback.NeriMiniPlayer
 import moe.ouom.neriplayer.ui.component.playback.NeriMiniPlayerDefaults
 import moe.ouom.neriplayer.ui.component.playback.MiniPlayerTabletControls
 import moe.ouom.neriplayer.ui.component.playback.resolvePlaybackWaiting
+import moe.ouom.neriplayer.ui.theme.NeriMotion
 import moe.ouom.neriplayer.util.platform.PHONE_SMALLEST_SCREEN_WIDTH_DP
 import moe.ouom.neriplayer.ui.effect.glass.LocalAdvancedGlassBackdrops
 import moe.ouom.neriplayer.ui.effect.glass.captureAdvancedGlassBackdrop
@@ -145,6 +166,27 @@ internal fun appSnackbarStartInset(useNavigationRail: Boolean, playbackOverlayVi
 private fun positiveBottomBarHeight(nextHeight: Int, previousHeight: Int): Int =
     if (nextHeight > 0) nextHeight else previousHeight
 
+/**
+ * 收紧态播放栏的槽位底边（距离屏幕底部）。
+ *
+ * 收紧后播放栏要下移到导航栏那一行，玻璃面的底边和右侧那颗圆钮的底边齐平。
+ * 圆钮在 clean 风格下就是底栏胶囊收成的圆钮，它的底边 =
+ * 系统导航栏内边距 + 底栏下边距。
+ */
+internal fun resolveCompactMiniPlayerBottomPadding(
+    navigationBarInset: Dp,
+    cleanStyle: Boolean
+): Dp = if (cleanStyle) {
+    navigationBarInset + DockBarBottomMargin
+} else {
+    // Material 风格底栏是贴着屏幕底部的 80dp 长条，圆钮居中放在里面
+    (80.dp - CompactDockButtonSize) / 2
+}
+
+/** 收紧态右侧圆钮占掉的位置：播放栏收窄这么多，正好停在圆钮左边。 */
+internal fun compactDockReservedWidth(progress: Float): Dp =
+    (CompactDockButtonSize + CompactDockButtonGap) * progress.coerceIn(0f, 1f)
+
 @Composable
 internal fun AppNavigationScaffold(
     bottomBar: AppBottomBarPresentation,
@@ -160,12 +202,36 @@ internal fun AppNavigationScaffold(
     val dragBoundsOwner = remember { AppDragBoundsOwner() }
     val yieldsToIme = cleanFloatingChromeYieldsToIme()
     val miniPlayerReservesSpace = miniPlayer.hasSong && !yieldsToIme
+    // 底部两栏形态：页面向下滚动后收紧，回到顶部再展开。两栏读同一个状态，不会各动各的。
+    var bottomDockProgress by remember { mutableStateOf(0f) }
+    val density = LocalDensity.current
+    val compactThresholdPx = with(density) { DefaultBottomDockCompactThreshold.toPx() }.toInt()
+    val dockScrollReporter = remember(compactThresholdPx) {
+        BottomDockScrollReporter(
+            thresholdPx = compactThresholdPx,
+            onProgressChanged = { bottomDockProgress = it }
+        )
+    }
     val reservedMiniPlayerHeight = reservedMiniPlayerHeight(
         miniPlayerReservesSpace,
         bottomBar.showNowPlaying,
         configuration.smallestScreenWidthDp
     )
-    CompositionLocalProvider(LocalMiniPlayerHeight provides reservedMiniPlayerHeight) {
+    // 当前标签（收紧后底栏会收成它的一颗圆钮）
+    val currentTabEntry = bottomBar.items.firstOrNull { (dest, _) ->
+        bottomBar.currentDestination?.hierarchy?.any { it.route == dest.route } == true
+    }
+
+    CompositionLocalProvider(
+        LocalMiniPlayerHeight provides reservedMiniPlayerHeight,
+        LocalBottomDockProgress provides bottomDockProgress,
+        LocalBottomDockMode provides if (bottomDockProgress >= 0.5f) {
+            BottomDockMode.COMPACT
+        } else {
+            BottomDockMode.EXPANDED
+        },
+        LocalBottomDockScrollReporter provides dockScrollReporter
+    ) {
         AppFeedbackHostEffect(snackbarHostState)
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val useNavigationRail = shouldUseAppNavigationRail(configuration.smallestScreenWidthDp, maxWidth)
@@ -185,6 +251,7 @@ internal fun AppNavigationScaffold(
                     if (!useNavigationRail) {
                         AppScaffoldBottomBar(
                             bottomBar = bottomBar,
+                            compactTab = currentTabEntry,
                             yieldsToIme = yieldsToIme,
                             onMainTabSelected = onMainTabSelected,
                             onTabBarBoundsChanged = dragBoundsOwner::updateTabBarBounds
@@ -272,6 +339,7 @@ private fun Modifier.collapseBottomBarSlot(collapsed: Boolean): Modifier = layou
 @Composable
 private fun AppScaffoldBottomBar(
     bottomBar: AppBottomBarPresentation,
+    compactTab: Pair<Destinations, ImageVector>?,
     yieldsToIme: Boolean,
     onMainTabSelected: (String) -> Unit,
     onTabBarBoundsChanged: (Rect) -> Unit
@@ -294,6 +362,18 @@ private fun AppScaffoldBottomBar(
         hasCustomBackground = bottomBar.hasCustomBackground,
         alwaysUseNewTabStyle = bottomBar.alwaysUseNewTabStyle
     )
+    // 收紧进度：导航栏收成右侧一颗圆钮。
+    // clean 风格由底栏自己收（胶囊横向缩成圆钮），Material 风格整条淡出，
+    // 由这里单独画一颗圆钮补位——它和底栏同在 bottomBar 槽位里，
+    // 层级在播放栏之上，点它不会被下面的标签截走（之前会跳到设置页）。
+    val dockProgress by animateFloatAsState(
+        targetValue = LocalBottomDockProgress.current,
+        animationSpec = NeriMotion.smooth(),
+        label = "bottom_bar_compact_button_progress"
+    )
+    val navProgress = navCompactProgress(dockProgress)
+    val buttonFade = ((navProgress - 0.3f) / 0.45f).coerceIn(0f, 1f)
+    val dockReporter = LocalBottomDockScrollReporter.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -340,6 +420,23 @@ private fun AppScaffoldBottomBar(
                 items = bottomBar.items,
                 currentDestination = bottomBar.currentDestination,
                 onItemSelected = { onMainTabSelected(it.route) }
+            )
+        }
+
+        // Material 风格：底栏整条淡出，右侧补一颗当前标签的圆钮。
+        // clean 风格的圆钮是底栏胶囊自己收出来的，这里不用再画一颗。
+        if (!NeriDesign.isClean && compactTab != null) {
+            CompactDockButton(
+                destination = compactTab.first,
+                icon = compactTab.second,
+                onClick = { dockReporter?.requestScrollToTop() },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        end = DockBarHorizontalMargin,
+                        bottom = (80.dp - CompactDockButtonSize) / 2
+                    )
+                    .graphicsLayer { alpha = buttonFade }
             )
         }
     }
@@ -518,13 +615,66 @@ private fun AppMiniPlayerOverlay(
         offlineMode = offlineMode,
         onOpenCurrentPlaybackSource = onOpenCurrentPlaybackSource
     )
-    Box(modifier = Modifier.fillMaxSize()) {
-        AnimatedVisibility(
-            visible = miniPlayerVisible,
+    // 收紧态：底栏收成右侧一颗圆钮，播放栏下移到底栏那一行并收窄。
+    //
+    // 两者读同一个进度（导航栏收紧的那一段），所以动作是同步的：
+    //  · 展开态：播放栏在导航栏正上方，宽度和导航栏一样；
+    //  · 收紧态：导航栏收成圆钮停在右边，播放栏下移到同一行，宽度让出圆钮的位置。
+    val dockProgress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = LocalBottomDockProgress.current,
+        animationSpec = NeriMotion.smooth(),
+        label = "mini_player_overlay_dock_progress"
+    )
+    val navProgress = navCompactProgress(dockProgress)
+    val navBottomInset = WindowInsets.navigationBars
+        .asPaddingValues()
+        .calculateBottomPadding()
+    // 展开态：播放栏的槽位底边停在导航栏顶边再高一点的位置，
+    // 两者之间留出一小段缝（播放栏玻璃面和导航栏胶囊不贴在一起）。
+    val miniPlayerBottomGap = if (NeriDesign.isClean) {
+        NeriMiniPlayerDefaults.SurfaceBottomGap
+    } else {
+        0.dp
+    }
+    val expandedBottomPadding = bottomPadding + miniPlayerBottomGap
+    // 收紧后播放栏的槽位底边：和右侧那颗圆钮的底边齐平。
+    // 不能比展开态还高（那会让播放栏往上跳），所以取两者的较小值。
+    val compactBottomPadding = minOf(
+        resolveCompactMiniPlayerBottomPadding(
+            navigationBarInset = navBottomInset,
+            cleanStyle = NeriDesign.isClean
+        ),
+        expandedBottomPadding
+    )
+    val effectiveBottomPadding = expandedBottomPadding +
+        (compactBottomPadding - expandedBottomPadding) * navProgress
+    // 右侧给圆钮留出来的位置
+    val reservedForDockButton = compactDockReservedWidth(navProgress)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            // 底栏在 Scaffold 里的层级更高，不提上来的话点击会穿透到它的标签上
+            .zIndex(1f)
+    ) {
+        Row(
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(bottom = bottomPadding)
-                .zIndex(MINI_PLAYER_OVERLAY_Z_INDEX),
+                // 播放栏贴在屏幕底部（再按底距抬起来），不是顶部
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                // 和导航栏胶囊用同一套左右边距，两者的玻璃面才真正一样宽
+                .padding(
+                    start = DockBarHorizontalMargin,
+                    end = DockBarHorizontalMargin,
+                    bottom = effectiveBottomPadding
+                ),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            AnimatedVisibility(
+                visible = miniPlayerVisible,
+                modifier = Modifier
+                    .weight(1f)
+                    .zIndex(MINI_PLAYER_OVERLAY_Z_INDEX),
             enter = slideInVertically(
                 animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
                 initialOffsetY = { it / 2 }
@@ -563,6 +713,12 @@ private fun AppMiniPlayerOverlay(
                 isAudioRouteMuted = controls.routeMuted,
                 tabletControls = tabletControls
             )
+            }
+
+            // 右侧圆钮占位：播放栏收窄这么多，正好停在圆钮左边。
+            // 圆钮本身在底栏那一层（Scaffold 的 bottomBar 槽位），
+            // 层级在播放栏之上，点它不会被下面的标签截走。
+            Spacer(modifier = Modifier.width(reservedForDockButton))
         }
     }
 }

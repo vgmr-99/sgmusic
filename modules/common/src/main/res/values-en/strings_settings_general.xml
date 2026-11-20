@@ -405,4 +405,5 @@
     <string name="settings_github_fork_url">github.com/vgmr-99/sgmusic</string>
     <string name="settings_github_upstream_title">Upstream repo (Timbre)</string>
     <string name="settings_github_fork_title">This repo (Timbre)</string>
+    <string name="settings_about_repo_address">Repository</string>
 </resources>

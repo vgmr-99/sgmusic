@@ -96,7 +96,11 @@ class QishuiBrowseApi(
                         )
                     )
                 }
-            }
+            // 汽水的搜索结果是一条混合推荐流，同一个歌单可能在多个位置重复出现。
+            // 重复的 id 会让界面侧 LazyVerticalGrid 的 key 冲突，
+            // Compose 直接抛 IllegalArgumentException 把 App 打死，
+            // 所以这里按 id 去重（与 Mint 各源的做法一致）。
+            }.distinctBy { it.id }
         }
 
     /**

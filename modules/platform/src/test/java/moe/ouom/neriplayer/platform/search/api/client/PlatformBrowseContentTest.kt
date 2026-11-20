@@ -181,6 +181,25 @@ class PlatformBrowseContentTest {
     }
 
     @Test
+    fun `qishui duplicate playlists are deduped`() = runTest {
+        // 汽水的场景歌单搜索返回的是推荐流，同一个歌单会在流里出现多次。
+        // 重复 id 会撞上界面侧 LazyVerticalGrid 的 key，Compose 抛
+        // IllegalArgumentException 直接崩 App，所以这里必须去重。
+        responseBody = """
+            {"result_groups":[{"id":"playlists","data":[
+              {"entity":{"playlist":{"id":"7429294603956600867","title":"伤感emo歌曲合集","count_tracks":75}}},
+              {"entity":{"playlist":{"id":"7429294603956600867","title":"伤感emo歌曲合集","count_tracks":75}}},
+              {"entity":{"playlist":{"id":"7429294603956600868","title":"深夜电台","count_tracks":30}}}
+            ]}]}
+        """.trimIndent()
+
+        val cards = QishuiBrowseApi(client).browse("伤感")
+
+        assertEquals(2, cards.size)
+        assertEquals(listOf("qs_7429294603956600867", "qs_7429294603956600868"), cards.map { it.id })
+    }
+
+    @Test
     fun `migu playlist square marks the playlist nodes`() = runTest {
         responseBody = """
             {"code":"000000","data":{"contents":[

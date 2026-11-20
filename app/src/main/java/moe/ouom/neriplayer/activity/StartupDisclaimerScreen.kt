@@ -141,7 +141,7 @@ internal fun StartupDisclaimerContent(
 }
 
 @Composable
-private fun DisclaimerHeader() {
+internal fun DisclaimerHeader() {
     val colors = MaterialTheme.colorScheme
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -184,7 +184,7 @@ private fun DisclaimerHeader() {
 }
 
 @Composable
-private fun DisclaimerFact(
+internal fun DisclaimerFact(
     icon: ImageVector,
     title: String,
     body: String
@@ -224,7 +224,7 @@ private fun DisclaimerFact(
 }
 
 @Composable
-private fun DisclaimerDetails() {
+internal fun DisclaimerDetails() {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         DisclaimerDetailSection(
             title = stringResource(AppR.string.disclaimer_section1_title),
@@ -293,7 +293,7 @@ private fun DisclaimerDetails() {
 }
 
 @Composable
-private fun DisclaimerDetailSection(title: String, lines: List<String>) {
+internal fun DisclaimerDetailSection(title: String, lines: List<String>) {
     val colors = MaterialTheme.colorScheme
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.6f))

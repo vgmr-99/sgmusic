@@ -135,6 +135,7 @@ import moe.ouom.neriplayer.ui.effect.glass.rememberAdvancedGlassBackdrop
 import moe.ouom.neriplayer.ui.feedback.AppFeedback
 import moe.ouom.neriplayer.ui.screen.nowplaying.NowPlayingScreen
 import moe.ouom.neriplayer.ui.screen.debug.DebugHomeScreen
+import moe.ouom.neriplayer.ui.screen.about.LocalAboutPageNavigator
 import moe.ouom.neriplayer.ui.screen.host.ExploreHostScreen
 import moe.ouom.neriplayer.ui.screen.host.HomeHostScreen
 import moe.ouom.neriplayer.ui.screen.host.LibraryHostScreen
@@ -1598,6 +1599,8 @@ private fun NeriAppContent(
                 }
                 val settingsContent: @Composable () -> Unit = {
                     AppSettingsRoute(
+                        // 设置页不走 NavHost，关于页跳转回调由 AppSettingsRoute 注入
+                        onOpenStandaloneAbout = { navController.navigate(Destinations.About.route) { launchSingleTop = true } },
                         repo = repo,
                         application = AppContainer.applicationContext,
                         initialThemeSnapshot = initialThemeSnapshot,
@@ -1793,6 +1796,11 @@ private fun NeriAppContent(
                                 )
                             ) {
                                 PredictiveBackPreviewGate(previewEnabled = predictiveBackPreviewEnabled) {
+                                CompositionLocalProvider(
+                                    LocalAboutPageNavigator provides {
+                                        navController.navigate(Destinations.About.route) { launchSingleTop = true }
+                                    }
+                                ) {
                                 AppNavigationGraph(
                                     owner = AppNavigationGraphOwner(
                                         navController = navController,
@@ -1821,6 +1829,7 @@ private fun NeriAppContent(
                                         )
                                     )
                                 )
+                                }
                                 }
                             }
                             MainTabPredictiveBackHandler(

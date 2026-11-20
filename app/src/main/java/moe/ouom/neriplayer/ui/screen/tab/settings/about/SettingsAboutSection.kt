@@ -98,9 +98,10 @@ internal fun SettingsAboutContent(
     onOpenGitHubRepo: () -> Unit,
     onOpenUpstreamGitHubRepo: () -> Unit = onOpenGitHubRepo,
     onOpenForkGitHubRepo: () -> Unit = onOpenGitHubRepo,
-    onOpenDisclaimer: () -> Unit = {}
+    onOpenDisclaimer: () -> Unit = {},
+    onOpenStandaloneAbout: (() -> Unit)? = null
 ) {
-    SettingsAboutIntroItem()
+    SettingsAboutIntroItem(onOpenStandaloneAbout)
     SettingsBuildUuidItem(onCopyValue)
     SettingsVersionItem(
         devModeEnabled = devModeEnabled,
@@ -118,8 +119,11 @@ internal fun SettingsAboutContent(
 }
 
 @Composable
-private fun SettingsAboutIntroItem() {
+private fun SettingsAboutIntroItem(onOpenStandaloneAbout: (() -> Unit)? = null) {
     ListItem(
+        modifier = androidx.compose.ui.Modifier.settingsItemClickable {
+            onOpenStandaloneAbout?.invoke()
+        },
         leadingContent = {
             Icon(
                 imageVector = Icons.Outlined.Info,

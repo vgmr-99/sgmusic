@@ -108,6 +108,8 @@ import moe.ouom.neriplayer.platform.subsonic.repository.ServerArtist as MusicSer
 import moe.ouom.neriplayer.ui.screen.server.album.ServerAlbumDetailScreen
 import moe.ouom.neriplayer.ui.screen.server.artist.ServerArtistDetailScreen
 import moe.ouom.neriplayer.ui.screen.server.artist.serverArtistDetailKey
+import moe.ouom.neriplayer.ui.component.navigation.ReportBottomDockScroll
+import moe.ouom.neriplayer.ui.component.navigation.firstVisibleItemTopPx
 
 @Parcelize
 sealed class LibrarySelectedItem : Parcelable {
@@ -570,7 +572,27 @@ fun LibraryHostScreen(
                                 )
                         ) {
                             libraryStateHolder.SaveableStateProvider("library_screen") {
-                                LibraryScreen(
+                                ReportBottomDockScroll(
+                                {
+                                    // 各个 tab 各有各的列表，全都回到顶部，
+                                    // 用户停在哪个 tab 就把哪个滚回去
+                                    scope.launch { localListState.scrollToItem(0) }
+                                    scope.launch { favoriteListState.scrollToItem(0) }
+                                    scope.launch { neteaseListState.scrollToItem(0) }
+                                    scope.launch { neteaseAlbumState.scrollToItem(0) }
+                                    scope.launch { youtubeMusicListState.scrollToItem(0) }
+                                    scope.launch { biliListState.scrollToItem(0) }
+                                    scope.launch { qqMusicListState.scrollToItem(0) }
+                                },
+                                { localListState.firstVisibleItemTopPx() },
+                                { favoriteListState.firstVisibleItemTopPx() },
+                                { neteaseListState.firstVisibleItemTopPx() },
+                                { neteaseAlbumState.firstVisibleItemTopPx() },
+                                { youtubeMusicListState.firstVisibleItemTopPx() },
+                                { biliListState.firstVisibleItemTopPx() },
+                                { qqMusicListState.firstVisibleItemTopPx() }
+                            )
+                            LibraryScreen(
                             initialTab = selectedTab,
                             onTabChange = { selectedTab = it },
                             localListState = localListState,

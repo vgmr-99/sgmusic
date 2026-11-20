@@ -86,6 +86,8 @@ internal fun AdvancedGlassSurface(
     modifier: Modifier = Modifier,
     shape: Shape = RectangleShape,
     fallbackColor: Color = Color.Transparent,
+    /** 始终画在玻璃层下面的底色。与玻璃主体共用同一个 shape 裁剪。 */
+    baseColor: Color = Color.Transparent,
     tintColor: Color = Color.Unspecified,
     enabled: Boolean = true,
     suppressInactiveNavigationSurface: Boolean = false,
@@ -216,6 +218,19 @@ internal fun AdvancedGlassSurface(
             .clip(shape)
             .then(regionRegistrationModifier)
     ) {
+        // 底色层：始终画在玻璃层下面。
+        //
+        // 之前的实现里 fallbackColor 只在"没有背景采样"时才用，一旦玻璃生效，
+        // 颜色就完全来自 tintColor，而它还会被 tokens.tintAlpha 再乘一次——
+        // 于是调用方即使传了不透明底色，实际也会被乘到接近全透明，
+        // 浮在内容上的独立圆钮（底栏收紧态）就会把后面的内容透过来。
+        //
+        // 这里对齐 miuix 上游 glassPanel 的做法：fallback = clip(shape).background(底色)，
+        // 底色与玻璃主体共用同一个 shape，圆角轮廓同时作用于两层。
+        if (baseColor != Color.Transparent) {
+            GlassColorLayer(shape = shape, color = baseColor)
+        }
+
         if (glassEnabled) {
             GlassColorLayer(
                 shape = shape,

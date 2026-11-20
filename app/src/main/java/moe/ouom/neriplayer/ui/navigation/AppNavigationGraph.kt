@@ -26,6 +26,7 @@ import moe.ouom.neriplayer.ui.screen.download.DownloadProgressScreen
 import moe.ouom.neriplayer.ui.screen.history.RecentScreen
 import moe.ouom.neriplayer.ui.screen.history.stats.PlaybackStatsScreen
 import moe.ouom.neriplayer.ui.screen.history.stats.WrappedScreen
+import moe.ouom.neriplayer.ui.screen.about.AboutScreen
 import moe.ouom.neriplayer.ui.screen.debug.BiliApiProbeScreen
 import moe.ouom.neriplayer.ui.screen.debug.CrashLogListScreen
 import moe.ouom.neriplayer.ui.screen.debug.ListenTogetherDebugScreen
@@ -719,6 +720,27 @@ private fun NavGraphBuilder.registerLibraryDetailRoutes(
             )
         }
     }
+
+    composable(
+        route = Destinations.About.route,
+        enterTransition = {
+            transparentDetailEnterTransition(coherentFeedbackEnabled)
+        },
+        exitTransition = {
+            transparentDetailExitTransition(coherentFeedbackEnabled)
+        },
+        popEnterTransition = {
+            transparentDetailPopEnterTransition(coherentFeedbackEnabled)
+        },
+        popExitTransition = {
+            transparentDetailPopExitTransition(coherentFeedbackEnabled)
+        }
+    ) {
+        renderScene(Destinations.About.route) {
+            AboutScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }    }
 
 }
 

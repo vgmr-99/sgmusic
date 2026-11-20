@@ -51,6 +51,13 @@ sealed class Destinations(val route: String, val labelResId: Int) {
             get() = ROUTE
     }
 
+    /** 关于页：大 LOGO 折叠头 */
+    object About {
+        const val ROUTE = "about"
+        val route: String
+            get() = ROUTE
+    }
+
     // DEBUG
     data object Debug : Destinations("debug", AppR.string.nav_debug)
     data object DebugListenTogether : Destinations("debug/listen_together", moe.ouom.neriplayer.common.R.string.listen_together_title)

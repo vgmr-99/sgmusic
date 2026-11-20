@@ -83,7 +83,8 @@ internal fun SettingsAboutPageContent(
     devModeEnabled: Boolean,
     onDevModeChange: (Boolean) -> Unit,
     onInlineMessageChange: (String) -> Unit,
-    onShowMessage: (String) -> Unit
+    onShowMessage: (String) -> Unit,
+    onOpenStandaloneAbout: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -105,7 +106,8 @@ internal fun SettingsAboutPageContent(
         onOpenGitHubRepo = actions::onOpenGitHubRepo,
         onOpenUpstreamGitHubRepo = actions::onOpenUpstreamGitHubRepo,
         onOpenForkGitHubRepo = actions::onOpenForkGitHubRepo,
-        onOpenDisclaimer = { disclaimerState.value = true }
+        onOpenDisclaimer = { disclaimerState.value = true },
+        onOpenStandaloneAbout = onOpenStandaloneAbout
     )
     if (disclaimerState.value) {
         SettingsDisclaimerDialog(onDismiss = { disclaimerState.value = false })
