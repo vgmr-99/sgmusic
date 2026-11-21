@@ -57,7 +57,12 @@ internal suspend fun resolveBackgroundOriginal(
 ): List<LyricEntry> {
     val song = inputs.song
     song.confirmedLyricFor(ManagedLyricVariant.ORIGINAL)?.let { return parseAvailableLyric(it) }
-    if (song?.isLocalSong() == true) return resolveLocalOriginal(inputs, raw)
+    if (song?.isLocalSong() == true) {
+        // 内嵌/侧载歌词优先；本地没有歌词时再走在线匹配。
+        val local = resolveLocalOriginal(inputs, raw)
+        if (local.isNotEmpty()) return local
+        return resolveMissingRemoteOriginal(inputs, sources)
+    }
     return resolveRemoteOriginal(inputs, raw, sources)
 }
 
@@ -171,7 +176,6 @@ private suspend fun readOnlineTranslationUnlessLocal(
     sources: NowPlayingLyricsSources
 ): List<LyricEntry> {
     val song = inputs.song ?: return emptyList()
-    if (song.isLocalSong()) return emptyList()
     return sources.onlineTranslated(song)
 }
 
@@ -218,7 +222,7 @@ private suspend fun readOnlinePhoneticUnlessLocal(
     song: SongItem?,
     sources: NowPlayingLyricsSources
 ): List<LyricEntry> {
-    if (song == null || song.isLocalSong()) return emptyList()
+    if (song == null) return emptyList()
     return sources.onlineRomanized(song)
 }
 

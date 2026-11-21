@@ -72,8 +72,14 @@ fun deriveCodecLabel(mimeType: String?): String? {
 
     return when (normalizedMimeType) {
         "audio/flac" -> "FLAC"
+        "audio/ac3" -> "AC-3"
         "audio/eac3",
         "audio/e-ac-3" -> "E-AC-3"
+        "audio/eac3-joc" -> "E-AC-3 JOC"
+        "audio/true-hd" -> "TRUEHD"
+        "audio/vnd.dts" -> "DTS"
+        "audio/vnd.dts.hd" -> "DTS-HD"
+        "audio/vorbis" -> "VORBIS"
         "audio/mp4",
         "audio/m4a",
         "audio/aac" -> "AAC"

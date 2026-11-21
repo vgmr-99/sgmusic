@@ -8,5 +8,8 @@ const val METADATA_SUFFIX = ".npmeta.json"
 const val PENDING_METADATA_SUFFIX = ".npmeta.pending.json"
 // Provider 在批内串行删除，小批次才能及时确认进度并让空闲 worker 接续工作
 const val SAF_REFERENCE_DELETE_BATCH_SIZE = 16
-val audioExtensions = setOf("mp3", "m4a", "aac", "flac", "wav", "ogg", "webm", "eac3")
+val audioExtensions = setOf(
+    "mp3", "m4a", "aac", "flac", "wav", "ogg", "webm",
+    "ac3", "eac3", "thd", "dts", "dtshd"
+)
 val imageExtensions = setOf("jpg", "jpeg", "png", "webp")

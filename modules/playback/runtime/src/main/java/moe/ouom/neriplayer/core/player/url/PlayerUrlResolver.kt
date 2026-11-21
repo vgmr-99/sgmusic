@@ -116,6 +116,11 @@ internal fun normalizeNeteaseMimeType(type: String?): String? {
         "mp3" -> "audio/mpeg"
         "aac" -> "audio/aac"
         "m4a", "mp4" -> "audio/mp4"
+        "ac3" -> "audio/ac3"
+        "eac3" -> "audio/eac3"
+        "truehd" -> "audio/true-hd"
+        "dts" -> "audio/vnd.dts"
+        "vorbis" -> "audio/vorbis"
         else -> if (normalizedType.contains('/')) normalizedType else "audio/$normalizedType"
     }
 }

@@ -73,6 +73,11 @@
     <string name="lx_script_import_confirm_warning">脚本由第三方提供，导入后会在应用内执行并用于解析播放地址。请确认来源可信。</string>
     <string name="lx_script_import_confirm_import">导入</string>
     <string name="settings_lx_delete">删除脚本</string>
+    <string name="settings_lx_remark_action">编辑备注</string>
+    <string name="settings_lx_remark_title">编辑脚本备注</string>
+    <string name="settings_lx_remark_hint">备注名称（用于分类，留空则显示文件名）</string>
+    <string name="settings_lx_remark_file">脚本文件：%1$s</string>
+    <string name="settings_lx_remark_save">保存</string>
     <string name="settings_lx_empty">尚未导入任何脚本。兜底链当前休眠。</string>
     <string name="settings_lx_state_ok">已就绪</string>
     <string name="settings_lx_state_fail">初始化失败</string>

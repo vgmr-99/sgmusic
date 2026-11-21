@@ -28,8 +28,14 @@ internal fun subsonicAudioMetadata(json: JSONObject): SubsonicAudioMetadata {
         "m4a", "mp4" -> "audio/mp4"
         "aac" -> "audio/aac"
         "ogg", "oga", "opus" -> "audio/ogg"
+        "vorbis" -> "audio/vorbis"
         "wav" -> "audio/wav"
         "aiff", "aif" -> "audio/aiff"
+        "ac3" -> "audio/ac3"
+        "eac3" -> "audio/eac3"
+        "thd", "truehd" -> "audio/true-hd"
+        "dts" -> "audio/vnd.dts"
+        "dtshd", "dts-hd" -> "audio/vnd.dts.hd"
         else -> null
     }
     return SubsonicAudioMetadata(

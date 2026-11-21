@@ -10,15 +10,26 @@ import org.junit.Test
 class FfmpegPreferredMediaCodecSelectorTest {
 
     @Test
-    fun `FFmpeg preferred lossless formats do not query platform decoders`() {
+    fun `FFmpeg preferred formats do not query platform decoders`() {
         val delegate = RecordingMediaCodecSelector()
         val selector = FfmpegPreferredMediaCodecSelector(
             delegate = delegate,
             ffmpegPreferredMimeTypes = FFMPEG_PREFERRED_AUDIO_MIME_TYPES.toSet()
         )
 
-        assertTrue(selector.getDecoderInfos(MimeTypes.AUDIO_FLAC, false, false).isEmpty())
-        assertTrue(selector.getDecoderInfos(MimeTypes.AUDIO_ALAC, false, false).isEmpty())
+        listOf(
+            MimeTypes.AUDIO_FLAC,
+            MimeTypes.AUDIO_ALAC,
+            MimeTypes.AUDIO_AC3,
+            MimeTypes.AUDIO_E_AC3,
+            MimeTypes.AUDIO_E_AC3_JOC,
+            MimeTypes.AUDIO_TRUEHD,
+            MimeTypes.AUDIO_DTS,
+            MimeTypes.AUDIO_DTS_HD,
+            MimeTypes.AUDIO_VORBIS
+        ).forEach { mimeType ->
+            assertTrue(mimeType, selector.getDecoderInfos(mimeType, false, false).isEmpty())
+        }
         assertTrue(selector.getDecoderInfos("AUDIO/ALAC", false, false).isEmpty())
         assertTrue(delegate.requests.isEmpty())
     }
@@ -49,11 +60,15 @@ class FfmpegPreferredMediaCodecSelectorTest {
 
         selector.getDecoderInfos(MimeTypes.AUDIO_MPEG, false, true)
         selector.getDecoderInfos(MimeTypes.AUDIO_AAC, false, false)
+        selector.getDecoderInfos(MimeTypes.AUDIO_OPUS, false, false)
+        selector.getDecoderInfos(MimeTypes.AUDIO_AMR_NB, false, false)
 
         assertEquals(
             listOf(
                 DecoderRequest(MimeTypes.AUDIO_MPEG, false, true),
-                DecoderRequest(MimeTypes.AUDIO_AAC, false, false)
+                DecoderRequest(MimeTypes.AUDIO_AAC, false, false),
+                DecoderRequest(MimeTypes.AUDIO_OPUS, false, false),
+                DecoderRequest(MimeTypes.AUDIO_AMR_NB, false, false)
             ),
             delegate.requests
         )

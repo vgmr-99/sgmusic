@@ -30,6 +30,18 @@ data class AppUpdateInfo(
 )
 
 /**
+ * 版本检查的互斥结果。
+ *
+ * 「网络/解析失败」与「远端没有更新版本」过去都被压成 `AppUpdateInfo?` 的 null，
+ * 导致调用方无法区分，关于页因此同时弹出「已是最新版本」和「检查失败」。
+ */
+sealed interface AppUpdateCheckResult {
+    data class Available(val info: AppUpdateInfo) : AppUpdateCheckResult
+    data object UpToDate : AppUpdateCheckResult
+    data object Failed : AppUpdateCheckResult
+}
+
+/**
  * 版本检测的纯逻辑，保持无 Android 依赖以便单测。
  */
 internal object AppUpdateLogic {
@@ -129,7 +141,8 @@ object AppUpdateNotifier {
  * 版本检查器：请求 GitHub Releases latest 接口并解析。
  *
  * 设计取向：
- * - 网络失败/解析失败一律返回 null，调用方静默跳过——更新检查绝不能打扰使用；
+ * - 网络失败/解析失败返回 [AppUpdateCheckResult.Failed]，远端无更新返回 [AppUpdateCheckResult.UpToDate]，
+ *   三者互斥，调用方据此展示准确文案或静默跳过；
  * - 超时远短于播放链路：用户等弹窗的耐心只有几秒；
  * - 复用 [AppContainer.sharedOkHttpClient]（自带代理支持）时由调用方传入。
  */
@@ -147,7 +160,7 @@ class AppUpdateChecker(
             .build()
     }
 
-    suspend fun checkLatestRelease(currentVersion: String): AppUpdateInfo? =
+    suspend fun checkLatestRelease(currentVersion: String): AppUpdateCheckResult =
         withContext(Dispatchers.IO) {
             runCatching {
                 val url = "${mirrorPrefix}https://api.github.com/repos/${AppUpdateLogic.GITHUB_REPO}/releases/latest"
@@ -156,19 +169,25 @@ class AppUpdateChecker(
                     .header("Accept", "application/vnd.github+json")
                     .build()
                 checkClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) return@runCatching null
-                    val body = response.body?.string() ?: return@runCatching null
-                    val info = AppUpdateLogic.parseGitHubRelease(body, currentVersion)
-                        ?: return@runCatching null
+                    if (!response.isSuccessful) {
+                        return@runCatching AppUpdateCheckResult.Failed
+                    }
+                    val body = response.body?.string()
+                        ?: return@runCatching AppUpdateCheckResult.Failed
+                    val parsed = AppUpdateLogic.parseGitHubRelease(body, currentVersion)
+                        ?: return@runCatching AppUpdateCheckResult.Failed
                     // 把镜像前缀同步拼到 APK 直链上（下载走同一通道）
-                    if (info.apkUrl != null && mirrorPrefix.isNotEmpty()) {
-                        info.copy(apkUrl = mirrorPrefix + info.apkUrl)
+                    val info = if (parsed.apkUrl != null && mirrorPrefix.isNotEmpty()) {
+                        parsed.copy(apkUrl = mirrorPrefix + parsed.apkUrl)
                     } else {
-                        info
+                        parsed
+                    }
+                    if (AppUpdateLogic.isVersionNewer(info.latestVersion, currentVersion)) {
+                        AppUpdateCheckResult.Available(info)
+                    } else {
+                        AppUpdateCheckResult.UpToDate
                     }
                 }
-            }.getOrNull()?.takeIf {
-                AppUpdateLogic.isVersionNewer(it.latestVersion, currentVersion)
-            }
+            }.getOrDefault(AppUpdateCheckResult.Failed)
         }
 }

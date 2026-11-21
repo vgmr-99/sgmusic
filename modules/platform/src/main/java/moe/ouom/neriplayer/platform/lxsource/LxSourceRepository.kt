@@ -586,6 +586,18 @@ class LxSourceRepository(
         }
     }
 
+    /**
+     * 只更新用户备注名，不改脚本文件名（同名替换语义不变），也不需要重新 init 运行时。
+     */
+    suspend fun setRemark(sourceId: String, remark: String) {
+        mutationLock.withLock {
+            val item = _items.value.firstOrNull { it.id == sourceId } ?: return
+            val updated = item.copy(remark = remark.trim())
+            replace(updated)
+            store.save(updated)
+        }
+    }
+
     suspend fun remove(sourceId: String) {
         mutationLock.withLock {
             runtimes.remove(sourceId)?.close()

@@ -362,11 +362,15 @@ internal object AudioDownloadSourceResolver {
 
     internal fun mimeToExt(mime: String): String? = when (mime.lowercase()) {
         "audio/flac", "audio/x-flac" -> "flac"
-        "audio/eac3", "audio/e-ac-3" -> "eac3"
+        "audio/ac3" -> "ac3"
+        "audio/eac3", "audio/e-ac-3", "audio/eac3-joc" -> "eac3"
+        "audio/true-hd" -> "thd"
+        "audio/vnd.dts" -> "dts"
+        "audio/vnd.dts.hd" -> "dtshd"
         "audio/mp4", "audio/m4a", "audio/aac" -> "m4a"
         "video/mp4" -> "mp4"
         "audio/webm" -> "webm"
-        "audio/ogg" -> "ogg"
+        "audio/ogg", "audio/vorbis" -> "ogg"
         "audio/mpeg" -> "mp3"
         "audio/wav", "audio/x-wav" -> "wav"
         "audio/aiff", "audio/x-aiff" -> "aiff"

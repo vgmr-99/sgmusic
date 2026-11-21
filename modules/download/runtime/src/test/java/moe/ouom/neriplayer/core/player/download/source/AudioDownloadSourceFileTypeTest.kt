@@ -24,6 +24,12 @@ class AudioDownloadSourceFileTypeTest {
             "video/mp4" to "mp4",
             "audio/webm" to "webm",
             "audio/ogg" to "ogg",
+            "audio/vorbis" to "ogg",
+            "audio/ac3" to "ac3",
+            "audio/eac3-joc" to "eac3",
+            "audio/true-hd" to "thd",
+            "audio/vnd.dts" to "dts",
+            "audio/vnd.dts.hd" to "dtshd",
             "audio/mpeg" to "mp3"
         ).forEach { (mime, extension) ->
             assertEquals(mime, extension, resolver.mimeToExt(mime))

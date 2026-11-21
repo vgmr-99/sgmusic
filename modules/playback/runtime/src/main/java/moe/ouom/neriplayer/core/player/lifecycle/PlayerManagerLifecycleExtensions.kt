@@ -512,11 +512,15 @@ private fun PlayerManager.initializePlaybackEngine(app: Application, effectiveMa
     )
     conditionalHttpFactory = conditionalFactory
 
-    val finalDataSourceFactory = createPlaybackDataSourceFactory(
+    val baseDataSourceFactory = createPlaybackDataSourceFactory(
         app,
         effectiveMaxCacheSize,
         conditionalFactory
     )
+    // 本地稀有格式（APE/WMA/DSD/AIFF）走独立 native 解码器并输出 WAV/PCM；
+    // 网络音源仍由原工厂处理。native 不可用时包装层是透明透传。
+    val finalDataSourceFactory = moe.ouom.neriplayer.core.player.extaudio
+        .ExtAudioRoutingDataSourceFactory(app, baseDataSourceFactory)
 
     val extractorsFactory = androidx.media3.extractor.DefaultExtractorsFactory()
         .setConstantBitrateSeekingEnabled(true)

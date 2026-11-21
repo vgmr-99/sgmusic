@@ -209,12 +209,15 @@ enum class LxSourceState { INIT, OK, FAIL, DISABLED }
 
 data class LxSourceItem(
     val id: String,
+    /** 导入时的脚本文件名：仍作为同名替换与 JS 运行时的标识，不因备注而改变。 */
     val name: String,
     val scriptText: String,
     val state: LxSourceState = LxSourceState.INIT,
     val info: LxSourceInfo? = null,
     val error: String? = null,
     val enabled: Boolean = true,
+    /** 用户自定义备注名，仅用于界面展示与分类；为空时回退显示 [name]。 */
+    val remark: String = "",
 )
 
 sealed interface LxResult<out T> {

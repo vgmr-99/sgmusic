@@ -30,10 +30,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -262,7 +264,11 @@ fun NeriBottomBar(
     // 形状保持长条（收紧后整条淡出，圆钮是另一颗独立控件）
     val dockGlassShape = RectangleShape
 
-    Box(modifier = modifier.fillMaxWidth()) {
+    // 应用启用了 edge-to-edge；Material 风格的 NavigationBar 显式清零了自身 insets，
+    // 三键导航时会被系统按键盖住。在这里补齐导航栏 inset，让底栏整体上移：
+    // 同时让 Scaffold 底栏槽位的测量高度和拖拽热区都包含这段 padding。
+    // clean 风格由 CleanFloatingTabBar 自己处理，不经过这个分支。
+    Box(modifier = modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)) {
     AdvancedGlassSurface(
         role = AdvancedGlassRole.BottomNavigation,
         // 玻璃面跟着一起收窄：展开态是整条胶囊，收紧态是一颗圆形玻璃钮

@@ -133,7 +133,7 @@ class PlayerLyricsProviderTest {
     }
 
     @Test
-    fun `local songs never load remote lyrics`() {
+    fun `local songs can fall back to remote lyric matching`() {
         val song = SongItem(
             id = 1L,
             name = "Local",
@@ -145,7 +145,7 @@ class PlayerLyricsProviderTest {
             mediaUri = "/tmp/local.mp3"
         )
 
-        assertFalse(shouldLoadRemoteLyrics(song))
+        assertTrue(shouldLoadRemoteLyrics(song))
     }
 
     @Test
@@ -173,7 +173,7 @@ class PlayerLyricsProviderTest {
                 isManagedLocalDownload = false
             )
         )
-        assertFalse(shouldLoadRemoteLyrics(song))
+        assertTrue(shouldLoadRemoteLyrics(song))
     }
 
     @Test
@@ -193,7 +193,7 @@ class PlayerLyricsProviderTest {
     }
 
     @Test
-    fun `preferred source runs before stored lyrics for remote songs`() {
+    fun `preferred source runs before stored lyrics and applies to local songs too`() {
         val remoteSong = SongItem(
             id = 2L,
             name = "Signal",
@@ -213,7 +213,7 @@ class PlayerLyricsProviderTest {
                 LyricSourcePreference.Kugou
             )
         )
-        assertFalse(
+        assertTrue(
             shouldTryPreferredLyricSource(
                 remoteSong.copy(mediaUri = "/tmp/local.mp3"),
                 LyricSourcePreference.Kugou

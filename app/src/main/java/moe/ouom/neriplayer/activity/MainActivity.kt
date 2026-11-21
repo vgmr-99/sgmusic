@@ -2132,7 +2132,7 @@ fun AnimatedSplashScreen() {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             androidx.compose.foundation.Image(
-                painter = painterResource(id = AppR.drawable.splash_logo),
+                painter = painterResource(id = AppR.drawable.splash_logo_vector),
                 contentDescription = null,
                 modifier = Modifier
                     .size(170.dp)

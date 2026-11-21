@@ -45,6 +45,8 @@ private data class LxScriptDocument(
     val enabled: Boolean = true,
     val state: String = "INIT",
     val error: String? = null,
+    /** 新增字段带默认值，旧版 lx_sources.json 反序列化后为空备注，兼容旧数据。 */
+    val remark: String = "",
 )
 
 /**
@@ -70,13 +72,14 @@ class FileLxSourceStore(
                     enabled = it.enabled,
                     state = runCatching { LxSourceState.valueOf(it.state) }.getOrDefault(LxSourceState.INIT),
                     error = it.error,
+                    remark = it.remark,
                 )
             }
         }
     }
 
     override suspend fun save(item: LxSourceItem) {
-        val doc = LxScriptDocument(item.id, item.name, item.scriptText, item.enabled, item.state.name, item.error)
+        val doc = LxScriptDocument(item.id, item.name, item.scriptText, item.enabled, item.state.name, item.error, item.remark)
         withContext(Dispatchers.IO) {
             mutex.withLock {
                 writeLocked(readLocked().filterNot { it.id == item.id } + doc)
@@ -87,7 +90,7 @@ class FileLxSourceStore(
     override suspend fun saveAll(items: List<LxSourceItem>) {
         withContext(Dispatchers.IO) {
             mutex.withLock {
-                writeLocked(items.map { LxScriptDocument(it.id, it.name, it.scriptText, it.enabled, it.state.name, it.error) })
+                writeLocked(items.map { LxScriptDocument(it.id, it.name, it.scriptText, it.enabled, it.state.name, it.error, it.remark) })
             }
         }
     }

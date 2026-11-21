@@ -73,6 +73,11 @@
     <string name="lx_script_import_confirm_warning">Third-party scripts run inside the app and are used to resolve playback URLs. Only import sources you trust.</string>
     <string name="lx_script_import_confirm_import">Import</string>
     <string name="settings_lx_delete">Delete script</string>
+    <string name="settings_lx_remark_action">Edit note</string>
+    <string name="settings_lx_remark_title">Edit script note</string>
+    <string name="settings_lx_remark_hint">Note name for grouping; leave blank to show the file name</string>
+    <string name="settings_lx_remark_file">Script file: %1$s</string>
+    <string name="settings_lx_remark_save">Save</string>
     <string name="settings_lx_empty">No script imported yet. The fallback chain is idle.</string>
     <string name="settings_lx_state_ok">Ready</string>
     <string name="settings_lx_state_fail">Init failed</string>

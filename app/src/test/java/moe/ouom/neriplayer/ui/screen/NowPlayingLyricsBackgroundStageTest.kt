@@ -132,8 +132,8 @@ class NowPlayingLyricsBackgroundStageTest {
                 override fun fastDownloaded(context: Context, song: SongItem) = ManagedDownloadStorage.DownloadedLyricsBundle(
                     "[00:01.00]source original", "[00:01.00]source translation", "[00:01.00]source romanized",
                     hasOriginalSidecar = true, hasTranslatedSidecar = true, hasRomanizedSidecar = true)
-                override suspend fun preferred(song: SongItem, source: LyricSourcePreference): PreferredLyricSourceResult =
-                    error("confirmed user edit must bypass preferred replacement")
+                // 本地歌曲现在也允许偏好源；这里返回未命中，验证仍回退到本地歌词。
+                override suspend fun preferred(song: SongItem, source: LyricSourcePreference): PreferredLyricSourceResult? = null
                 override suspend fun onlineOriginal(song: SongItem): List<LyricEntry> = error("local fallback must suffice")
                 override suspend fun onlineTranslated(song: SongItem): List<LyricEntry> = error("local fallback must suffice")
                 override suspend fun onlineRomanized(song: SongItem): List<LyricEntry> = error("local fallback must suffice")

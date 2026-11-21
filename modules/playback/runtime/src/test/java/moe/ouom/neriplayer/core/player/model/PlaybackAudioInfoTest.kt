@@ -41,7 +41,13 @@ class PlaybackAudioInfoTest {
     fun deriveCodecLabel_normalizesCommonMimeTypes() {
         assertEquals("FLAC", deriveCodecLabel("audio/flac"))
         assertEquals("AAC", deriveCodecLabel("audio/mp4; codecs=\"mp4a.40.2\""))
+        assertEquals("AC-3", deriveCodecLabel("audio/ac3"))
         assertEquals("E-AC-3", deriveCodecLabel("audio/eac3"))
+        assertEquals("E-AC-3 JOC", deriveCodecLabel("audio/eac3-joc"))
+        assertEquals("TRUEHD", deriveCodecLabel("audio/true-hd"))
+        assertEquals("DTS", deriveCodecLabel("audio/vnd.dts"))
+        assertEquals("DTS-HD", deriveCodecLabel("audio/vnd.dts.hd"))
+        assertEquals("VORBIS", deriveCodecLabel("audio/vorbis"))
         assertEquals("OPUS", deriveCodecLabel("audio/webm"))
         assertEquals("HLS", deriveCodecLabel("application/vnd.apple.mpegurl"))
     }

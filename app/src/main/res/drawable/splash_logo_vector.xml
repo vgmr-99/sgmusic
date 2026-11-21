@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  与 docs/assets/icon-w1.svg 几何参数一致的可缩放版本。
+  原 splash_logo.png 的唱片纹路在 512px 源图里只有约 2px，缩到 132dp 后
+  下采样会出现锯齿；矢量图在最终显示尺寸上抗锯齿渲染，暗色背景下不再有锐化感。
+  注意：小组件占位图与系统启动图使用 <bitmap>，只能继续用 PNG。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="512dp"
+    android:height="512dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+
+    <!-- 黑胶唱片本体 -->
+    <path
+        android:pathData="M512,214A298,298 0 1,1 512,810A298,298 0 1,1 512,214Z"
+        android:fillColor="#1E1E28" />
+
+    <!-- 三道唱片纹路：stroke-opacity .16 / stroke-width 4 @1024 viewport -->
+    <path
+        android:pathData="M512,264A248,248 0 1,1 512,760A248,248 0 1,1 512,264Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="0.16"
+        android:strokeWidth="4" />
+    <path
+        android:pathData="M512,310A202,202 0 1,1 512,714A202,202 0 1,1 512,310Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="0.16"
+        android:strokeWidth="4" />
+    <path
+        android:pathData="M512,356A156,156 0 1,1 512,668A156,156 0 1,1 512,356Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="0.16"
+        android:strokeWidth="4" />
+
+    <!-- 中心标签与主轴孔 -->
+    <path
+        android:pathData="M512,422A90,90 0 1,1 512,602A90,90 0 1,1 512,422Z"
+        android:fillColor="#FF7A45" />
+    <path
+        android:pathData="M512,498A14,14 0 1,1 512,526A14,14 0 1,1 512,498Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- 拾光弧带：源 SVG 的 pathLength=100 + dasharray="13 87" 等价于取路径前 13% -->
+    <group
+        android:rotation="-64"
+        android:pivotX="512"
+        android:pivotY="512">
+        <path
+            android:pathData="M512,174A338,338 0 1,1 512,850A338,338 0 1,1 512,174Z"
+            android:fillColor="#00000000"
+            android:strokeColor="#FF7A45"
+            android:strokeWidth="14"
+            android:strokeLineCap="round"
+            android:trimPathEnd="0.13" />
+    </group>
+</vector>

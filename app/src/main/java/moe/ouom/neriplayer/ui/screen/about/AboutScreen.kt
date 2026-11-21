@@ -473,7 +473,7 @@ private fun AboutHeader(
     ) {
         Box(modifier = Modifier.size(AboutLogoSize)) {
             Image(
-                painter = painterResource(id = R.drawable.splash_logo),
+                painter = painterResource(id = R.drawable.splash_logo_vector),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize()

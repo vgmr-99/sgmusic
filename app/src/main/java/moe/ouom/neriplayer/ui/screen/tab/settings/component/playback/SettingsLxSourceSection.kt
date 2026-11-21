@@ -32,6 +32,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteForever
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Science
@@ -42,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -90,6 +92,8 @@ internal fun SettingsLxSourceSection(
     var urlImportError by remember { mutableStateOf<String?>(null) }
     var testPhase by remember { mutableStateOf<LxTestPhase?>(null) }
     var testTarget by remember { mutableStateOf<LxSourceItem?>(null) }
+    var remarkTarget by remember { mutableStateOf<LxSourceItem?>(null) }
+    var remarkDraft by remember { mutableStateOf("") }
     var testProbes by remember { mutableStateOf<List<LxQualityProbe>>(emptyList()) }
     var testReport by remember { mutableStateOf<LxSourceTestReport?>(null) }
     var showUrlImport by remember { mutableStateOf(false) }
@@ -228,8 +232,21 @@ internal fun SettingsLxSourceSection(
         } else {
             scripts.forEach { item ->
                 ListItem(
-                    headlineContent = { Text(item.name) },
+                    headlineContent = {
+                        Text(
+                            text = item.remark.takeIf { it.isNotBlank() } ?: item.name,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
                     supportingContent = {
+                        if (item.remark.isNotBlank()) {
+                            Text(
+                                text = stringResource(CoreCommonR.string.settings_lx_remark_file, item.name),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         val sources = item.info?.sources?.keys?.joinToString(",").orEmpty()
                         val status = when (item.state) {
                             LxSourceState.OK -> stringResource(CoreCommonR.string.settings_lx_state_ok)
@@ -249,6 +266,17 @@ internal fun SettingsLxSourceSection(
                     },
                     trailingContent = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = {
+                                    remarkTarget = item
+                                    remarkDraft = item.remark
+                                }
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Edit,
+                                    contentDescription = stringResource(CoreCommonR.string.settings_lx_remark_action)
+                                )
+                            }
                             IconButton(
                                 onClick = {
                                     testTarget = item
@@ -341,6 +369,43 @@ internal fun SettingsLxSourceSection(
 
         if (showGuide) {
             LxSourceGuideDialog(onDismiss = { showGuide = false })
+        }
+
+        remarkTarget?.let { target ->
+            AlertDialog(
+                onDismissRequest = { remarkTarget = null },
+                title = { Text(stringResource(CoreCommonR.string.settings_lx_remark_title)) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = remarkDraft,
+                            onValueChange = { remarkDraft = it.take(40) },
+                            singleLine = true,
+                            label = { Text(stringResource(CoreCommonR.string.settings_lx_remark_hint)) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            text = stringResource(CoreCommonR.string.settings_lx_remark_file, target.name),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val value = remarkDraft.trim()
+                        AppContainer.launchBackgroundIo { lxRepository.setRemark(target.id, value) }
+                        remarkTarget = null
+                    }) {
+                        Text(stringResource(CoreCommonR.string.settings_lx_remark_save))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { remarkTarget = null }) {
+                        Text(stringResource(CoreCommonR.string.action_cancel))
+                    }
+                }
+            )
         }
     }
 }

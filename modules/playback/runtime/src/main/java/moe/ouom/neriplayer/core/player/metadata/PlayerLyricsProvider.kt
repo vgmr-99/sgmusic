@@ -209,7 +209,8 @@ fun resolveLyricTextForPlayback(
 }
 
 internal fun shouldLoadRemoteLyrics(song: SongItem): Boolean {
-    return !song.isLocalSong() && !song.isServerSong()
+    // 本地歌曲不再被排除：内嵌/侧载歌词优先，读不到时允许在线匹配兜底。
+    return !song.isServerSong()
 }
 
 fun shouldReadManagedDownloadLyrics(
@@ -278,10 +279,11 @@ fun shouldTryPreferredLyricSource(
     song: SongItem,
     preference: LyricSourcePreference
 ): Boolean = preference != LyricSourcePreference.Automatic &&
-    !song.isLocalSong() &&
     hasPreferredSourceFallback(song)
 
 private fun hasPreferredSourceFallback(song: SongItem): Boolean {
+    // 本地歌曲没有存储歌词字段时也要允许指定歌词源去在线匹配。
+    if (song.isLocalSong()) return true
     if (song.lyricSyncEdited == true) {
         return listOf(song.matchedLyric, song.matchedTranslatedLyric, song.matchedRomanizedLyric).any { it == null }
     }
@@ -1373,9 +1375,8 @@ object PlayerLyricsProvider {
                 // Server failures must reach the existing lyric load owner, not look like no lyrics.
                 return@withContext PlayerDependencies.repositories.subsonicRepository?.lyrics(song).orEmpty()
             }
-            if (song.isLocalSong()) {
-                return@withContext emptyList()
-            }
+            // 本地歌曲：上面已优先返回内嵌/侧载歌词；到这里说明本地没有歌词，
+            // 继续走下面的 LX / 多源高置信在线匹配，而不是直接返回空。
             if (isYouTubeMusicTrack) {
                 return@withContext getYouTubeMusicLyrics(
                     song = song,

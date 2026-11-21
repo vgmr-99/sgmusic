@@ -52,8 +52,12 @@ import moe.ouom.neriplayer.core.player.audio.reactive.AudioReactive
 /**
  * 自定义 RenderersFactory:
  * - 注入 TeeAudioProcessor 将 PCM 能量送入 AudioReactive, 供可视化/背景特效使用
- * - 仅对 FLAC/ALAC 优先使用内置 FFmpeg, 避免部分设备的平台解码器将有效比特流过早标记为结束,
+ * - 对平台解码器支持不一致的格式优先使用内置 FFmpeg, 避免部分设备将有效比特流过早标记为结束,
  *   或像 c2.qti.alac.sw.decoder 那样声明支持却在送入数据时解码失败
+ *
+ * [FFMPEG_PREFERRED_AUDIO_MIME_TYPES] 只收录随包 FFmpeg 确实编入解码器的格式;
+ * 构造时会再用 FfmpegLibrary.supportsFormat 探测一次, 探测失败则保留平台解码器。
+ * AAC/MP3/Opus/AMR 等平台普遍硬解的格式不放进列表, 以免退化成软解增加功耗。
  */
 @UnstableApi
 class ReactiveRenderersFactory(context: Context) : DefaultRenderersFactory(context) {
@@ -86,7 +90,7 @@ class ReactiveRenderersFactory(context: Context) : DefaultRenderersFactory(conte
         } else {
             NPLogger.w(
                 "NERI-Player",
-                "Bundled FFmpeg cannot decode FLAC or ALAC; keep platform MediaCodec"
+                "Bundled FFmpeg decoder unavailable; keep platform MediaCodec for all formats"
             )
         }
     }
@@ -174,7 +178,26 @@ internal class FfmpegPcm16AudioSink(
     }
 }
 
-internal val FFMPEG_PREFERRED_AUDIO_MIME_TYPES = listOf(MimeTypes.AUDIO_FLAC, MimeTypes.AUDIO_ALAC)
+/**
+ * 优先交给随包 FFmpeg 解码的格式。这里列出的解码器均已确认编入随包 FFmpeg 6.0:
+ * flac, alac, ac3, eac3, truehd, dca(DTS), vorbis。
+ *
+ * 不列入:
+ * - AAC/MP3/Opus/AMR: 平台普遍有硬解, 强制软解会增加功耗;
+ * - MP1/MP2/G711: FfmpegLibrary 虽有 MIME 映射, 但随包构建未编入对应解码器;
+ * - APE/WMA/MIDI/DSD: 随包 FFmpeg 没有解码器, Media3 也没有对应 Extractor。
+ */
+internal val FFMPEG_PREFERRED_AUDIO_MIME_TYPES = listOf(
+    MimeTypes.AUDIO_FLAC,
+    MimeTypes.AUDIO_ALAC,
+    MimeTypes.AUDIO_AC3,
+    MimeTypes.AUDIO_E_AC3,
+    MimeTypes.AUDIO_E_AC3_JOC,
+    MimeTypes.AUDIO_TRUEHD,
+    MimeTypes.AUDIO_DTS,
+    MimeTypes.AUDIO_DTS_HD,
+    MimeTypes.AUDIO_VORBIS
+)
 
 @UnstableApi
 internal class FfmpegPreferredMediaCodecSelector(

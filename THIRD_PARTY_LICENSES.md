@@ -15,6 +15,7 @@ Timbre 按根目录的 [GPL-3.0 许可证](LICENSE) 发布。本文记录部分�
 | [InstallerX Revived](https://github.com/wxxsfxyzm/InstallerX-Revived) | Upstream Shizuku hooked-binder technique retained by the Capsulyric port | GPL-3.0-only |
 | libusb | Sources and headers in [`modules/native/src/main/cpp/third_party/libusb/`](modules/native/src/main/cpp/third_party/libusb/) used by USB exclusive output | LGPL-2.1-or-later, as declared in the imported source headers |
 | [quickjs-wrapper (wang.harlon.quickjs:wrapper-android 3.2.3)](https://github.com/HarlonWang/quickjs-wrapper) | QuickJS Android/JVM runtime used by the LX custom-source host (`modules/platform/.../lxsource/`) | Apache-2.0 |
+| [FFmpeg 6.0](https://ffmpeg.org/) | Minimal static build (APE/WMA/DSD/AIFF decoders and demuxers) inside `libextaudio.so`; build source and GPG-verified provenance in [`tools_pub/extaudio/`](tools_pub/extaudio/) | LGPL-2.1-or-later, as declared by the configured FFmpeg build |
 
 The Super Island adaptations are in
 [`shizuku/`](modules/playback/runtime/src/main/java/moe/ouom/neriplayer/core/player/shizuku/)

@@ -33,6 +33,7 @@ import kotlinx.coroutines.withContext
 import moe.ouom.neriplayer.BuildConfig
 import moe.ouom.neriplayer.R
 import moe.ouom.neriplayer.core.di.AppContainer
+import moe.ouom.neriplayer.core.update.AppUpdateCheckResult
 import moe.ouom.neriplayer.core.update.AppUpdateChecker
 import moe.ouom.neriplayer.core.update.AppUpdateInfo
 import moe.ouom.neriplayer.core.update.AppUpdateInstaller
@@ -49,8 +50,11 @@ internal enum class AppUpdateUiState {
     /** 正在请求远端版本。 */
     Checking,
 
-    /** 远端没有比当前更新的版本，或检查失败（用 [AppUpdateController.checkFailed] 区分）。 */
+    /** 远端没有比当前更新的版本。 */
     UpToDate,
+
+    /** 检查请求本身失败（网络/解析），与「已是最新」互斥。 */
+    CheckFailed,
 
     /** 发现新版本，等待用户决定下载。 */
     Available,
@@ -81,28 +85,19 @@ internal class AppUpdateController(
     var info by mutableStateOf<AppUpdateInfo?>(null)
         private set
 
-    /** 检查请求本身失败（网络等），区别于「已是最新」。 */
-    var checkFailed by mutableStateOf(false)
-        private set
-
     private var pollJob: Job? = null
 
     /** 发起一次版本检查（纯网络调用，不需要 context）。 */
     fun check() {
         if (state == AppUpdateUiState.Checking) return
         state = AppUpdateUiState.Checking
-        checkFailed = false
         scope.launch(Dispatchers.IO) {
             val checker = AppUpdateChecker(AppContainer.sharedOkHttpClient)
             val result = checker.checkLatestRelease(BuildConfig.VERSION_NAME)
             withContext(Dispatchers.Main) {
-                info = result
-                state = if (result != null) {
-                    AppUpdateUiState.Available
-                } else {
-                    checkFailed = true
-                    AppUpdateUiState.UpToDate
-                }
+                val mapped = mapCheckResult(result)
+                info = mapped.info
+                state = mapped.state
             }
         }
     }
@@ -149,8 +144,19 @@ internal class AppUpdateController(
     fun reset() {
         pollJob?.cancel()
         state = AppUpdateUiState.Idle
-        checkFailed = false
     }
+}
+
+/** 检查结果 → UI 状态/信息 的唯一映射，标题与正文都只读 [AppUpdateUiState]。 */
+internal data class AppUpdateCheckUi(
+    val state: AppUpdateUiState,
+    val info: AppUpdateInfo?,
+)
+
+internal fun mapCheckResult(result: AppUpdateCheckResult): AppUpdateCheckUi = when (result) {
+    is AppUpdateCheckResult.Available -> AppUpdateCheckUi(AppUpdateUiState.Available, result.info)
+    AppUpdateCheckResult.UpToDate -> AppUpdateCheckUi(AppUpdateUiState.UpToDate, null)
+    AppUpdateCheckResult.Failed -> AppUpdateCheckUi(AppUpdateUiState.CheckFailed, null)
 }
 
 @Composable
@@ -162,8 +168,9 @@ internal fun rememberAppUpdateController(): AppUpdateController {
 /**
  * 关于页的检查更新弹窗。
  *
- * 一个弹窗承载全部状态：Checking / UpToDate / Available / Downloading /
+ * 一个弹窗承载全部状态：Checking / UpToDate / CheckFailed / Available / Downloading /
  * ReadyToInstall / DownloadFailed，按 [controller.state] 切换内容与按钮。
+ * 标题与正文都只依据 [controller.state]，避免互斥状态出现矛盾文案。
  */
 @Composable
 internal fun AppUpdateDialog(
@@ -190,6 +197,8 @@ internal fun AppUpdateDialog(
                         stringResource(R.string.about_update_downloading_title)
                     state == AppUpdateUiState.DownloadFailed ->
                         stringResource(R.string.about_update_download_failed_title)
+                    state == AppUpdateUiState.CheckFailed ->
+                        stringResource(R.string.about_update_check_failed_title)
                     info != null ->
                         stringResource(R.string.about_update_new_version_title, info.latestVersion)
                     else ->
@@ -217,6 +226,9 @@ internal fun AppUpdateDialog(
                     state == AppUpdateUiState.DownloadFailed ->
                         Text(stringResource(R.string.about_update_download_failed_message))
 
+                    state == AppUpdateUiState.CheckFailed ->
+                        Text(stringResource(R.string.about_update_check_failed_message))
+
                     info != null && state == AppUpdateUiState.Available -> {
                         Text(
                             stringResource(
@@ -230,14 +242,10 @@ internal fun AppUpdateDialog(
                     }
 
                     else -> Text(
-                        if (controller.checkFailed) {
-                            stringResource(R.string.about_update_check_failed_message)
-                        } else {
-                            stringResource(
-                                R.string.about_update_up_to_date_message,
-                                BuildConfig.VERSION_NAME
-                            )
-                        }
+                        stringResource(
+                            R.string.about_update_up_to_date_message,
+                            BuildConfig.VERSION_NAME
+                        )
                     )
                 }
             }
@@ -271,6 +279,11 @@ internal fun AppUpdateDialog(
                 }
                 AppUpdateUiState.DownloadFailed -> HapticTextButton(
                     onClick = { controller.download(appContext) }
+                ) {
+                    Text(stringResource(R.string.about_update_action_retry))
+                }
+                AppUpdateUiState.CheckFailed -> HapticTextButton(
+                    onClick = { controller.check() }
                 ) {
                     Text(stringResource(R.string.about_update_action_retry))
                 }

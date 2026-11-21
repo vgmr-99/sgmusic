@@ -168,7 +168,7 @@ class NowPlayingLyricsResolutionTest {
     }
 
     @Test
-    fun `remote missing and collapsed lyrics use online source while local missing remains empty`() = runTest {
+    fun `remote and local missing lyrics use online source while local embedded stays authoritative`() = runTest {
         var onlineCalls = 0
         val sources = object : FakeNowPlayingLyricsSources() {
             override suspend fun onlineOriginal(song: SongItem): List<LyricEntry> {
@@ -188,13 +188,14 @@ class NowPlayingLyricsResolutionTest {
             NowPlayingBackgroundRawLyrics(collapsed, null, null),
             sources
         ).single().text)
-        assertTrue(
+        assertEquals(
+            "online",
             resolveBackgroundOriginal(
                 inputs(localSong),
                 NowPlayingBackgroundRawLyrics(null, null, null),
                 sources
-            ).isEmpty())
-        assertEquals(2, onlineCalls)
+            ).single().text)
+        assertEquals(3, onlineCalls)
     }
 
     @Test
@@ -216,17 +217,18 @@ class NowPlayingLyricsResolutionTest {
     }
 
     @Test
-    fun `missing remote phonetic uses online source and local without source stays empty`() = runTest {
+    fun `missing phonetic uses online source for remote and local songs`() = runTest {
         val sources = object : FakeNowPlayingLyricsSources() {
             override suspend fun onlineRomanized(song: SongItem) = listOf(LyricEntry("online phonetic", 1_000L, 2_000L))
         }
         assertEquals("online phonetic", resolveBackgroundPhonetic(
             inputs(song), NowPlayingNeteaseFallback("", ""), sources
         ).single().text)
-        assertTrue(
+        assertEquals(
+            "online phonetic",
             resolveBackgroundPhonetic(
                 inputs(localSong), NowPlayingNeteaseFallback("", ""), sources
-            ).isEmpty())
+            ).single().text)
     }
 
     @Test
