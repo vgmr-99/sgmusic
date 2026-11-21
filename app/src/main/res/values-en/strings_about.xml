@@ -3,5 +3,8 @@
     <!-- About: 拾光音乐 fork of Timbre, GPLv3 -->
     
     <string name="about_app_name">Shiguang Music · Timbre</string>
+    <string name="about_app_tagline">Every sound of time</string>
     <string name="about_app_footer">Based on the upstream NeriPlayer project\nThanks to the upstream team for their open-source contribution!</string>
+    <string name="about_feedback_title">Feedback &amp; Suggestions</string>
+    <string name="about_feedback_subtitle">QQ Group: 60035779</string>
 </resources>

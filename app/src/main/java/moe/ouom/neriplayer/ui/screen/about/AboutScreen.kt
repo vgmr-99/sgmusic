@@ -52,8 +52,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
 import kotlinx.coroutines.launch
@@ -95,7 +98,7 @@ import kotlin.math.abs
  *
  * 关于页：大 LOGO 折叠头。
  *
- * 交互参照 MeowPlayer：顶部一张大标志 + 应用名 + 版本号，背景是品牌渐变；
+ * 交互参照 MeowPlayer：顶部一张大标志 + 应用名 + 品牌标语（手写体），背景是品牌渐变；
  * 页面向下滚动时标志逐渐缩小淡出，标题栏的"关于"随之浮现。
  * 这里没用标准 LargeTopAppBar，因为它的折叠行为只有标题淡入，
  * 撑不起"大标志缩成小标题"的视觉，所以自己按滚动偏移驱动。
@@ -235,6 +238,14 @@ internal fun AboutScreen(
             context.tryStartActivity(intent)
             Unit
         },
+        onOpenFeedback = {
+            val intent = Intent(
+                Intent.ACTION_VIEW,
+                "https://qm.qq.com/q/pDaVRWnCF".toUri()
+            )
+            context.tryStartActivity(intent)
+            Unit
+        },
         onShowDisclaimer = { showDisclaimer = true }
     )
 
@@ -320,6 +331,7 @@ private data class AboutCardEntry(
 @Composable
 private fun aboutContentCardEntries(
     onOpenRepo: () -> Unit,
+    onOpenFeedback: () -> Unit,
     onShowDisclaimer: () -> Unit
 ): List<AboutCardEntry> {
     return listOf(
@@ -332,6 +344,13 @@ private fun aboutContentCardEntries(
             key = "version",
             title = stringResource(CoreCommonR.string.settings_version),
             subtitle = BuildConfig.VERSION_NAME
+        ),
+        // 反馈&建议：QQ 加群直链，紧跟在版本卡片后面
+        AboutCardEntry(
+            key = "feedback",
+            title = stringResource(R.string.about_feedback_title),
+            subtitle = stringResource(R.string.about_feedback_subtitle),
+            onClick = onOpenFeedback
         ),
         AboutCardEntry(
             key = "repo",
@@ -411,7 +430,7 @@ private fun AboutHeaderBackground() {
 }
 
 /**
- * 折叠头：大标志 + 应用名 + 版本号。
+ * 折叠头：大标志 + 应用名 + 品牌标语。
  *
  * 标志随滚动缩小、上移并淡出，名字跟着一起退场。
  * 整块用同一个 graphicsLayer 驱动，避免逐个子元素做动画导致多次重组。
@@ -460,10 +479,17 @@ private fun AboutHeader(
 
         Spacer(modifier = Modifier.height(6.dp))
 
+        // 品牌标语：龙藏手写体（只打包了标语所需的字符子集，20KB）。
+        // 用显式 fontSize 而不是 typography 样式，手写体的 x-height 和
+        // 系统字体差异大，直接给绝对字号最稳。
         Text(
-            text = "${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_UUID.take(8)})",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            text = stringResource(R.string.about_app_tagline),
+            fontFamily = FontFamily(Font(R.font.long_cang)),
+            fontSize = 22.sp,
+            lineHeight = 28.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 24.dp)
         )
     }
 }

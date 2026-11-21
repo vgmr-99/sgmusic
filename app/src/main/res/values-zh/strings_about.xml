@@ -3,5 +3,8 @@
     <!-- 关于：拾光音乐基于上游 Timbre 二次开发，GPLv3 -->
     
     <string name="about_app_name">拾光音乐 · Timbre</string>
+    <string name="about_app_tagline">拾取时光的每一段声音</string>
     <string name="about_app_footer">基于上游 NeriPlayer项目二次开发\n感谢上游团队的开源贡献！</string>
+    <string name="about_feedback_title">反馈&amp;建议</string>
+    <string name="about_feedback_subtitle">QQ群：60035779</string>
 </resources>
