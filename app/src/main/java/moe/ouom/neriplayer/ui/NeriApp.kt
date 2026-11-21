@@ -1762,6 +1762,7 @@ private fun NeriAppContent(
                         bottomBar = AppBottomBarPresentation(
                             items = bottomBarItems,
                             currentDestination = navigationVisibility.destination,
+                            selectedMainTabRoute = selectedMainTabRoute,
                             showNowPlaying = shouldSuppressPlaybackNavigation(
                                 showNowPlaying,
                                 backGestureRevealing = nowPlayingBackRevealing.value

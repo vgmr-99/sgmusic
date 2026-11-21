@@ -1,5 +1,7 @@
 package moe.ouom.neriplayer.ui.component.navigation
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
@@ -7,8 +9,12 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 
 /*
  * NeriPlayer - A unified Android player for streaming music and videos from multiple online platforms.
@@ -108,24 +114,14 @@ private const val DockScrollStepPerItemPx = 320
 internal val LocalBottomDockMode = compositionLocalOf { BottomDockMode.EXPANDED }
 
 /**
- * 底部两栏的滚动上报入口。
+ * 回顶动作的注册入口。
  *
- * 脚手架层创建，各页面用 [ReportBottomDockScroll] 上报自己的滚动偏移。
+ * 形态现在由脚手架层的垂直手势驱动，不再看列表滚动位置；
+ * 这个类只保留「当前页面怎么回到顶部」的注册与调用，
+ * 收紧态圆钮点下去时用它。滚动上报接口保留为 no-op，
+ * 避免改动所有调用点，同时杜绝它们反过来改形态。
  */
-internal class BottomDockScrollReporter(
-    private val thresholdPx: Int,
-    private val onProgressChanged: (Float) -> Unit
-) {
-    /** 当前接管形态的页面。页面切换时由新页面接管。 */
-    private var activeOwner: Any? = null
-
-    /** 接管者的滚动位置，用于判断是否需要重新广播。 */
-    private var activeOffsetPx: Int = 0
-
-    /** 当前收紧进度，0 = 展开，1 = 完全收紧。 */
-    var progress: Float = 0f
-        private set
-
+internal class BottomDockScrollReporter() {
     /**
      * 当前页面的"回到顶部"动作，由页面在注册滚动上报时提供。
      *
@@ -133,38 +129,27 @@ internal class BottomDockScrollReporter(
      */
     var scrollToTop: (() -> Unit)? = null
 
-    /** 请求回到当前页面顶部。 */
+    /**
+     * 点收紧态圆钮时的附加动作，由脚手架层提供。
+     *
+     * 手势驱动形态后，滚动不再影响两栏形态；以前「滚到顶部自然展开」的联动没了，
+     * 所以点圆钮要显式把形态恢复成展开，否则用户点了钮还是收着，读不懂反馈。
+     */
+    var onDockTap: (() -> Unit)? = null
+
+    /** 请求回到当前页面顶部，并恢复展开态。 */
     fun requestScrollToTop() {
+        onDockTap?.invoke()
         scrollToTop?.invoke()
     }
 
     /**
-     * 上报滚动位置。
+     * 保留的滚动上报接口：现在什么都不做。
      *
-     * @param owner 页面标识。同一个页面反复上报用同一个令牌。
-     * @param firstItemTopPx 首个可见 item 相对视口顶部的距离
+     * @param owner 页面标识（已忽略）
+     * @param firstItemTopPx 首个可见 item 的相对位置（已忽略）
      */
-    fun report(owner: Any, firstItemTopPx: Int) {
-        // 新页面接管：立刻用它的当前位置刷新形态。
-        // 页面变为可见时一定会重组（NavHost 切换可见条目），重组里会重新上报，
-        // 所以切 Tab、跳独立路由都能正确重置，不会留着上一个页面的形态。
-        if (owner !== activeOwner) {
-            activeOwner = owner
-            activeOffsetPx = firstItemTopPx
-            applyProgress()
-            return
-        }
-        if (firstItemTopPx == activeOffsetPx) return
-        activeOffsetPx = firstItemTopPx
-        applyProgress()
-    }
-
-    private fun applyProgress() {
-        val next = resolveBottomDockProgress(activeOffsetPx, thresholdPx)
-        if (next == progress) return
-        progress = next
-        onProgressChanged(next)
-    }
+    fun report(owner: Any, firstItemTopPx: Int) = Unit
 }
 
 /**
@@ -216,6 +201,76 @@ internal const val CompactDockItemsFadeSpan = 0.35f
  */
 internal fun shouldScrollToTopOnDockTap(compactProgress: Float): Boolean =
     compactProgress >= CompactDockItemsFadeSpan
+
+/**
+ * 垂直手势的方向判定。
+ *
+ * 底部两栏的形态改成**手势驱动**后，判定只看「手指往哪个方向划了一段距离」，
+ * 不再看列表滚到哪：滚不动的页面、内容很短的子页面、NavHost 里的独立路由，
+ * 都跟主 Tab 一样能收紧/恢复。
+ *
+ * 采用「一次性切换」：手势越过阈值就返回一次方向，调用方把形态切过去并保持；
+ * 同一次手势里后续位移不再重复触发，必须抬手再划才会反向。
+ *
+ * @param dragY 从按下到现在累计的垂直位移，屏幕坐标向下为正
+ * @param thresholdPx 触发阈值（像素）
+ * @return 上滑（dragY 为负）返回 [DockSwipeDirection.COLLAPSE]，
+ *         下滑返回 [DockSwipeDirection.EXPAND]，没到阈值返回 null
+ */
+internal enum class DockSwipeDirection { COLLAPSE, EXPAND }
+
+/** 手势收紧阈值：约 40dp，够过滤轻碰，又不必划完整屏。 */
+internal val DockSwipeThreshold: Dp = 40.dp
+
+internal fun resolveDockSwipeDirection(
+    dragY: Float,
+    thresholdPx: Float
+): DockSwipeDirection? {
+    if (thresholdPx <= 0f || abs(dragY) < thresholdPx) return null
+    return if (dragY < 0f) DockSwipeDirection.COLLAPSE else DockSwipeDirection.EXPAND
+}
+
+/**
+ * 全局垂直手势检测器：只观察、不消费。
+ *
+ * 挂在脚手架的内容区外层，因此主 Tab 和所有子页面共用同一套形态。
+ * 关键是 [PointerEventPass.Initial] 里读位移但**不调用 consume()**：
+ *  · 列表仍能正常滚动（事件继续往下传）；
+ *  · 播放条自己那套「上滑展开播放页」手势也不受影响；
+ *  · 用户只是划一下页面，形态就跟着切换，跟列表有没有内容无关。
+ *
+ * 一次手势只触发一次（[fired] 锁存），避免拖动过程中反复切换造成抖动。
+ */
+internal fun Modifier.bottomDockSwipeDetector(
+    enabled: Boolean,
+    thresholdPx: Float,
+    onDirection: (DockSwipeDirection) -> Unit
+): Modifier = pointerInput(enabled, thresholdPx) {
+    if (!enabled) return@pointerInput
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        var lastY = down.position.y
+        var dragY = 0f
+        var fired = false
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            if (!change.pressed) break
+            // 用绝对坐标差分而不是 positionChange()：
+            // positionChange 在同一事件流里被别的 pointerInput 读过之后可能归零，
+            // 而变化的绝对坐标是谁都能重复读的，不受内层是否消费影响。
+            val currentY = change.position.y
+            dragY += currentY - lastY
+            lastY = currentY
+            if (!fired) {
+                resolveDockSwipeDirection(dragY, thresholdPx)?.let { direction ->
+                    onDirection(direction)
+                    fired = true
+                }
+            }
+        }
+    }
+}
 
 /** 底栏的水平边距：展开态胶囊和收紧态圆钮沿用同一套。 */
 internal val DockBarHorizontalMargin = 16.dp

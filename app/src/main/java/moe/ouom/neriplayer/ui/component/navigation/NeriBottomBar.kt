@@ -103,6 +103,26 @@ internal fun resolveBottomBarSelectionAlpha(
 }
 
 /**
+ * 按当前主 Tab route 找选中项；route 为空（或没匹配上）时退回 destination hierarchy。
+ *
+ * 子页面的 hierarchy 里没有主 Tab route，只靠 hierarchy 会找不到当前项，
+ * 导致收紧后的圆钮是空白的。selectedTabRoute 由 App 层的权威状态提供。
+ */
+internal fun resolveSelectedBottomBarIndex(
+    items: List<Pair<Destinations, ImageVector>>,
+    currentDestination: NavDestination?,
+    selectedTabRoute: String?
+): Int {
+    if (!selectedTabRoute.isNullOrBlank()) {
+        val byRoute = items.indexOfFirst { (dest, _) -> dest.route == selectedTabRoute }
+        if (byRoute >= 0) return byRoute
+    }
+    return items.indexOfFirst { (dest, _) ->
+        currentDestination?.hierarchy?.any { it.route == dest.route } == true
+    }
+}
+
+/**
  * 紧凑态下底栏只保留当前标签，其余标签收起。
  *
  * 返回可见标签的下标集合：紧凑态只留当前选中项，展开态全部保留。
@@ -110,14 +130,14 @@ internal fun resolveBottomBarSelectionAlpha(
 internal fun resolveVisibleBottomBarItems(
     items: List<Pair<Destinations, ImageVector>>,
     currentDestination: NavDestination?,
-    compact: Boolean
+    compact: Boolean,
+    selectedTabRoute: String? = null
 ): List<Int> {
     if (!compact || items.isEmpty()) return items.indices.toList()
-    val selectedIndex = items.indexOfFirst { (dest, _) ->
-        currentDestination?.hierarchy?.any { it.route == dest.route } == true
-    }
+    val selectedIndex = resolveSelectedBottomBarIndex(items, currentDestination, selectedTabRoute)
     return if (selectedIndex >= 0) listOf(selectedIndex) else items.indices.toList()
 }
+
 internal fun isNeriNavigationDestinationSelected(
     currentDestination: NavDestination?,
     destination: Destinations
@@ -132,7 +152,9 @@ fun NeriBottomBar(
     currentDestination: NavDestination?,
     onItemSelected: (Destinations) -> Unit,
     modifier: Modifier = Modifier,
-    selectAlpha: Float = DEFAULT_BOTTOM_BAR_SELECTION_ALPHA
+    selectAlpha: Float = DEFAULT_BOTTOM_BAR_SELECTION_ALPHA,
+    /** 当前所属主 Tab route，子页面里也能准确判定选中项 */
+    selectedTabRoute: String? = null
 ) {
     // 页面向下滚动后底栏收紧，只留当前标签；回到顶部再展开。
     // 连续进度：前半段把导航栏收成一颗当前标签的圆钮
@@ -143,7 +165,7 @@ fun NeriBottomBar(
         label = "bottom_bar_compact_progress"
     )
     val compact = compactProgress > 0.5f
-    val visibleIndices = resolveVisibleBottomBarItems(items, currentDestination, compact)
+    val visibleIndices = resolveVisibleBottomBarItems(items, currentDestination, compact, selectedTabRoute)
 
     // 展开态是整条导航栏，收紧态是右侧那颗圆钮。
     //
@@ -158,9 +180,7 @@ fun NeriBottomBar(
     val navFade = 1f - buttonFade
 
     val dockReporter = LocalBottomDockScrollReporter.current
-    val currentIndex = items.indexOfFirst { (dest, _) ->
-        currentDestination?.hierarchy?.any { it.route == dest.route } == true
-    }
+    val currentIndex = resolveSelectedBottomBarIndex(items, currentDestination, selectedTabRoute)
     val currentDest = items.getOrNull(currentIndex)?.first
     val currentIcon = items.getOrNull(currentIndex)?.second
 
@@ -185,7 +205,8 @@ fun NeriBottomBar(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 compactProgress = compactProgress,
-                visibleIndices = visibleIndices
+                visibleIndices = visibleIndices,
+                selectedTabRoute = selectedTabRoute
             )
         }
         return

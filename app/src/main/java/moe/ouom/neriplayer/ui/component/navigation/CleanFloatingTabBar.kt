@@ -92,15 +92,15 @@ internal fun CleanFloatingTabBar(
     onItemSelected: (Destinations) -> Unit,
     modifier: Modifier = Modifier,
     compactProgress: Float = 0f,
-    visibleIndices: List<Int> = items.indices.toList()
+    visibleIndices: List<Int> = items.indices.toList(),
+    /** 当前所属主 Tab route，子页面里也能准确判定选中项 */
+    selectedTabRoute: String? = null
 ) {
     val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
     val dark = colors.surface.luminance() < 0.5f
     val overBackground = LocalHasCustomBackground.current
-    val selectedIndex = items.indexOfFirst { (dest, _) ->
-        isNeriNavigationDestinationSelected(currentDestination, dest)
-    }
+    val selectedIndex = resolveSelectedBottomBarIndex(items, currentDestination, selectedTabRoute)
     val tabDrag = remember { CleanTabDragState() }
     val host = remember { LensHost() }
     val latestItems by rememberUpdatedState(items)

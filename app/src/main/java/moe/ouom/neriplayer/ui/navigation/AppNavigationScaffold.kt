@@ -12,7 +12,6 @@ import moe.ouom.neriplayer.ui.component.navigation.CompactDockButtonGap
 import moe.ouom.neriplayer.ui.component.navigation.CompactDockButtonSize
 import moe.ouom.neriplayer.ui.component.navigation.DockBarBottomMargin
 import moe.ouom.neriplayer.ui.component.navigation.DockBarHorizontalMargin
-import moe.ouom.neriplayer.ui.component.navigation.LocalBottomDockProgress
 import moe.ouom.neriplayer.ui.component.navigation.navCompactProgress
 import moe.ouom.neriplayer.ui.theme.NeriDesign
 import androidx.compose.foundation.layout.isImeVisible
@@ -83,9 +82,12 @@ import moe.ouom.neriplayer.data.local.media.displayName
 import moe.ouom.neriplayer.navigation.Destinations
 import moe.ouom.neriplayer.ui.component.navigation.BottomDockMode
 import moe.ouom.neriplayer.ui.component.navigation.BottomDockScrollReporter
-import moe.ouom.neriplayer.ui.component.navigation.DefaultBottomDockCompactThreshold
 import moe.ouom.neriplayer.ui.component.navigation.LocalBottomDockMode
 import moe.ouom.neriplayer.ui.component.navigation.LocalBottomDockScrollReporter
+import moe.ouom.neriplayer.ui.component.navigation.DockSwipeDirection
+import moe.ouom.neriplayer.ui.component.navigation.DockSwipeThreshold
+import moe.ouom.neriplayer.ui.component.navigation.LocalBottomDockProgress
+import moe.ouom.neriplayer.ui.component.navigation.bottomDockSwipeDetector
 import moe.ouom.neriplayer.ui.component.navigation.NeriBottomBar
 import moe.ouom.neriplayer.ui.component.navigation.resolveBottomBarSelectionAlpha
 import moe.ouom.neriplayer.ui.component.playback.NeriMiniPlayer
@@ -114,6 +116,15 @@ import moe.ouom.neriplayer.ui.banner.managedProcessingRevealGesture
 internal data class AppBottomBarPresentation(
     val items: List<Pair<Destinations, ImageVector>>,
     val currentDestination: NavDestination?,
+    /**
+     * 当前所属的主 Tab route。
+     *
+     * 子页面（播放统计、最近播放、歌单详情……）的 destination hierarchy 里
+     * 不再包含主 Tab route，只靠 hierarchy 匹配会找不到当前项，
+     * 收紧后右侧圆钮就是空白的。这个字段由 NeriApp 的 selectedMainTabRoute 提供，
+     * 在子页面里依然准确，作为当前 Tab 的权威来源。
+     */
+    val selectedMainTabRoute: String? = null,
     val showNowPlaying: Boolean,
     val offlineMode: Boolean,
     val alwaysUseNewTabStyle: Boolean,
@@ -202,15 +213,24 @@ internal fun AppNavigationScaffold(
     val dragBoundsOwner = remember { AppDragBoundsOwner() }
     val yieldsToIme = cleanFloatingChromeYieldsToIme()
     val miniPlayerReservesSpace = miniPlayer.hasSong && !yieldsToIme
-    // 底部两栏形态：页面向下滚动后收紧，回到顶部再展开。两栏读同一个状态，不会各动各的。
-    var bottomDockProgress by remember { mutableStateOf(0f) }
+    // 底部两栏形态：由垂直手势驱动，和列表滚到哪无关。
+    // 上滑一次收紧并保持、下滑一次恢复并保持；只有手势能改这个目标值，
+    // 所以内容很短、滚不动的页面和 NavHost 里的子页面行为完全一致。
+    var dockCompactTarget by remember { mutableStateOf(false) }
+    val bottomDockProgress by animateFloatAsState(
+        targetValue = if (dockCompactTarget) 1f else 0f,
+        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+        label = "bottom_dock_gesture_progress"
+    )
     val density = LocalDensity.current
-    val compactThresholdPx = with(density) { DefaultBottomDockCompactThreshold.toPx() }.toInt()
-    val dockScrollReporter = remember(compactThresholdPx) {
-        BottomDockScrollReporter(
-            thresholdPx = compactThresholdPx,
-            onProgressChanged = { bottomDockProgress = it }
-        )
+    // 手势阈值：比列表滚动的单位距离大一点，避免轻碰误触；但远小于一屏，抬手即生效
+    val dockSwipeThresholdPx = with(density) { DockSwipeThreshold.toPx() }
+    // 回顶动作的注册入口仍保留：收紧态圆钮点下去要能回到当前页面顶部。
+    // 它不再参与形态计算，只负责记住「当前页面怎么回顶」。
+    val dockScrollReporter = remember {
+        BottomDockScrollReporter().apply {
+            onDockTap = { dockCompactTarget = false }
+        }
     }
     val reservedMiniPlayerHeight = reservedMiniPlayerHeight(
         miniPlayerReservesSpace,
@@ -218,9 +238,13 @@ internal fun AppNavigationScaffold(
         configuration.smallestScreenWidthDp
     )
     // 当前标签（收紧后底栏会收成它的一颗圆钮）
-    val currentTabEntry = bottomBar.items.firstOrNull { (dest, _) ->
-        bottomBar.currentDestination?.hierarchy?.any { it.route == dest.route } == true
-    }
+    // 先在权威的 selectedMainTabRoute 里找（子页面也准确），
+    // 找不到再退回 destination hierarchy 匹配（导航状态尚未同步时的兜底）。
+    val currentTabEntry = bottomBar.selectedMainTabRoute
+        ?.let { route -> bottomBar.items.firstOrNull { (dest, _) -> dest.route == route } }
+        ?: bottomBar.items.firstOrNull { (dest, _) ->
+            bottomBar.currentDestination?.hierarchy?.any { it.route == dest.route } == true
+        }
 
     CompositionLocalProvider(
         LocalMiniPlayerHeight provides reservedMiniPlayerHeight,
@@ -286,7 +310,16 @@ internal fun AppNavigationScaffold(
                         showNowPlaying = bottomBar.showNowPlaying,
                         offlineMode = bottomBar.offlineMode,
                         railContent = { AppNavigationRail(bottomBar, onMainTabSelected) },
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            // 全局手势检测器：挂内容区外层，主 Tab 与所有子页面共用。
+                            // 播放页打开时禁用，避免和播放页自己的手势打架。
+                            .bottomDockSwipeDetector(
+                                enabled = !bottomBar.showNowPlaying,
+                                thresholdPx = dockSwipeThresholdPx
+                            ) { direction ->
+                                dockCompactTarget = direction == DockSwipeDirection.COLLAPSE
+                            }
                     ) {
                         AppManagedProcessingLayer(
                             layoutInsets = layoutInsets,
@@ -419,6 +452,7 @@ private fun AppScaffoldBottomBar(
                 selectAlpha = selectAlpha,
                 items = bottomBar.items,
                 currentDestination = bottomBar.currentDestination,
+                selectedTabRoute = bottomBar.selectedMainTabRoute,
                 onItemSelected = { onMainTabSelected(it.route) }
             )
         }
