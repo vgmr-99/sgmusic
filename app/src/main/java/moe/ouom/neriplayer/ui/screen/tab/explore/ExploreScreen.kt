@@ -178,6 +178,8 @@ import moe.ouom.neriplayer.ui.viewmodel.tab.BiliPlaylist
 import moe.ouom.neriplayer.ui.viewmodel.tab.NeteaseExploreSearchType
 import moe.ouom.neriplayer.ui.viewmodel.tab.PlatformBrowseTrackScope
 import moe.ouom.neriplayer.ui.viewmodel.tab.PlaylistSummary
+import moe.ouom.neriplayer.ui.component.navigation.ReportBottomDockScroll
+import moe.ouom.neriplayer.ui.component.navigation.firstVisibleItemTopPx
 import moe.ouom.neriplayer.ui.viewmodel.tab.SearchSource
 import moe.ouom.neriplayer.ui.viewmodel.tab.YouTubeExploreSearchType
 import moe.ouom.neriplayer.ui.viewmodel.tab.YouTubeMusicPlaylist
@@ -194,6 +196,43 @@ import moe.ouom.neriplayer.R as AppR
 private const val SEARCH_INPUT_DEBOUNCE_MS = 300L
 private val ExplorePrimaryTabShape = RoundedCornerShape(20.dp)
 private val ExploreSearchFieldShape = RoundedCornerShape(16.dp)
+
+/**
+ * 探索页当前由哪个滚动容器接管底部两栏形态。
+ *
+ * 探索页是一个 HorizontalPager：每个平台页、搜索结果页、YouTube 页各有自己的滚动容器。
+ * 早期只上报宿主的 gridState，而它实际没绑任何列表，导致上滑时底栏永远不变形。
+ * 但如果把所有列表的滚动源一起上报，又会踩另一个坑：
+ * 滚过的旧页面会把进度一直顶在高位，切到新页面底栏还是收着的。
+ * 所以这里按当前页面**只选一个**滚动源上报。
+ */
+internal enum class ExploreDockScrollSource {
+    /** 搜索结果列表。 */
+    SEARCH,
+
+    /** YouTube Music 歌单网格。 */
+    YOUTUBE,
+
+    /** 平台浏览页（网易云 / QQ / 酷狗 / 酷我 / 咪咕）的歌单网格。 */
+    BROWSE,
+
+    /** B站 / 链接识别页没有可滚动内容，一律按展开态处理。 */
+    NONE
+}
+
+internal fun resolveExploreDockScrollSource(
+    hasSearchQuery: Boolean,
+    source: SearchSource?
+): ExploreDockScrollSource = when {
+    hasSearchQuery -> ExploreDockScrollSource.SEARCH
+    source == SearchSource.YOUTUBE_MUSIC -> ExploreDockScrollSource.YOUTUBE
+    source == SearchSource.NETEASE ||
+        source == SearchSource.QQ_MUSIC ||
+        source == SearchSource.KUGOU ||
+        source == SearchSource.KUWO ||
+        source == SearchSource.MIGU -> ExploreDockScrollSource.BROWSE
+    else -> ExploreDockScrollSource.NONE
+}
 
 internal fun exploreSearchSourceDisplayOrder(
     isInternational: Boolean,
@@ -742,6 +781,30 @@ fun ExploreScreen(
         }
     )
 
+    // 底部两栏（播放条 + 导航栏）的滚动源：
+    // 只上报当前页真正在滚的那个容器，避免已滚过的其它 tab 把底栏一直顶在收紧态。
+    val dockScrollSource = resolveExploreDockScrollSource(
+        hasSearchQuery = searchQuery.isNotBlank(),
+        source = orderedSearchSources.getOrNull(pagerState.currentPage)
+    )
+    val dockTopProvider: () -> Int = when (dockScrollSource) {
+        ExploreDockScrollSource.SEARCH -> { { searchListState.firstVisibleItemTopPx() } }
+        ExploreDockScrollSource.YOUTUBE -> { { youtubeGridState.firstVisibleItemTopPx() } }
+        ExploreDockScrollSource.BROWSE -> { { gridState.firstVisibleItemTopPx() } }
+        ExploreDockScrollSource.NONE -> { { 0 } }
+    }
+    ReportBottomDockScroll(
+        scrollToTop = {
+            when (dockScrollSource) {
+                ExploreDockScrollSource.SEARCH -> scope.launch { searchListState.scrollToItem(0) }
+                ExploreDockScrollSource.YOUTUBE -> scope.launch { youtubeGridState.scrollToItem(0) }
+                ExploreDockScrollSource.BROWSE -> scope.launch { gridState.scrollToItem(0) }
+                ExploreDockScrollSource.NONE -> Unit
+            }
+        },
+        dockTopProvider
+    )
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = Color.Transparent,
@@ -1255,6 +1318,7 @@ fun ExploreScreen(
                                     trackWebUrl = ui.platformBrowseTrackWebUrl,
                                     trackScope = ui.platformBrowseTrackScope
                                 ),
+                                gridState = gridState,
                                 onCardClick = { card ->
                                     // 各平台歌单都能直接展开曲目并播放；
                                     // 读不到曲目时曲目面板会给出「去官方页面」的兜底入口

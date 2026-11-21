@@ -36,6 +36,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -116,6 +117,14 @@ internal fun PlatformBrowseContent(
     browse: PlatformBrowseState,
     onCardClick: (PlatformBrowseCard) -> Unit,
     onCategoryClick: (String) -> Unit,
+    /**
+     * 由探索页传入的网格滚动状态。
+     *
+     * 必须绑定外部 state，底部两栏才能读到这个列表的滚动偏移；
+     * 之前这里自建 state，探索页上报的却是一个没绑任何列表的 gridState，
+     * 导致上滑时播放栏和导航栏永远不变形。
+     */
+    gridState: LazyGridState,
     /** 加载超时/失败后的重试入口，避免用户只能对着转圈或死文案干等 */
     onRetry: () -> Unit = {},
     onTrackClick: (PlatformSearchResult) -> Unit,
@@ -144,6 +153,7 @@ internal fun PlatformBrowseContent(
     }
     PlatformBrowseCardGrid(
         browse = browse,
+        gridState = gridState,
         onCardClick = onCardClick,
         onCategoryClick = onCategoryClick,
         onRetry = onRetry,
@@ -158,6 +168,7 @@ internal fun PlatformBrowseContent(
 @Composable
 private fun PlatformBrowseCardGrid(
     browse: PlatformBrowseState,
+    gridState: LazyGridState,
     onCardClick: (PlatformBrowseCard) -> Unit,
     onCategoryClick: (String) -> Unit,
     onRetry: () -> Unit,
@@ -172,6 +183,7 @@ private fun PlatformBrowseCardGrid(
     val gridMinCellSize = if (isTabletLayout) 170.dp else 150.dp
     val gridSpacing = if (isTabletLayout) 16.dp else 12.dp
     LazyVerticalGrid(
+        state = gridState,
         columns = GridCells.Adaptive(gridMinCellSize),
         verticalArrangement = Arrangement.spacedBy(gridSpacing),
         horizontalArrangement = Arrangement.spacedBy(gridSpacing),

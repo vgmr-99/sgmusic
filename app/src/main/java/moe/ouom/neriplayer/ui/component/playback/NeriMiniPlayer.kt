@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -921,6 +922,13 @@ fun NeriMiniPlayer(
         MaterialTheme.colorScheme.secondaryContainer
     }
     SideEffect { sharedCoverFlight?.miniPlayerContainerColor = capsuleColor }
+
+    // 收紧成单条后才显示边框进度；展开态保持原来的细描边，不干扰正常视觉。
+    // 进度状态在这一层独立收集，绘制阶段读取，不会带动封面/文字重组。
+    val progressVisual = rememberMiniPlayerProgressVisual(
+        active = cleanStyle && !useTabletControls && compactProgress > 0.5f,
+        isPlaying = isPlaying
+    )
     AdvancedGlassSurface(
         role = AdvancedGlassRole.MiniPlayer,
         modifier = Modifier
@@ -940,11 +948,19 @@ fun NeriMiniPlayer(
             .clip(shape)
             .then(
                 if (cleanStyle && !useTabletControls) {
-                    Modifier.border(
-                        width = 0.5.dp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                        shape = shape
-                    )
+                    Modifier
+                        .border(
+                            width = 0.5.dp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                            shape = shape
+                        )
+                        // 进度线沿着同一条胶囊轮廓画，叠在底轨之上
+                        .miniPlayerProgressOutline(
+                            shape = shape,
+                            color = MaterialTheme.colorScheme.primary,
+                            visual = progressVisual,
+                            strokeWidth = 2.dp
+                        )
                 } else {
                     Modifier
                 }
@@ -1097,7 +1113,16 @@ fun NeriMiniPlayer(
                     }
                 )
             } else {
-                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // 玻璃面实际高 58dp（64dp 槽位扣掉 SurfaceBottomGap 6dp），
+                        // 之前这一层只 fillMaxWidth、没撑满高度，Box 默认 TopStart，
+                        // 52dp 的内容行就贴着玻璃面顶部 → 上边距 6dp、下边距 12dp，
+                        // 肉眼看到的就是「整体偏上」。撑满高度再居中后上下各 9dp。
+                        .fillMaxHeight(),
+                    contentAlignment = Alignment.CenterStart
+                ) {
                     // 窄窗口优先保留歌曲文字，切歌仍可使用原来的左右滑动
                     val showSkipControls = shouldShowMiniPlayerSkipControls(smallestScreenWidthDp, maxWidth)
                     // 紧凑态隐藏切歌按钮，把位置让给收拢后的圆钮

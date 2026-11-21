@@ -81,8 +81,6 @@ import moe.ouom.neriplayer.ui.viewmodel.tab.BiliPlaylist
 import moe.ouom.neriplayer.ui.viewmodel.tab.PlaylistSummary
 import moe.ouom.neriplayer.ui.viewmodel.tab.YouTubeMusicPlaylist
 import moe.ouom.neriplayer.util.media.CoverArtColorCache
-import moe.ouom.neriplayer.ui.component.navigation.ReportBottomDockScroll
-import moe.ouom.neriplayer.ui.component.navigation.firstVisibleItemTopPx
 
 // 探索页选中项
 internal sealed class ExploreSelectedItem {
@@ -344,10 +342,8 @@ fun ExploreHostScreen(
                                     detailCloseRootRevealFraction
                                 )
                         ) {
-                            ReportBottomDockScroll(
-                                { scope.launch { gridState.scrollToItem(0) } },
-                                { gridState.firstVisibleItemTopPx() }
-                            )
+                            // 底部两栏的滚动上报已移进 ExploreScreen：
+                            // 那里才知道当前 pager 页和搜索态，能只上报真正在滚的列表。
                             ExploreScreen(
                                 gridState = gridState,
                                 topAppBarState = topAppBarState,
