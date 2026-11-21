@@ -186,6 +186,7 @@ import moe.ouom.neriplayer.ui.util.ClipboardCopyResult
 import moe.ouom.neriplayer.ui.util.copyPlainTextSafely
 import moe.ouom.neriplayer.ui.onboarding.StartupOnboardingScreen
 import moe.ouom.neriplayer.ui.screen.safemode.SafeModeScreen
+import moe.ouom.neriplayer.ui.screen.about.AppUpdateAutoCheckHost
 import moe.ouom.neriplayer.ui.sync.upgrade.StartupSyncUpgradePrompt
 import moe.ouom.neriplayer.ui.theme.rememberActualSystemDarkTheme
 import moe.ouom.neriplayer.util.crash.CrashReportStore
@@ -350,13 +351,14 @@ private fun MainActivity.setNeriContent(
             isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE,
             safeModeActive = safeModeActive
         )
-        CompositionLocalProvider(
-            LocalActivity provides this@setNeriContent,
+        CompositionLocalProvider(            LocalActivity provides this@setNeriContent,
             LocalActivityResultRegistryOwner provides this@setNeriContent,
             LocalOverscrollFactory provides AdvancedGlassOverscrollFactory,
             LocalOverlayNavigationBarHidden provides hideNavigationBar,
             content = content
         )
+        // 应用内更新：启动静默检查 + 新版本提示弹窗（AlertDialog 为独立窗口，不影响主内容布局）
+        AppUpdateAutoCheckHost()
     }
 }
 

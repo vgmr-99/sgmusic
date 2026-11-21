@@ -7,4 +7,27 @@
     <string name="about_app_footer">Based on the upstream NeriPlayer project\nThanks to the upstream team for their open-source contribution!</string>
     <string name="about_feedback_title">Feedback &amp; Suggestions</string>
     <string name="about_feedback_subtitle">QQ Group: 60035779</string>
+
+    <!-- In-app update -->
+    <string name="about_update_version_subtitle">%1$s · Tap to check for updates</string>
+    <string name="about_update_checking">Check for Updates</string>
+    <string name="about_update_checking_message">Checking for a new version…</string>
+    <string name="about_update_new_version_title">New version %1$s available</string>
+    <string name="about_update_up_to_date_title">Up to date</string>
+    <string name="about_update_up_to_date_message">Version %1$s is already the latest.</string>
+    <string name="about_update_check_failed_message">Check failed. Check your network and try again.</string>
+    <string name="about_update_current_version">Current version: %1$s</string>
+    <string name="about_update_downloading_title">Downloading update</string>
+    <string name="about_update_downloading_message">The update package is downloading. You will be prompted to install when it completes; progress is also shown in the notification shade.</string>
+    <string name="about_update_ready_title">Update package ready</string>
+    <string name="about_update_ready_message">Download complete. Tap "Install" to start the update.</string>
+    <string name="about_update_download_failed_title">Download failed</string>
+    <string name="about_update_download_failed_message">Failed to download the update package. Please retry or download it manually from the releases page.</string>
+    <string name="about_update_action_download">Download Update</string>
+    <string name="about_update_action_install">Install</string>
+    <string name="about_update_action_retry">Retry</string>
+    <string name="about_update_action_close">Close</string>
+    <string name="about_update_action_open_release">Open Releases Page</string>
+    <string name="about_update_action_view_release">View Release</string>
+    <string name="about_update_action_dismiss">Later</string>
 </resources>

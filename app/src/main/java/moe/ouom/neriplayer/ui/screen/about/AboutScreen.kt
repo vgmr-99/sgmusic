@@ -227,9 +227,13 @@ internal fun AboutScreen(
     // 卡片清单要读 stringResource，属于 Composable 调用，
     // 必须在 LazyListScope 之外算好再传进去
     var showDisclaimer by remember { mutableStateOf(false) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
+    val updateController = rememberAppUpdateController()
     val aboutScope = rememberCoroutineScope()
     val context = LocalContext.current
     val cardEntries = aboutContentCardEntries(
+        // 版本卡片点击 → 检查更新
+        onCheckUpdate = { showUpdateDialog = true; updateController.check() },
         onOpenRepo = {
             val intent = Intent(
                 Intent.ACTION_VIEW,
@@ -251,6 +255,13 @@ internal fun AboutScreen(
 
     if (showDisclaimer) {
         DisclaimerDialog(onDismiss = { showDisclaimer = false })
+    }
+
+    if (showUpdateDialog) {
+        AppUpdateDialog(
+            controller = updateController,
+            onDismiss = { showUpdateDialog = false }
+        )
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -330,6 +341,7 @@ private data class AboutCardEntry(
  */
 @Composable
 private fun aboutContentCardEntries(
+    onCheckUpdate: () -> Unit,
     onOpenRepo: () -> Unit,
     onOpenFeedback: () -> Unit,
     onShowDisclaimer: () -> Unit
@@ -343,7 +355,8 @@ private fun aboutContentCardEntries(
         AboutCardEntry(
             key = "version",
             title = stringResource(CoreCommonR.string.settings_version),
-            subtitle = BuildConfig.VERSION_NAME
+            subtitle = stringResource(R.string.about_update_version_subtitle, BuildConfig.VERSION_NAME),
+            onClick = onCheckUpdate
         ),
         // 反馈&建议：QQ 加群直链，紧跟在版本卡片后面
         AboutCardEntry(
