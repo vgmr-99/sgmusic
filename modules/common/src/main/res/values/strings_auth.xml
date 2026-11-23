@@ -85,6 +85,7 @@
     <string name="settings_lx_state_init">初始化中</string>
     <string name="settings_lx_self_test_init_failed">脚本初始化失败：%1$s</string>
     <string name="settings_lx_test_action">测试音源</string>
+    <string name="settings_lx_test_short">测</string>
     <string name="settings_lx_test_title">测试音源</string>
     <string name="settings_lx_test_quick_title">快速检测</string>
     <string name="settings_lx_test_quick_desc">每个平台检测一个基础音质</string>

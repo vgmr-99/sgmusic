@@ -628,6 +628,15 @@ object AutoSettingsSchema {
             icon = AutoSettingIcon.Layers
         )
 
+        @AutoSetting(order = 44)
+        val nowPlayingAutoHideControls = autoSwitchSetting(
+            key = "nowplaying_auto_hide_controls",
+            defaultValue = false,
+            titleRes = CoreCommonR.string.settings_nowplaying_auto_hide_controls,
+            descriptionRes = CoreCommonR.string.settings_nowplaying_auto_hide_controls_desc,
+            icon = AutoSettingIcon.Layers
+        )
+
         @AutoSetting(order = 45)
         val nowPlayingCoverLyricsEnabled = autoSwitchSetting(
             key = "nowplaying_cover_lyrics_enabled",
@@ -830,6 +839,32 @@ object AutoSettingsSchema {
             titleRes = CoreCommonR.string.settings_motion,
             descriptionRes = CoreCommonR.string.settings_motion_expand,
             icon = AutoSettingIcon.Bolt
+        )
+
+        @AutoSetting(
+            key = "lyrics_display_mode",
+            type = SettingValueType.String,
+            defaultString = "karaoke",
+            order = 8,
+            ui = SettingUiType.Custom
+        )
+        val lyricsDisplayMode = autoSetting(
+            titleRes = CoreCommonR.string.settings_lyrics_display_mode,
+            descriptionRes = CoreCommonR.string.settings_lyrics_display_mode_desc,
+            iconRes = CoreCommonR.drawable.ic_lyrics
+        )
+
+        @AutoSetting(
+            key = "karaoke_highlight_style",
+            type = SettingValueType.String,
+            defaultString = "standard",
+            order = 9,
+            ui = SettingUiType.Custom
+        )
+        val karaokeHighlightStyle = autoSetting(
+            titleRes = CoreCommonR.string.settings_karaoke_highlight_style,
+            descriptionRes = CoreCommonR.string.settings_karaoke_highlight_style_desc,
+            iconRes = CoreCommonR.drawable.ic_lyrics
         )
 
         @AutoSetting(

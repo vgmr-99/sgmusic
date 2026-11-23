@@ -244,6 +244,8 @@ internal fun SettingsPersonalizationPlaybackInfoCard(
         .collectAsState(initial = true)
     val nowPlayingImmersiveMode by autoSettingsRepository.nowPlayingImmersiveModeFlow
         .collectAsState(initial = false)
+    val nowPlayingAutoHideControls by autoSettingsRepository.nowPlayingAutoHideControlsFlow
+        .collectAsState(initial = false)
     val coverLyricsState = resolveCoverLyricsSwitchState(
         lyricsEnabled = nowPlayingCoverLyricsEnabled,
         immersiveMode = nowPlayingImmersiveMode
@@ -306,6 +308,18 @@ internal fun SettingsPersonalizationPlaybackInfoCard(
                 scope.launch { autoSettingsRepository.setNowPlayingCoverLyricsEnabled(enabled) }
             },
             enabled = coverLyricsState.enabled,
+            supportingContent = null,
+            highlightTargetId = highlightTargetId,
+            highlightPulse = highlightPulse,
+            onHighlightFinished = onHighlightFinished
+        )
+        PersonalizationSwitchItem(
+            setting = AutoSettingsMetadata.requireSetting(AutoSettingsKeys.NOW_PLAYING_AUTO_HIDE_CONTROLS),
+            checked = nowPlayingAutoHideControls,
+            onCheckedChange = { enabled ->
+                scope.launch { autoSettingsRepository.setNowPlayingAutoHideControls(enabled) }
+            },
+            enabled = true,
             supportingContent = null,
             highlightTargetId = highlightTargetId,
             highlightPulse = highlightPulse,

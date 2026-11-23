@@ -51,6 +51,9 @@ class PlaybackQualityOwner(
         val source = port.currentAudioSource() ?: return
         if (source == PlaybackAudioSource.LOCAL || source == PlaybackAudioSource.SUBSONIC) return
         if (key == mutablePreferredKeys.value.forSource(source)) return
+        // 立即更新内存态：否则弹窗回退选中项永远显示默认值（LX 默认 320k），
+        // 且重复点同一档会被上面的守卫直接吞掉，看着像"点了没反应"。
+        setPreferredQuality(source, key)
         scope.launch { port.persistPreferredQuality(source, key) }
     }
 

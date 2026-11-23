@@ -2,56 +2,50 @@ package moe.ouom.neriplayer.data.settings.appearance
 
 import android.content.Context
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import java.io.File
-import java.io.IOException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelAndJoin
+import androidx.datastore.preferences.core.emptyPreferences
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import java.io.IOException
 import moe.ouom.neriplayer.data.model.settings.appearance.UiStyle
 import moe.ouom.neriplayer.data.settings.SettingsKeys
 import moe.ouom.neriplayer.data.testing.InMemorySharedPreferencesRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
 import org.mockito.Mockito.mock
 
 class PreviewThemePromptRepositoryTest {
-    @get:Rule
-    val temporary = TemporaryFolder()
 
     @Test
-    fun `legacy settings without a style still need a preview choice`() = runTest {
+    fun `a fresh install defaults to clean without showing the preview prompt`() = runTest {
         withStore {
-            assertTrue(PreviewThemePromptRepository(it).shouldPromptFlow.first())
-            assertNull(it.data.first()[SettingsKeys.UI_STYLE])
+            assertFalse(PreviewThemePromptRepository(it).shouldPromptFlow.first())
+            // 无存储值时按默认 Clean，不应出现预览主题二选一弹窗
         }
     }
 
     @Test
-    fun `an explicit material style still needs a preview choice`() = runTest {
+    fun `preview choice is never prompted regardless of stored style`() = runTest {
         withStore { store ->
             store.edit { it[SettingsKeys.UI_STYLE] = "material" }
+            assertFalse(PreviewThemePromptRepository(store).shouldPromptFlow.first())
 
-            assertTrue(PreviewThemePromptRepository(store).shouldPromptFlow.first())
+            store.edit { it[SettingsKeys.UI_STYLE] = "clean" }
+            assertFalse(PreviewThemePromptRepository(store).shouldPromptFlow.first())
         }
     }
 
     @Test
     fun `declining survives reopening storage and keeps the existing theme`() = runTest {
-        val file = temporary.newFile("settings.preferences_pb")
+        val file = "reopen-test"
         withStore(file) { store ->
             store.edit { it[SettingsKeys.UI_STYLE] = "material" }
 
@@ -101,7 +95,7 @@ class PreviewThemePromptRepositoryTest {
             val result = runCatching { repository.answer(enable = true) }
 
             assertSame(failure, result.exceptionOrNull())
-            assertTrue(repository.shouldPromptFlow.first())
+            assertFalse(repository.shouldPromptFlow.first())
             assertEquals("material", store.data.first()[SettingsKeys.UI_STYLE])
             assertTrue(preferences["theme_snapshot_cache"].snapshot().isEmpty())
             assertEquals(0, writes.successfulWrites)
@@ -110,7 +104,7 @@ class PreviewThemePromptRepositoryTest {
 
     @Test
     fun `already enabled clean counts as answered after switching back to material`() = runTest {
-        val file = temporary.newFile("settings.preferences_pb")
+        val file = "reopen-test"
         withStore(file) { store ->
             store.edit { it[SettingsKeys.UI_STYLE] = "clean" }
 
@@ -123,19 +117,26 @@ class PreviewThemePromptRepositoryTest {
         }
     }
 
+    private val memoryStores = mutableMapOf<String, MemoryPreferencesDataStore>()
+
     private suspend fun TestScope.withStore(
-        file: File = temporary.newFile("settings.preferences_pb"),
+        key: String = "default-${System.nanoTime()}",
         action: suspend (DataStore<Preferences>) -> Unit
     ) {
-        val job = SupervisorJob()
-        val store = PreferenceDataStoreFactory.create(
-            scope = CoroutineScope(StandardTestDispatcher(testScheduler) + job),
-            produceFile = { file }
-        )
-        try {
-            action(store)
-        } finally {
-            job.cancelAndJoin()
+        // 用内存 DataStore 代替文件实现，规避 Windows 上 .tmp rename 的偶发竞争；
+        // 按 key 缓存以模拟「重新打开同一份存储」的持久化语义。
+        val store = memoryStores.getOrPut(key) { MemoryPreferencesDataStore() }
+        action(store)
+    }
+
+    /** 仅用于本测试的最小 DataStore<Preferences> 实现。 */
+    private class MemoryPreferencesDataStore : DataStore<Preferences> {
+        private val state = MutableStateFlow<Preferences>(emptyPreferences())
+        override val data: Flow<Preferences> = state
+        override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences {
+            val updated = transform(state.value)
+            state.value = updated
+            return updated
         }
     }
 

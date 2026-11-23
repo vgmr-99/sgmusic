@@ -11,6 +11,15 @@
     <string name="settings_show_lyric_translation_desc">Show translated lyrics</string>
     <string name="settings_advanced_lyrics">Advanced Lyrics</string>
     <string name="settings_advanced_lyrics_desc">Enable a more modern lyrics layout and motion, and prefer word-level lyrics when available</string>
+    <string name="settings_lyrics_display_mode">Lyrics display mode</string>
+    <string name="settings_lyrics_display_mode_desc">Choose word-by-word karaoke or line-by-line lyrics</string>
+    <string name="settings_lyrics_display_mode_karaoke">Word-by-word</string>
+    <string name="settings_lyrics_display_mode_line">Line-by-line</string>
+    <string name="settings_karaoke_highlight_style">Karaoke highlight style</string>
+    <string name="settings_karaoke_highlight_style_desc">Adjust how strongly the active word is highlighted</string>
+    <string name="settings_karaoke_highlight_standard">Standard</string>
+    <string name="settings_karaoke_highlight_emphasis">Emphasis</string>
+    <string name="settings_karaoke_highlight_soft">Soft</string>
     <string name="settings_coherent_feedback">Coherent feedback</string>
     <string name="settings_coherent_feedback_desc">Move detail and background pages together; turn this off for a drawer-style rise with a gently receding background</string>
     <string name="settings_advanced_blur">Advanced Blur Effects</string>

@@ -20,10 +20,11 @@
     <string name="settings_theme_mode_auto_desc">开启后会自动跟随系统外观切换</string>
     <string name="settings_theme_palette_style">色彩风格</string>
     <string name="settings_theme_palette_style_desc">切换 Material Kolor 的调色风格，动态封面取色和自定义主题色都会使用。</string>
-    <string name="settings_theme_color_spec">色彩空间</string>
-    <string name="settings_theme_color_spec_desc">选择 Material 色彩规范版本，2025 更鲜明，2021 更稳定。</string>
+    <string name="settings_theme_color_spec">动态色规范</string>
+    <string name="settings_theme_color_spec_desc">选择动态配色的色彩规范版本，2025 更鲜明，2021 更稳定。仅在关闭「动态取色」后生效。</string>
     <string name="settings_theme_color_spec_2021">2021</string>
     <string name="settings_theme_color_spec_2025">2025</string>
+    <string name="settings_theme_color_spec_disabled_hint">当前「动态取色」已开启，使用系统配色，此规范不生效。关闭「动态取色」后即可生效。</string>
     <string name="settings_theme_style_tonal_spot">柔和色点</string>
     <string name="settings_theme_style_tonal_spot_desc">接近 Android 默认动态色，平衡耐看。</string>
     <string name="settings_theme_style_neutral">低饱和</string>
@@ -44,6 +45,8 @@
     <string name="settings_nowplaying_keep_screen_on_desc">打开播放页时保持屏幕唤醒，离开后恢复系统自动锁屏</string>
     <string name="settings_nowplaying_cover_lyrics">封面页显示歌词</string>
     <string name="settings_nowplaying_cover_lyrics_desc">在正在播放的封面页显示逐行歌词</string>
+    <string name="settings_nowplaying_auto_hide_controls">自动隐藏控制条</string>
+    <string name="settings_nowplaying_auto_hide_controls_desc">播放几秒后自动隐藏播放控制条，轻触屏幕可重新显示</string>
     <string name="settings_nowplaying_progress_quality_switch">进度条上方显示当前音质</string>
     <string name="settings_nowplaying_progress_quality_switch_desc">显示在进度条上方；音质切换入口位于更多选项</string>
     <string name="settings_nowplaying_toolbar_dock">底部工具栏使用 Dock 样式</string>

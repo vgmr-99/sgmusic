@@ -4,7 +4,7 @@ data class ThemePreferenceSnapshot(
     val dynamicColor: Boolean = true,
     val forceDark: Boolean = false,
     val followSystemDark: Boolean = true,
-    val uiStyle: UiStyle = UiStyle.Material
+    val uiStyle: UiStyle = UiStyle.Clean
 ) {
     fun resolveUseDark(systemDark: Boolean): Boolean {
         return when {

@@ -26,8 +26,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -35,13 +38,11 @@ import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -231,78 +232,116 @@ internal fun SettingsLxSourceSection(
             )
         } else {
             scripts.forEach { item ->
-                ListItem(
-                    headlineContent = {
-                        Text(
-                            text = item.remark.takeIf { it.isNotBlank() } ?: item.name,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
-                    supportingContent = {
-                        if (item.remark.isNotBlank()) {
+                val sources = item.info?.sources?.keys?.joinToString(",").orEmpty()
+                val status = when (item.state) {
+                    LxSourceState.OK -> stringResource(CoreCommonR.string.settings_lx_state_ok)
+                    LxSourceState.FAIL -> stringResource(CoreCommonR.string.settings_lx_state_fail)
+                    LxSourceState.DISABLED -> stringResource(CoreCommonR.string.settings_lx_state_disabled)
+                    LxSourceState.INIT -> stringResource(CoreCommonR.string.settings_lx_state_init)
+                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp)
+                ) {
+                    // 第一排：名称 + 单行文件名（信息区占满整行宽度）。
+                    // 状态只在第二排「状态 · 声明平台」显示一次，避免重复。
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = item.remark.takeIf { it.isNotBlank() } ?: item.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                             Text(
                                 text = stringResource(CoreCommonR.string.settings_lx_remark_file, item.name),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                        }
-                        val sources = item.info?.sources?.keys?.joinToString(",").orEmpty()
-                        val status = when (item.state) {
-                            LxSourceState.OK -> stringResource(CoreCommonR.string.settings_lx_state_ok)
-                            LxSourceState.FAIL -> stringResource(CoreCommonR.string.settings_lx_state_fail)
-                            LxSourceState.DISABLED -> stringResource(CoreCommonR.string.settings_lx_state_disabled)
-                            LxSourceState.INIT -> stringResource(CoreCommonR.string.settings_lx_state_init)
-                        }
-                        Text(if (sources.isEmpty()) status else "$status · $sources")
-                        // 失败原因外露：下次再碰 init 失败，不必抓 logcat 才知道
-                        if (!item.error.isNullOrBlank()) {
-                            Text(
-                                text = item.error!!,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    },
-                    trailingContent = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(
-                                onClick = {
-                                    remarkTarget = item
-                                    remarkDraft = item.remark
-                                }
-                            ) {
-                                Icon(
-                                    Icons.Outlined.Edit,
-                                    contentDescription = stringResource(CoreCommonR.string.settings_lx_remark_action)
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    testTarget = item
-                                    testProbes = emptyList()
-                                    testReport = null
-                                    testPhase = LxTestPhase.CHOOSE
-                                },
-                                enabled = testPhase == null
-                            ) {
-                                Icon(
-                                    Icons.Outlined.Science,
-                                    contentDescription = stringResource(CoreCommonR.string.settings_lx_test_action)
-                                )
-                            }
-                            MiuixSettingsSwitch(
-                                checked = item.enabled,
-                                onCheckedChange = { next ->
-                                    AppContainer.launchBackgroundIo { lxRepository.setEnabled(item.id, next) }
-                                }
-                            )
-                            IconButton(onClick = { AppContainer.launchBackgroundIo { lxRepository.remove(item.id) } }) {
-                                Icon(Icons.Outlined.DeleteForever, contentDescription = stringResource(CoreCommonR.string.settings_lx_delete))
-                            }
                         }
                     }
-                )
+                    // 失败原因外露
+                    if (!item.error.isNullOrBlank()) {
+                        Text(
+                            text = item.error!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    // 第二排：左侧状态/声明平台，右侧四个缩小按钮（顺序不变：备注/检测/开关/删除）
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (sources.isEmpty()) status else "$status · $sources",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        // 备注：铅笔图标
+                        IconButton(
+                            onClick = {
+                                remarkTarget = item
+                                remarkDraft = item.remark
+                            },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                Icons.Outlined.Edit,
+                                contentDescription = stringResource(CoreCommonR.string.settings_lx_remark_action),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(2.dp))
+                        // 检测：单文字「测」代替图标
+                        IconButton(
+                            onClick = {
+                                testTarget = item
+                                testProbes = emptyList()
+                                testReport = null
+                                testPhase = LxTestPhase.CHOOSE
+                            },
+                            enabled = testPhase == null,
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Text(
+                                text = stringResource(CoreCommonR.string.settings_lx_test_short),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Spacer(Modifier.width(2.dp))
+                        MiuixSettingsSwitch(
+                            checked = item.enabled,
+                            onCheckedChange = { next ->
+                                AppContainer.launchBackgroundIo { lxRepository.setEnabled(item.id, next) }
+                            }
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        IconButton(
+                            onClick = { AppContainer.launchBackgroundIo { lxRepository.remove(item.id) } },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                Icons.Outlined.DeleteForever,
+                                contentDescription = stringResource(CoreCommonR.string.settings_lx_delete),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
 

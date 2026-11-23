@@ -32,6 +32,17 @@ import moe.ouom.neriplayer.platform.lxsource.LxSourceState
 import moe.ouom.neriplayer.common.logging.NPLogger
 
 /**
+ * 偏好音质字符串 -> LxQuality。
+ * 枚举共 8 档（128k/192k/320k/flac/flac24bit/hires/atmos/master），
+ * 过去这里只硬编码了 128k/flac/flac24bit，其余（hires/atmos/master）被错误打成 320k。
+ * 提取为纯函数便于单测锁定全量映射。
+ */
+internal fun lxQualityFromCode(raw: String): LxQuality {
+    val code = raw.trim().lowercase()
+    return LxQuality.entries.firstOrNull { it.code == code } ?: LxQuality.Q320
+}
+
+/**
  * LX 兜底：网易云失败 -> Bilibili 匹配失败 -> LX 自定义源兜底（最后一档）。
  * 由 getNeteaseSongUrl 在 tryResolveNeteaseAutoBiliSource 之后调用。
  * 语义：LX 只做 musicUrl 解析，播放平台按 song.channelId 映射到 LX 平台代码。
@@ -42,13 +53,7 @@ internal suspend fun PlayerManager.tryResolveLxSource(
     // LX 总开关已移除：只要有就绪脚本即可兜底
     val resolver = lxSourceResolver() ?: return null
     val platform = platformFor(song.channelId)
-    // 默认 320k；脚本声明的 qualitys 里没有这一档时退回脚本的第一档
-    var quality = when (lxSourceQuality.trim().lowercase()) {
-        "128k" -> LxQuality.Q128
-        "flac" -> LxQuality.FLAC
-        "flac24bit" -> LxQuality.FLAC24
-        else -> LxQuality.Q320
-    }
+    var quality = lxQualityFromCode(lxSourceQuality)
     quality = adjustQuality(platform, quality)
     return try {
         val result = resolver.resolve(song, platform, quality)
@@ -93,9 +98,13 @@ private fun PlayerManager.adjustQuality(platform: LxPlatform, requested: LxQuali
             .mapNotNull { it.info }
             .filter { it.supports(platform) }
             .flatMap { it.qualities(platform) }
+            // 归一化：与 UI 选项(LxSourceResolver.lxQualityOptions)和 Repository 的比较保持一致，
+            // 否则脚本声明 "FLAC"/" hires " 时会因大小写/空格不匹配而错误回退到第一档。
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() }
     }.getOrNull().orEmpty()
     if (declared.isEmpty() || requested.code in declared) return requested
-    val first = declared.firstOrNull { it.isNotBlank() } ?: return requested
+    val first = declared.first() 
     return LxQuality.entries.firstOrNull { it.code == first } ?: requested
 }
 

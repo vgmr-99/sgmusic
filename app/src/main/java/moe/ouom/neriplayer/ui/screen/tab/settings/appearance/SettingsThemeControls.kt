@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -280,7 +281,8 @@ internal fun ThemePaletteStyleSelector(
 internal fun ThemeColorSpecSelector(
     selectedSpec: String,
     onSpecChange: (String) -> Unit,
-    modifier: Modifier
+    modifier: Modifier,
+    enabled: Boolean = true
 ) {
     val normalizedSpec = ThemeDefaults.normalizeColorSpec(selectedSpec)
     val options = listOf(
@@ -297,8 +299,19 @@ internal fun ThemeColorSpecSelector(
                 MiuixSettingsSegmentedTabs(
                     labels = options.map { it.second },
                     selectedIndex = options.indexOfFirst { it.first == normalizedSpec }.coerceAtLeast(0),
-                    onSelectedIndexChange = { index -> onSpecChange(options[index].first) }
+                    onSelectedIndexChange = { index ->
+                        // 动态取色开启时该项不生效，禁用点击避免用户误以为改了有用。
+                        if (enabled) onSpecChange(options[index].first)
+                    },
+                    modifier = Modifier.alpha(if (enabled) 1f else 0.45f)
                 )
+                if (!enabled) {
+                    Text(
+                        text = stringResource(CoreCommonR.string.settings_theme_color_spec_disabled_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent)

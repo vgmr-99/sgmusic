@@ -85,6 +85,7 @@
     <string name="settings_lx_state_init">Initializing</string>
     <string name="settings_lx_self_test_init_failed">Script initialization failed: %1$s</string>
     <string name="settings_lx_test_action">Test source</string>
+    <string name="settings_lx_test_short">T</string>
     <string name="settings_lx_test_title">Test source</string>
     <string name="settings_lx_test_quick_title">Quick check</string>
     <string name="settings_lx_test_quick_desc">Checks one basic quality per platform</string>

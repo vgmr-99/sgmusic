@@ -298,6 +298,21 @@ internal fun SettingsMotionSection(
                     }
                 }
 
+                LyricsDisplayModeSettingItem(
+                    repo = autoSettingsRepository,
+                    scope = scope,
+                    highlightTargetId = highlightTargetId,
+                    highlightPulse = highlightPulse,
+                    onHighlightFinished = onHighlightFinished
+                )
+                KaraokeHighlightStyleSettingItem(
+                    repo = autoSettingsRepository,
+                    scope = scope,
+                    highlightTargetId = highlightTargetId,
+                    highlightPulse = highlightPulse,
+                    onHighlightFinished = onHighlightFinished
+                )
+
                 EnhancedAdvancedBlurSettingItem(
                     sdkInt = Build.VERSION.SDK_INT,
                     advancedBlurEnabled = advancedBlurEnabled,
@@ -544,6 +559,117 @@ internal fun EnhancedAdvancedBlurSettingItem(
             confirmButton = {
                 MiuixSettingsTextButton(onClick = { showBackgroundImageHint = false }) {
                     Text(stringResource(CoreCommonR.string.action_ok))
+                }
+            }
+        )
+    }
+}
+
+/** 歌词显示方式：逐字卡拉OK / 逐行。写回独立设置，保留旧 advanced_lyrics 开关不动。 */
+@Composable
+private fun LyricsDisplayModeSettingItem(
+    repo: AutoSettingsRepository,
+    scope: kotlinx.coroutines.CoroutineScope,
+    highlightTargetId: String?,
+    highlightPulse: Int,
+    onHighlightFinished: (() -> Unit)?
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    val mode by repo.lyricsDisplayModeFlow.collectAsStateWithLifecycle(initialValue = "karaoke")
+    val options = listOf("karaoke" to CoreCommonR.string.settings_lyrics_display_mode_karaoke,
+        "line" to CoreCommonR.string.settings_lyrics_display_mode_line)
+    val label = stringResource(options.firstOrNull { it.first == mode }?.second
+        ?: CoreCommonR.string.settings_lyrics_display_mode_karaoke)
+    AutoSettingsListItem(
+        setting = AutoSettingsMetadata.requireSetting(AutoSettingsKeys.LYRICS_DISPLAY_MODE),
+        supportingContent = { Text(label) },
+        trailingContent = {
+            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        },
+        highlightTargetId = highlightTargetId,
+        highlightPulse = highlightPulse,
+        onHighlightFinished = onHighlightFinished,
+        onClick = { showDialog = true }
+    )
+    if (showDialog) {
+        MiuixSettingsDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text(stringResource(CoreCommonR.string.settings_lyrics_display_mode)) },
+            text = {
+                Column {
+                    options.forEach { (value, labelRes) ->
+                        MiuixSettingsChoiceRow(
+                            title = stringResource(labelRes),
+                            selected = value == mode,
+                            onClick = {
+                                scope.launch { repo.setLyricsDisplayMode(value) }
+                                showDialog = false
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                MiuixSettingsTextButton(onClick = { showDialog = false }) {
+                    Text(stringResource(CoreCommonR.string.action_close))
+                }
+            }
+        )
+    }
+}
+
+/** 卡拉OK高亮样式：标准 / 强调 / 柔和。 */
+@Composable
+private fun KaraokeHighlightStyleSettingItem(
+    repo: AutoSettingsRepository,
+    scope: kotlinx.coroutines.CoroutineScope,
+    highlightTargetId: String?,
+    highlightPulse: Int,
+    onHighlightFinished: (() -> Unit)?
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    val style by repo.karaokeHighlightStyleFlow.collectAsStateWithLifecycle(initialValue = "standard")
+    val options = listOf(
+        "standard" to CoreCommonR.string.settings_karaoke_highlight_standard,
+        "emphasis" to CoreCommonR.string.settings_karaoke_highlight_emphasis,
+        "soft" to CoreCommonR.string.settings_karaoke_highlight_soft
+    )
+    val label = stringResource(options.firstOrNull { it.first == style }?.second
+        ?: CoreCommonR.string.settings_karaoke_highlight_standard)
+    AutoSettingsListItem(
+        setting = AutoSettingsMetadata.requireSetting(AutoSettingsKeys.KARAOKE_HIGHLIGHT_STYLE),
+        supportingContent = { Text(label) },
+        trailingContent = {
+            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        },
+        highlightTargetId = highlightTargetId,
+        highlightPulse = highlightPulse,
+        onHighlightFinished = onHighlightFinished,
+        onClick = { showDialog = true }
+    )
+    if (showDialog) {
+        MiuixSettingsDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text(stringResource(CoreCommonR.string.settings_karaoke_highlight_style)) },
+            text = {
+                Column {
+                    options.forEach { (value, labelRes) ->
+                        MiuixSettingsChoiceRow(
+                            title = stringResource(labelRes),
+                            selected = value == style,
+                            onClick = {
+                                scope.launch { repo.setKaraokeHighlightStyle(value) }
+                                showDialog = false
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                MiuixSettingsTextButton(onClick = { showDialog = false }) {
+                    Text(stringResource(CoreCommonR.string.action_close))
                 }
             }
         )

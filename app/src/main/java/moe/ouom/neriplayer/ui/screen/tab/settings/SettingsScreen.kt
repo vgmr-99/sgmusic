@@ -23,6 +23,7 @@ package moe.ouom.neriplayer.ui.screen.tab.settings
  * Created: 2025/8/8
  */
 
+import android.os.Build
 import moe.ouom.neriplayer.ui.settings.SettingRowIcon
 import moe.ouom.neriplayer.data.ltw.validation.format
 import androidx.compose.foundation.background
@@ -545,6 +546,9 @@ internal fun SettingsScreen(
                                 ThemeColorSpecSelector(
                                     selectedSpec = appearanceState.visualBlur.themeColorSpecValue,
                                     onSpecChange = appearanceActions.onThemeColorSpecChange,
+                                    // 动态取色开启且 SDK>=31 时走系统动态色，不读该规范，禁用以免误导
+                                    enabled = !appearanceState.theme.dynamicColorEnabled ||
+                                        Build.VERSION.SDK_INT < 31,
                                     modifier = Modifier.settingsHighlightTarget(
                                         targetId = "manual:theme_color_spec",
                                         highlightTargetId = settingsHighlightTargetId,

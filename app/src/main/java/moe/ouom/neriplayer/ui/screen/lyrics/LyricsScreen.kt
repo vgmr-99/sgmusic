@@ -232,6 +232,20 @@ internal fun resolveLyricsTabletPortraitWidths(availableWidth: Dp): LyricsTablet
     )
 }
 
+/** 逐字歌词高亮强度预设。 */
+internal data class KaraokeHighlightSpec(
+    val focusedScale: Float,
+    val unfocusedScale: Float,
+    val activeAlpha: Float,
+    val inactiveAlpha: Float
+)
+
+internal fun resolveKaraokeHighlightSpec(style: String): KaraokeHighlightSpec = when (style) {
+    "emphasis" -> KaraokeHighlightSpec(1.04f, 0.94f, 1f, 0.16f)
+    "soft" -> KaraokeHighlightSpec(1.005f, 0.985f, 1f, 0.45f)
+    else -> KaraokeHighlightSpec(1.015f, 0.965f, 1f, 0.28f) // standard，与既有默认一致
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun LyricsScreen(
@@ -251,6 +265,8 @@ fun LyricsScreen(
     onSeekTo: (Long) -> Unit,
     progressSeekEnabled: Boolean = true,
     advancedLyricsEnabled: Boolean = true,
+    lyricsDisplayMode: String = "karaoke",
+    karaokeHighlightStyle: String = "standard",
     translatedLyrics: List<LyricEntry>? = null,
     phoneticLyrics: List<LyricEntry> = emptyList(),
     lyricSourceKey: String?,
@@ -777,6 +793,8 @@ fun LyricsScreen(
                 playbackSessionKey = currentSong?.stableKey(),
                 previewPositionOverrideMs = previewPositionOverrideMs,
                 advancedLyricsEnabled = advancedLyricsEnabled,
+                lyricsDisplayMode = lyricsDisplayMode,
+                karaokeHighlightStyle = karaokeHighlightStyle,
                 showLyricTranslation = secondaryMode != LyricsSecondaryLineMode.NONE,
                 lyricTranslationUsePhonetic = secondaryMode == LyricsSecondaryLineMode.PHONETIC,
                 lyricFontScale = lyricFontScale,
@@ -1371,6 +1389,8 @@ internal fun LyricsContentPane(
     playbackSessionKey: String?,
     previewPositionOverrideMs: Long?,
     advancedLyricsEnabled: Boolean,
+    lyricsDisplayMode: String = "karaoke",
+    karaokeHighlightStyle: String = "standard",
     showLyricTranslation: Boolean,
     lyricTranslationUsePhonetic: Boolean,
     lyricFontScale: Float,
@@ -1421,7 +1441,10 @@ internal fun LyricsContentPane(
     }
     val effectiveRawTranslatedLyrics = if (usePhoneticTranslation) null else rawTranslatedLyrics
 
-    if (advancedLyricsEnabled || useTabletLayout) {
+    // 逐字/逐行由新设置决定；"line" 强制逐行，其余沿用旧开关（保持向后兼容）
+    val useKaraoke = lyricsDisplayMode != "line" && advancedLyricsEnabled
+    val highlightSpec = resolveKaraokeHighlightSpec(karaokeHighlightStyle)
+    if (useKaraoke || useTabletLayout) {
         AdvancedLyricsView(
             lyrics = lyrics,
             currentTimeMs = effectiveLyricTimeMs,
@@ -1432,6 +1455,10 @@ internal fun LyricsContentPane(
             lyricOffsetMs = lyricOffsetMs,
             lyricBlurEnabled = lyricBlurEnabled,
             lyricBlurAmount = lyricBlurAmount,
+            focusedLineScale = highlightSpec.focusedScale,
+            unfocusedLineScale = highlightSpec.unfocusedScale,
+            activeLineAlpha = highlightSpec.activeAlpha,
+            inactiveLineAlpha = highlightSpec.inactiveAlpha,
             translatedLyrics = effectiveTranslatedLyrics,
             showLyricTranslation = showLyricTranslation,
             showPhoneticAsTranslation = usePhoneticTranslation,

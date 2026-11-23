@@ -43,6 +43,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -84,6 +85,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -319,6 +321,13 @@ fun NowPlayingScreen(
     val lyricTranslationUsePhonetic by settingsRepo
         .lyricTranslationUsePhoneticFlow
         .collectAsStateWithLifecycle(initialValue = false)
+    val lyricsDisplayMode by settingsRepo.lyricsDisplayModeFlow
+        .collectAsStateWithLifecycle(initialValue = "karaoke")
+    val karaokeHighlightStyle by settingsRepo.karaokeHighlightStyleFlow
+        .collectAsStateWithLifecycle(initialValue = "standard")
+    val nowPlayingAutoHideControls by settingsRepo.nowPlayingAutoHideControlsFlow
+        .collectAsStateWithLifecycle(initialValue = false)
+    var controlsInteractionTick by remember { mutableIntStateOf(0) }
 
     // 订阅当前播放链接
     val currentMediaUrl by PlayerManager.currentMediaUrlFlow.collectAsStateWithLifecycle()
@@ -381,6 +390,9 @@ fun NowPlayingScreen(
     )
     val actualCoverUrl = currentCoverUrl
     val coverOwner = rememberNowPlayingCoverOwner()
+    // 单击封面切换歌词主视觉（长按仍看大图）；用 rememberUpdatedState 保证拿到最新状态
+    val currentShowLyrics by rememberUpdatedState(showLyricsScreen)
+    coverOwner.onCoverTapToggleLyrics = { onShowLyricsScreenChange(!currentShowLyrics) }
     val coverSource = remember(
         currentCoverUrl, coverSongKey, coverSongKeyAliases,
         downloadPresenceVersion, coverAssetRootGeneration, coverAssetSongRevision, currentSong
@@ -733,6 +745,17 @@ fun NowPlayingScreen(
     val effectiveShowLyricsScreen = showLyricsScreen && !tabletLandscape
 
     LaunchedEffect(Unit) { contentVisible = true }
+    // 自动隐藏控制条：设置开启且正在播放时，4 秒后隐藏；交互后重置计时
+    var controlsAutoHidden by remember { mutableStateOf(false) }
+    LaunchedEffect(nowPlayingAutoHideControls, isPlaybackControlPlaying, currentSong?.id, controlsInteractionTick) {
+        if (!nowPlayingAutoHideControls || !isPlaybackControlPlaying) {
+            controlsAutoHidden = false
+        } else {
+            controlsAutoHidden = false
+            delay(4_000L)
+            controlsAutoHidden = true
+        }
+    }
     LaunchedEffect(currentSong?.id) { showQualitySwitchDialog = false }
     LaunchedEffect(effectiveShowLyricsScreen, showCoverSourceBadge) {
         val returningFromLyrics = previousLyricsScreenState && !effectiveShowLyricsScreen
@@ -954,6 +977,8 @@ fun NowPlayingScreen(
                                 },
                                 progressSeekEnabled = playbackProgressSeekEnabled,
                                 advancedLyricsEnabled = advancedLyricsEnabled,
+                                lyricsDisplayMode = lyricsDisplayMode,
+                                karaokeHighlightStyle = karaokeHighlightStyle,
                                 translatedLyrics = translatedLyrics,
                                 phoneticLyrics = phoneticLyrics,
                                 lyricSourceKey = currentLyricSourceKey,
@@ -1017,7 +1042,12 @@ fun NowPlayingScreen(
                                 .windowInsetsPadding(WindowInsets.safeDrawing)
                                 .padding(horizontal = horizontalPadding, vertical = verticalPadding)
                                 .pointerInput(Unit) {
-                                    detectVerticalDragGestures { _, dragAmount -> if (dragAmount > 60) onNavigateUp() }
+                                    // 轻触屏幕：唤醒自动隐藏的控制条（设置关闭时无副作用）
+                                    detectTapGestures { controlsInteractionTick++ }
+                                    detectVerticalDragGestures { _, dragAmount ->
+                                        if (dragAmount > 60) onNavigateUp()
+                                        else controlsInteractionTick++
+                                    }
                                 }
                             if (useWideLandscapeLayout) {
                                 contentModifier = contentModifier.testTag(
@@ -1041,14 +1071,26 @@ fun NowPlayingScreen(
                                     }
                                 }
                             } else if (!useWideLandscapeLayout && lyrics.isNotEmpty()) {
+                                // 竖屏：左滑进歌词页（保留原行为）；右滑切下一首（新增，零冲突方向）
                                 contentModifier = contentModifier.pointerInput(lyrics) {
-                                    detectHorizontalDragGestures { _, dragAmount ->
+                                    var accumulated = 0f
+                                    detectHorizontalDragGestures(
+                                        onDragStart = { accumulated = 0f },
+                                        onDragEnd = {
+                                            if (accumulated > 60f) PlayerManager.next()
+                                        }
+                                    ) { _, dragAmount ->
+                                        accumulated += dragAmount
                                         if (dragAmount < -20) onShowLyricsScreenChange(true)
                                     }
                                 }
                             }
 
                             val mainPlaybackControls: @Composable () -> Unit = {
+                                if (controlsAutoHidden) {
+                                    // 自动隐藏时保持等高占位，避免布局跳动
+                                    Spacer(Modifier.height(controlButtonSpacing * 3))
+                                } else {
                                 BoxWithConstraints(
                                     modifier = Modifier.fillMaxWidth(),
                                     contentAlignment = Alignment.Center
@@ -1174,6 +1216,7 @@ fun NowPlayingScreen(
                                             )
                                         }
                                     }
+                                }
                                 }
                             }
 

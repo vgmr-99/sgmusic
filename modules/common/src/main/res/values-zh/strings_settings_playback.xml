@@ -11,6 +11,15 @@
     <string name="settings_show_lyric_translation_desc">开启后将显示歌词的翻译内容</string>
     <string name="settings_advanced_lyrics">高级歌词</string>
     <string name="settings_advanced_lyrics_desc">启用更现代的歌词排版与动效，并优先使用逐字歌词</string>
+    <string name="settings_lyrics_display_mode">歌词显示方式</string>
+    <string name="settings_lyrics_display_mode_desc">选择逐字卡拉OK或逐行显示歌词</string>
+    <string name="settings_lyrics_display_mode_karaoke">逐字</string>
+    <string name="settings_lyrics_display_mode_line">逐行</string>
+    <string name="settings_karaoke_highlight_style">卡拉OK高亮样式</string>
+    <string name="settings_karaoke_highlight_style_desc">调整逐字歌词的高亮强调程度</string>
+    <string name="settings_karaoke_highlight_standard">标准</string>
+    <string name="settings_karaoke_highlight_emphasis">强调</string>
+    <string name="settings_karaoke_highlight_soft">柔和</string>
     <string name="settings_coherent_feedback">连贯反馈</string>
     <string name="settings_coherent_feedback_desc">让详情页与背景页面同步接力移动；关闭后使用背景轻微后退、前景自下而上展开的抽屉式动效</string>
     <string name="settings_advanced_blur">高级模糊效果</string>

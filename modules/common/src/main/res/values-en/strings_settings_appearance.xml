@@ -20,10 +20,11 @@
     <string name="settings_theme_mode_auto_desc">When enabled, the app follows the system appearance automatically.</string>
     <string name="settings_theme_palette_style">Color style</string>
     <string name="settings_theme_palette_style_desc">Switch the Material Kolor palette style for cover colors and custom accent colors.</string>
-    <string name="settings_theme_color_spec">Color spec</string>
-    <string name="settings_theme_color_spec_desc">Choose the Material color spec version. 2025 is more expressive, 2021 is more stable.</string>
+    <string name="settings_theme_color_spec">Dynamic color spec</string>
+    <string name="settings_theme_color_spec_desc">Choose the dynamic color spec version. 2025 is more expressive, 2021 is more stable. Takes effect only when "Dynamic color" is off.</string>
     <string name="settings_theme_color_spec_2021">2021</string>
     <string name="settings_theme_color_spec_2025">2025</string>
+    <string name="settings_theme_color_spec_disabled_hint">Dynamic color is on and system colors are in use, so this spec has no effect. Turn off "Dynamic color" to enable it.</string>
     <string name="settings_theme_style_tonal_spot">Tonal Spot</string>
     <string name="settings_theme_style_tonal_spot_desc">Balanced and close to Android dynamic color defaults.</string>
     <string name="settings_theme_style_neutral">Neutral</string>
@@ -44,6 +45,8 @@
     <string name="settings_nowplaying_keep_screen_on_desc">Prevent the screen from timing out while the Now Playing page is open</string>
     <string name="settings_nowplaying_cover_lyrics">Show lyrics on the cover page</string>
     <string name="settings_nowplaying_cover_lyrics_desc">Show line-by-line lyrics on the Now Playing cover page</string>
+    <string name="settings_nowplaying_auto_hide_controls">Auto-hide controls</string>
+    <string name="settings_nowplaying_auto_hide_controls_desc">Hide playback controls after a few seconds of playback; tap the screen to show them again</string>
     <string name="settings_nowplaying_progress_quality_switch">Show current quality above progress bar</string>
     <string name="settings_nowplaying_progress_quality_switch_desc">Shown above the progress bar; quality switching is available in More Options</string>
     <string name="settings_nowplaying_toolbar_dock">Use dock-style bottom toolbar</string>

@@ -74,6 +74,10 @@ fun AdvancedLyricsView(
     topFadeLength: Dp = 112.dp,
     bottomFadeLength: Dp = 196.dp,
     bottomContentInset: Dp = 0.dp,
+    focusedLineScale: Float = 1.015f,
+    unfocusedLineScale: Float = 0.965f,
+    activeLineAlpha: Float = 1f,
+    inactiveLineAlpha: Float = 0.28f,
     onLyricLongClick: ((LyricEntry) -> Unit)? = null,
     onSeekTo: (Long) -> Unit = {}
 ) {
@@ -192,10 +196,10 @@ fun AdvancedLyricsView(
                 blurDelta = if (lowPowerRendering) blurDelta * 0.55f else blurDelta,
                 topFadeLength = topFadeLength,
                 bottomFadeLength = bottomFadeLength,
-                focusedLineScale = 1.015f,
-                unfocusedLineScale = 0.965f,
-                activeLineAlpha = 1f,
-                inactiveLineAlpha = 0.28f,
+                focusedLineScale = focusedLineScale,
+                unfocusedLineScale = unfocusedLineScale,
+                activeLineAlpha = activeLineAlpha,
+                inactiveLineAlpha = inactiveLineAlpha,
                 blendMode = resolveAdvancedLyricsBlendMode(useAdditiveBlend)
             )
         }

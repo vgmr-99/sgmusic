@@ -185,6 +185,15 @@ class SettingsRepository(private val context: Context) {
     val nowPlayingCoverLyricsEnabledFlow: Flow<Boolean> =
         autoSettingsRepository.nowPlayingCoverLyricsEnabledFlow
 
+    val nowPlayingAutoHideControlsFlow: Flow<Boolean> =
+        autoSettingsRepository.nowPlayingAutoHideControlsFlow
+
+    val lyricsDisplayModeFlow: Flow<String> =
+        autoSettingsRepository.lyricsDisplayModeFlow
+
+    val karaokeHighlightStyleFlow: Flow<String> =
+        autoSettingsRepository.karaokeHighlightStyleFlow
+
     val nowPlayingToolbarDockEnabledFlow: Flow<Boolean> =
         autoSettingsRepository.nowPlayingToolbarDockEnabledFlow
 
@@ -1074,6 +1083,18 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setAdvancedLyricsEnabled(enabled: Boolean) {
         autoSettingsRepository.setAdvancedLyricsEnabled(enabled)
+    }
+
+    suspend fun setNowPlayingAutoHideControls(enabled: Boolean) {
+        autoSettingsRepository.setNowPlayingAutoHideControls(enabled)
+    }
+
+    suspend fun setLyricsDisplayMode(mode: String) {
+        autoSettingsRepository.setLyricsDisplayMode(mode)
+    }
+
+    suspend fun setKaraokeHighlightStyle(style: String) {
+        autoSettingsRepository.setKaraokeHighlightStyle(style)
     }
 
     suspend fun setCoherentFeedbackEnabled(enabled: Boolean) {

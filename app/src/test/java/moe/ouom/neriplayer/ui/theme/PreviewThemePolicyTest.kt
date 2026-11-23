@@ -71,9 +71,11 @@ class PreviewThemePolicyTest {
     }
 
     @Test
-    fun unknownStoredStyleFallsBackToMaterial() {
+    fun storedStyleResolution() {
         assertEquals(UiStyle.Clean, UiStyle.fromStorage("clean"))
-        assertEquals(UiStyle.Material, UiStyle.fromStorage(null))
+        // 拾光音乐默认简洁主题：无存储值时按默认 Clean
+        assertEquals(UiStyle.Clean, UiStyle.fromStorage(null))
+        // 未知的非空值仍保守回退 Material
         assertEquals(UiStyle.Material, UiStyle.fromStorage("aurora"))
     }
 

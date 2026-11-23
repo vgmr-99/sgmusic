@@ -457,6 +457,9 @@ internal class NowPlayingCoverOwner(
     var displayedFrame by mutableStateOf<NowPlayingCoverFrame?>(null)
         private set
 
+    /** 点击封面时切换歌词主视觉；由播放页注入。长按仍打开大图预览。 */
+    var onCoverTapToggleLyrics: (() -> Unit)? = null
+
     val cachedSongKeys: Set<String> get() = decodedFramesBySongKey.keys.toSet()
     val currentFailedRequest: NowPlayingCoverRequest?
         get() = failedCoverRequest?.takeIf { shouldHandleNowPlayingCoverError(it, latestRequest) }
@@ -950,7 +953,13 @@ private data class NowPlayingCoverPanelPreview(
     val onUnavailable: () -> Unit
 ) {
     fun action(owner: NowPlayingCoverOwner, coverUrl: String?, longPress: Boolean): () -> Unit = {
-        owner.openPreviewOrNotify(song, longPress, sessionKey, coverUrl, onUnavailable)
+        // 单击封面：切换歌词主视觉（由播放页注入）；未注入或长按时退回原预览行为
+        val toggle = if (!longPress) owner.onCoverTapToggleLyrics else null
+        if (toggle != null) {
+            toggle()
+        } else {
+            owner.openPreviewOrNotify(song, longPress, sessionKey, coverUrl, onUnavailable)
+        }
     }
 }
 
