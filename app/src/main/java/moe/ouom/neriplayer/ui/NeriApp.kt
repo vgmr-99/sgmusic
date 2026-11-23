@@ -1555,6 +1555,7 @@ private fun NeriAppContent(
                         onSongPlayNext = ::addSongToQueueNextFromSearch,
                         onSongAddToQueueEnd = ::addSongToQueueEndFromSearch,
                         onPlayParts = ::playBiliPartsAndOpenNowPlaying,
+                        onBiliUploaderClick = ::navigateToBiliUploader,
                         coherentFeedbackEnabled = coherentFeedbackEnabled,
                         renderScene = { revealTop, translationY, scale, sceneDepth, sceneContent ->
                             navigationSceneRenderer.RenderMainTabNavigationScene(

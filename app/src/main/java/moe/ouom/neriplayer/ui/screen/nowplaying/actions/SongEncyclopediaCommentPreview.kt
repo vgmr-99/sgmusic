@@ -22,11 +22,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import moe.ouom.neriplayer.core.player.PlayerManager
 import moe.ouom.neriplayer.data.model.comments.CommentError
 import moe.ouom.neriplayer.data.model.comments.CommentPlatform
 import moe.ouom.neriplayer.data.model.comments.CommentSource
 import moe.ouom.neriplayer.ui.component.comment.CommentItem
 import moe.ouom.neriplayer.ui.component.comment.CommentLoadingBlock
+import moe.ouom.neriplayer.ui.component.comment.clampCommentTimestampPosition
 import moe.ouom.neriplayer.ui.haptic.HapticIconButton
 import moe.ouom.neriplayer.ui.viewmodel.CommentListStatus
 import moe.ouom.neriplayer.ui.viewmodel.CommentUiState
@@ -51,6 +53,18 @@ internal fun SongEncyclopediaCommentPreview(
     val commentViewModel: CommentViewModel = viewModel(key = "encyclopedia_comment_preview")
     val ui by commentViewModel.uiState.collectAsStateWithLifecycle()
     val currentSource = remember(source) { source }
+
+    // 时间坐标跳转：本地无「一起听」房间，直接允许 seek。
+    // 超出曲目时长的坐标夹到最后一个有效位置；PlayerManager.seekTo 不改变
+    // playWhenReady，因此暂停态只跳不播、播放态跳后继续播。
+    val playbackDurationMs by PlayerManager.playbackDurationFlow.collectAsStateWithLifecycle()
+    val playbackSong by PlayerManager.currentSongFlow.collectAsStateWithLifecycle()
+    val seekDurationMs = maxOf(playbackDurationMs, playbackSong?.durationMs ?: 0L)
+    val onTimestampClick: (Long) -> Unit = remember(seekDurationMs) {
+        { positionMs ->
+            PlayerManager.seekTo(clampCommentTimestampPosition(positionMs, seekDurationMs))
+        }
+    }
 
     LaunchedEffect(currentSource) {
         commentViewModel.onSourceChanged(currentSource)
@@ -109,7 +123,8 @@ internal fun SongEncyclopediaCommentPreview(
                                 replyEnabled = false,
                                 likingIds = ui.likingIds,
                                 onLikeReply = commentViewModel::toggleLike,
-                                showReplyActions = false
+                                showReplyActions = false,
+                                onTimestampClick = onTimestampClick
                             )
                         }
                     }

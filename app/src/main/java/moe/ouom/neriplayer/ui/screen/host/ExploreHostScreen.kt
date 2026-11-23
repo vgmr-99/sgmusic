@@ -54,6 +54,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import moe.ouom.neriplayer.data.model.bilibili.video.VideoBasicInfo
 import moe.ouom.neriplayer.platform.bilibili.playback.resolver.buildBiliSongAlbum
+import moe.ouom.neriplayer.data.model.BiliUploaderSummary
 import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicCreatorSection
 import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicCreatorSummary
 import moe.ouom.neriplayer.core.di.AppContainer
@@ -158,6 +159,7 @@ fun ExploreHostScreen(
     onSongPlayNext: (SongItem) -> Unit = {},
     onSongAddToQueueEnd: (SongItem) -> Unit = {},
     onPlayParts: (VideoBasicInfo, Int, String) -> Unit = { _, _, _ -> },
+    onBiliUploaderClick: (BiliUploaderSummary) -> Unit = {},
     coherentFeedbackEnabled: Boolean = false,
     renderScene: @Composable (
         revealTopFraction: Float,
@@ -407,6 +409,10 @@ fun ExploreHostScreen(
                                     openExploreSelectedItem(
                                         ExploreSelectedItem.YouTubeMusicCreator(creator)
                                     )
+                                },
+                                onBiliUploaderClick = { uploader ->
+                                    captureExploreScrollPosition()
+                                    onBiliUploaderClick(uploader)
                                 },
                                 onNeteaseArtistClick = { artist ->
                                     captureExploreScrollPosition()

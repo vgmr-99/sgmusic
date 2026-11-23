@@ -132,6 +132,7 @@ import moe.ouom.neriplayer.data.model.playlist.LocalPlaylist
 import moe.ouom.neriplayer.data.playlist.usage.PlaylistUsageRepository
 import moe.ouom.neriplayer.data.local.playlist.system.FavoritesPlaylist
 import moe.ouom.neriplayer.data.model.stats.UsageEntry
+import moe.ouom.neriplayer.data.model.settings.home.HomeMajorSectionIds
 import moe.ouom.neriplayer.data.playlist.usage.buildLocalPlaylistUsageLookup
 import moe.ouom.neriplayer.data.playlist.usage.resolveLocalPlaylistUsageId
 import moe.ouom.neriplayer.platform.youtube.api.transport.buildYouTubeMusicMediaUri
@@ -148,6 +149,7 @@ import moe.ouom.neriplayer.ui.viewmodel.tab.HomeNeteaseSongSectionState
 import moe.ouom.neriplayer.ui.viewmodel.tab.HomeSectionState
 import moe.ouom.neriplayer.ui.viewmodel.tab.HomeViewModel
 import moe.ouom.neriplayer.ui.viewmodel.tab.NeteaseHomeSongSource
+import moe.ouom.neriplayer.ui.viewmodel.tab.NeteaseHomePlaylistSource
 import moe.ouom.neriplayer.ui.viewmodel.tab.PlaylistSummary
 import moe.ouom.neriplayer.ui.viewmodel.tab.YouTubeMusicPlaylist
 import moe.ouom.neriplayer.ui.viewmodel.tab.favoriteId
@@ -189,7 +191,11 @@ fun HomeScreen(
     onBiliMusicRankMore: (BiliMusicRankType) -> Unit = {},
     onBiliMusicHotMore: () -> Unit = {},
     onBiliMusicRankPlay: (List<BiliVideoItem>, Int) -> Unit = { _, _ -> },
-    onBiliMusicHotPlay: (List<BiliVideoItem>, Int) -> Unit = { _, _ -> }
+    onBiliMusicHotPlay: (List<BiliVideoItem>, Int) -> Unit = { _, _ -> },
+    /** 点击网易云歌曲小模块标题，进入该小模块的详情页。 */
+    onNeteaseSongSectionMore: (NeteaseHomeSongSource) -> Unit = {},
+    /** 点击网易云歌单小模块标题，进入该分类的更多歌单页。 */
+    onNeteasePlaylistSectionMore: (NeteaseHomePlaylistSource) -> Unit = {}
 ) {
     val context = LocalContext.current
     val appContext = remember(context) { context.applicationContext }
@@ -411,6 +417,14 @@ fun HomeScreen(
                     ui.biliMusicHot.error != null
             )
 
+    // 大模块顺序来自设置页
+    val majorOrder = remember(ui.layout.majorOrder, isInternational) {
+        resolveHomeMajorOrder(
+            order = ui.layout.majorOrder,
+            internationalEnabled = isInternational
+        )
+    }
+
     val hasVisibleSections =
             showContinue || hasVisibleBiliMusicSections ||
                     (showOnlineFeeds && (showNeteaseTrending || showNeteaseRadar || showRecommendedCard || isInternational))
@@ -479,27 +493,46 @@ fun HomeScreen(
                     nextGridItemIndex += 1
                     return key
                 }
-                // Bilibili 音乐模块只在非国际化模式展示，排在私人雷达之后
-                val addBiliMusicSections: LazyGridScope.() -> Unit = biliSections@ {
-                    if (!showBiliMusic) return@biliSections
-                    addBiliMusicRankSection(
-                        registerKey = ::registerGridItemKey,
-                        state = ui.biliMusicRank,
-                        onTypeSelected = vm::selectBiliMusicRankType,
-                        onMoreClick = { onBiliMusicRankMore(ui.biliMusicRank.type) },
-                        onPlay = onBiliMusicRankPlay,
-                        onRetry = { vm.loadBiliMusicRank(force = true) },
-                        offlineMode = offlineMode
-                    )
-                    addBiliMusicHotSection(
-                        registerKey = ::registerGridItemKey,
-                        state = ui.biliMusicHot,
-                        onMoreClick = onBiliMusicHotMore,
-                        onPlay = onBiliMusicHotPlay,
-                        onRetry = { vm.loadBiliMusicHot(force = true) },
-                        offlineMode = offlineMode
-                    )
-                }
+                val majorEnv = HomeMajorSectionEnv(
+                    ui = ui,
+                    showContinue = showContinue,
+                    showTrending = showNeteaseTrending,
+                    showRadar = showNeteaseRadar,
+                    showRecommended = showRecommendedCard,
+                    showBiliMusic = showBiliMusic,
+                    showOnlineFeeds = showOnlineFeeds,
+                    usageEntries = usageEntries,
+                    usageLoaded = usageLoaded,
+                    localPlaylistUsageLookup = localPlaylistUsageLookup,
+                    downloadedPlaybackCoverCandidates = downloadedPlaybackCoverCandidates,
+                    continuePagerPage = continuePagerPage,
+                    onContinuePagerPageChanged = onContinuePagerPageChanged,
+                    onOpenRecent = onOpenRecent,
+                    onSongClick = onSongClick,
+                    onItemClick = onItemClick,
+                    onYouTubeMusicPlaylistClick = onYouTubeMusicPlaylistClick,
+                    favoriteSongLookup = favoriteSongLookup,
+                    favoriteKeys = favoriteKeys,
+                    onFavoriteToggle = ::toggleHomeSongFavorite,
+                    onShowSnackbar = showHomeSnackbar,
+                    offlineMode = offlineMode,
+                    radarPlaylistListState = radarPlaylistListState,
+                    loadingText = homeLoadingText,
+                    guessYouLikeTitle = guessYouLikeTitle,
+                    dailyDiscoverTitle = dailyDiscoverTitle,
+                    moreRecommendationsTitle = moreRecommendationsTitle,
+                    ytmSections = ytmSections,
+                    registerKey = ::registerGridItemKey,
+                    onBiliMusicRankMore = { onBiliMusicRankMore(ui.biliMusicRank.type) },
+                    onBiliMusicHotMore = onBiliMusicHotMore,
+                    onBiliMusicRankPlay = onBiliMusicRankPlay,
+                    onBiliMusicHotPlay = onBiliMusicHotPlay,
+                    onBiliMusicTypeSelected = vm::selectBiliMusicRankType,
+                    onRetryBiliMusicRank = { vm.loadBiliMusicRank(force = true) },
+                    onRetryBiliMusicHot = { vm.loadBiliMusicHot(force = true) },
+                    onSongSectionMore = onNeteaseSongSectionMore,
+                    onPlaylistSectionMore = onNeteasePlaylistSectionMore
+                )
 
                 LazyVerticalGrid(
                     state = gridState,
@@ -514,363 +547,29 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(gridSpacing),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    if (showContinue) {
-                        item(
-                            key = registerGridItemKey(HomeScrollKeyContinueHeader),
-                            span = { GridItemSpan(maxLineSpan) }
-                        ) {
-                            SectionHeader(
-                                icon = Icons.Outlined.History,
-                                title = stringResource(CoreCommonR.string.player_continue)
-                            )
-                        }
-                        item(
-                            key = registerGridItemKey(HomeScrollKeyContinueContent),
-                            span = { GridItemSpan(maxLineSpan) }
-                        ) {
-                            if (usageLoaded) {
-                                ContinueSection(
-                                    items = usageEntries.take(HomeContinueEntryLimit),
-                                    localPlaylistLookup = localPlaylistUsageLookup,
-                                    localFilesCoverCandidates = downloadedPlaybackCoverCandidates,
-                                    onClick = { entry -> onOpenRecent(entry) },
-                                    savedPage = continuePagerPage,
-                                    onPageChanged = onContinuePagerPageChanged,
-                                    offlineMode = offlineMode
-                                )
+                    majorOrder.forEach { majorId ->
+                        when (majorId) {
+                            HomeMajorSectionIds.CONTINUE -> addHomeContinueBlock(majorEnv)
+                            HomeMajorSectionIds.BILIBILI -> addHomeBiliMusicBlock(majorEnv)
+                            HomeMajorSectionIds.TRENDING -> if (isInternational) {
+                                addHomeYouTubeMusicTrendingBlock(majorEnv)
                             } else {
-                                SectionLoadingState(homeLoadingText)
+                                addHomeTrendingBlock(majorEnv)
+                            }
+                            HomeMajorSectionIds.RADAR -> if (isInternational) {
+                                addHomeYouTubeMusicRadarBlock(majorEnv)
+                            } else {
+                                addHomeRadarBlock(majorEnv)
+                            }
+                            HomeMajorSectionIds.RECOMMENDED -> if (isInternational) {
+                                addHomeYouTubeMusicRecommendedBlock(majorEnv)
+                            } else {
+                                addHomeRecommendedBlock(majorEnv)
                             }
                         }
                     }
-
-                    if (showOnlineFeeds) {
-                        if (isInternational) {
-                            if (showNeteaseTrending && ytmSections.guessYouLike != null) {
-                                addYouTubeMusicSongShelfSection(
-                                    sectionKey = HomeScrollKeyYtGuess,
-                                    registerKey = ::registerGridItemKey,
-                                    shelf = ytmSections.guessYouLike,
-                                    icon = Icons.Outlined.Bolt,
-                                    title = guessYouLikeTitle,
-                                    onSongClick = onSongClick,
-                                    favoriteSongLookup = favoriteSongLookup,
-                                    onFavoriteToggle = ::toggleHomeSongFavorite,
-                                    onShowSnackbar = showHomeSnackbar,
-                                    offlineMode = offlineMode
-                                )
-                            }
-
-                            if (showNeteaseRadar && ytmSections.dailyDiscover != null) {
-                                addYouTubeMusicSongShelfSection(
-                                    sectionKey = HomeScrollKeyYtDaily,
-                                    registerKey = ::registerGridItemKey,
-                                    shelf = ytmSections.dailyDiscover,
-                                    icon = Icons.Outlined.Explore,
-                                    title = dailyDiscoverTitle,
-                                    onSongClick = onSongClick,
-                                    favoriteSongLookup = favoriteSongLookup,
-                                    onFavoriteToggle = ::toggleHomeSongFavorite,
-                                    onShowSnackbar = showHomeSnackbar,
-                                    offlineMode = offlineMode
-                                )
-                            }
-
-                            if (showRecommendedCard) {
-                                item(
-                                    key = registerGridItemKey(HomeScrollKeyYtMoreHeader),
-                                    span = { GridItemSpan(maxLineSpan) }
-                                ) {
-                                    SectionHeader(
-                                        icon = Icons.Outlined.Star,
-                                        title = moreRecommendationsTitle
-                                    )
-                                }
-
-                                when {
-                                    ui.ytMusicPlaylists.items.isNotEmpty() -> {
-                                        ui.ytMusicPlaylists.items.forEach { playlist ->
-                                            item(
-                                                key = registerGridItemKey(
-                                                    homeYtMusicPlaylistScrollKey(playlist)
-                                                )
-                                            ) {
-                                                YtMusicPlaylistCard(
-                                                    playlist = playlist,
-                                                    isFavorite = favoriteKeys.contains("youtubeMusic:${playlist.favoriteId()}"),
-                                                    onClick = { onYouTubeMusicPlaylistClick(playlist) },
-                                                    onShowSnackbar = { message ->
-                                                        scope.launch {
-                                                            snackbarHostState.showNeriSnackbar(message)
-                                                        }
-                                                    },
-                                                    offlineMode = offlineMode
-                                                )
-                                            }
-                                        }
-                                    }
-                                    ui.ytMusicPlaylists.loading -> {
-                                        item(
-                                            key = registerGridItemKey(HomeScrollKeyYtMoreLoading),
-                                            span = { GridItemSpan(maxLineSpan) }
-                                        ) {
-                                            SectionLoadingState(homeLoadingText)
-                                        }
-                                    }
-                                    ui.ytMusicPlaylists.error != null -> {
-                                        item(
-                                            key = registerGridItemKey(HomeScrollKeyYtMoreError),
-                                            span = { GridItemSpan(maxLineSpan) }
-                                        ) {
-                                            SectionErrorState(detail = ui.ytMusicPlaylists.error?.asString().orEmpty())
-                                        }
-                                    }
-                                }
-
-                                when {
-                                    ytmSections.remaining.any { shelf ->
-                                        shelf.shouldRenderAsSongShelf() || shelf.hasRenderablePlaylistItems()
-                                    } -> {
-                                        ytmSections.remaining.forEachIndexed { shelfIndex, shelf ->
-                                            val shelfKey = homeYtMusicShelfScrollKey(
-                                                shelfIndex = shelfIndex,
-                                                title = shelf.title
-                                            )
-                                            if (shelf.shouldRenderAsSongShelf()) {
-                                                addYouTubeMusicSongShelfSection(
-                                                    sectionKey = shelfKey,
-                                                    registerKey = ::registerGridItemKey,
-                                                    shelf = shelf,
-                                                    icon = Icons.Outlined.Explore,
-                                                    title = shelf.title,
-                                                    onSongClick = onSongClick,
-                                                    favoriteSongLookup = favoriteSongLookup,
-                                                    onFavoriteToggle = ::toggleHomeSongFavorite,
-                                                    onShowSnackbar = showHomeSnackbar,
-                                                    offlineMode = offlineMode
-                                                )
-                                            } else {
-                                                val playlistItems = shelf.items.filter { it.isPlaylistItem() }
-                                                if (playlistItems.isEmpty()) {
-                                                    return@forEachIndexed
-                                                }
-                                                item(
-                                                    key = registerGridItemKey("$shelfKey:header"),
-                                                    span = { GridItemSpan(maxLineSpan) }
-                                                ) {
-                                                    SectionHeader(
-                                                        icon = Icons.Outlined.Explore,
-                                                        title = shelf.title
-                                                    )
-                                                }
-                                                playlistItems.forEachIndexed { itemIndex, homeItem ->
-                                                    item(
-                                                        key = registerGridItemKey(
-                                                            homeYtMusicHomeItemScrollKey(
-                                                                shelfKey = shelfKey,
-                                                                itemIndex = itemIndex,
-                                                                item = homeItem
-                                                            )
-                                                        )
-                                                    ) {
-                                                        YtMusicHomeItemCard(
-                                                            item = homeItem,
-                                                            isFavorite = homeItem.toPlaylist()
-                                                                ?.favoriteId()
-                                                                ?.let { favoriteKeys.contains("youtubeMusic:$it") } == true,
-                                                            onClick = {
-                                                                val playlist = homeItem.toPlaylist()
-                                                                if (playlist != null) {
-                                                                    onYouTubeMusicPlaylistClick(playlist)
-                                                                } else if (homeItem.videoId.isNotBlank()) {
-                                                                    val songs = listOfNotNull(
-                                                                        homeItem.toPlayableSongItem(shelf.title)
-                                                                    )
-                                                                    if (songs.isNotEmpty()) {
-                                                                        onSongClick(songs, 0)
-                                                                    }
-                                                                }
-                                                            },
-                                                            onShowSnackbar = { message ->
-                                                                scope.launch {
-                                                                    snackbarHostState.showNeriSnackbar(message)
-                                                                }
-                                                            },
-                                                            offlineMode = offlineMode
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    ui.ytMusicHomeShelves.loading -> {
-                                        item(
-                                            key = registerGridItemKey(HomeScrollKeyYtShelvesLoading),
-                                            span = { GridItemSpan(maxLineSpan) }
-                                        ) {
-                                            SectionLoadingState(homeLoadingText)
-                                        }
-                                    }
-                                    ui.ytMusicHomeShelves.error != null -> {
-                                        item(
-                                            key = registerGridItemKey(HomeScrollKeyYtShelvesError),
-                                            span = { GridItemSpan(maxLineSpan) }
-                                        ) {
-                                            SectionErrorState(detail = ui.ytMusicHomeShelves.error?.asString().orEmpty())
-                                        }
-                                    }
-                                }
-                            }
-
-                            if (!hasVisibleYtMusicFeed && (showNeteaseTrending || showNeteaseRadar || showRecommendedCard)) {
-                                when {
-                                    ui.ytMusicHomeShelves.loading -> {
-                                        item(
-                                            key = registerGridItemKey(HomeScrollKeyYtEmptyFeedLoading),
-                                            span = { GridItemSpan(maxLineSpan) }
-                                        ) {
-                                            SectionLoadingState(homeLoadingText)
-                                        }
-                                    }
-                                    ui.ytMusicHomeShelves.error != null -> {
-                                        item(
-                                            key = registerGridItemKey(HomeScrollKeyYtEmptyFeedError),
-                                            span = { GridItemSpan(maxLineSpan) }
-                                        ) {
-                                            SectionErrorState(detail = ui.ytMusicHomeShelves.error?.asString().orEmpty())
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            if (showNeteaseRadar) {
-                                ui.radarSongSections
-                                    .filter { it.source == NeteaseHomeSongSource.PERSONAL_RADAR }
-                                    .forEach { sectionState ->
-                                    val sectionKey = homeNeteaseSongSectionKey(
-                                        group = "radar",
-                                        source = sectionState.source
-                                    )
-                                    addNeteaseSongSection(
-                                        sectionKey = sectionKey,
-                                        registerKey = ::registerGridItemKey,
-                                        sectionState = sectionState,
-                                        icon = neteaseSongSectionIcon(sectionState.source),
-                                        loadingText = homeLoadingText,
-                                        onSongClick = onSongClick,
-                                        favoriteSongLookup = favoriteSongLookup,
-                                        onFavoriteToggle = ::toggleHomeSongFavorite,
-                                        onShowSnackbar = showHomeSnackbar,
-                                        offlineMode = offlineMode
-                                    )
-                                }
-
-                                val radarPlaylistState = ui.radarPlaylists
-                                item(
-                                    key = registerGridItemKey(
-                                        HomeScrollKeyNeteaseRadarPlaylistsHeader
-                                    ),
-                                    span = { GridItemSpan(maxLineSpan) }
-                                ) {
-                                    SectionHeader(
-                                        icon = Icons.Outlined.Explore,
-                                        title = stringResource(CoreCommonR.string.home_netease_radar_playlists)
-                                    )
-                                }
-                                sectionContent(
-                                    section = radarPlaylistState,
-                                    loadingText = homeLoadingText,
-                                    errorDetail = radarPlaylistState.error,
-                                    keyPrefix = HomeScrollKeyNeteaseRadarPlaylists,
-                                    registerKey = ::registerGridItemKey
-                                ) {
-                                    item(
-                                        key = registerGridItemKey(HomeScrollKeyNeteaseRadarPlaylistsContent),
-                                        span = { GridItemSpan(maxLineSpan) }
-                                    ) {
-                                        RadarPlaylistStrip(
-                                            playlists = radarPlaylistState.items,
-                                            favoriteKeys = favoriteKeys,
-                                            listState = radarPlaylistListState,
-                                            onClick = onItemClick,
-                                            onShowSnackbar = { message ->
-                                                scope.launch {
-                                                    snackbarHostState.showNeriSnackbar(message)
-                                                }
-                                            },
-                                            offlineMode = offlineMode
-                                        )
-                                    }
-                                }
-
-                                ui.radarSongSections
-                                    .filter { it.source != NeteaseHomeSongSource.PERSONAL_RADAR }
-                                    .forEach { sectionState ->
-                                        val sectionKey = homeNeteaseSongSectionKey(
-                                            group = "radar",
-                                            source = sectionState.source
-                                        )
-                                        addNeteaseSongSection(
-                                            sectionKey = sectionKey,
-                                            registerKey = ::registerGridItemKey,
-                                            sectionState = sectionState,
-                                            icon = neteaseSongSectionIcon(sectionState.source),
-                                            loadingText = homeLoadingText,
-                                            onSongClick = onSongClick,
-                                            favoriteSongLookup = favoriteSongLookup,
-                                            onFavoriteToggle = ::toggleHomeSongFavorite,
-                                            onShowSnackbar = showHomeSnackbar,
-                                            offlineMode = offlineMode
-                                        )
-                                    }
-                            }
-
-                            // Bilibili 音乐模块：版权音乐榜（热门榜/原创榜）与音乐分区热门视频。
-                            // 排在「私人雷达 / 雷达歌单」之后、「热力飙升 / 我的推荐」之前，
-                            // 使 B 站榜单与网易云榜单相邻，且不拆散网易云的雷达组合。
-                            addBiliMusicSections()
-
-                            if (showNeteaseTrending) {
-                                ui.trendingSongSections.forEach { sectionState ->
-                                    val sectionKey = homeNeteaseSongSectionKey(
-                                        group = "trending",
-                                        source = sectionState.source
-                                    )
-                                    addNeteaseSongSection(
-                                        sectionKey = sectionKey,
-                                        registerKey = ::registerGridItemKey,
-                                        sectionState = sectionState,
-                                        icon = neteaseSongSectionIcon(sectionState.source),
-                                        loadingText = homeLoadingText,
-                                        onSongClick = onSongClick,
-                                        favoriteSongLookup = favoriteSongLookup,
-                                        onFavoriteToggle = ::toggleHomeSongFavorite,
-                                        onShowSnackbar = showHomeSnackbar,
-                                        offlineMode = offlineMode
-                                    )
-                                }
-                            }
-
-                            if (showRecommendedCard) {
-                                ui.playlistSections.forEach { sectionState ->
-                                    addNeteasePlaylistSection(
-                                        sectionKey = homeNeteasePlaylistSectionKey(sectionState.source),
-                                        registerKey = ::registerGridItemKey,
-                                        sectionState = sectionState,
-                                        loadingText = homeLoadingText,
-                                        favoriteKeys = favoriteKeys,
-                                        onItemClick = onItemClick,
-                                        onShowSnackbar = { message ->
-                                            scope.launch {
-                                                snackbarHostState.showNeriSnackbar(message)
-                                            }
-                                        },
-                                        offlineMode = offlineMode
-                                    )
-                                }
-                            }
-
-                        }
+                    if (isInternational) {
+                        addHomeYouTubeMusicEmptyFeedBlock(majorEnv)
                     }
                 }
                 SideEffect {
@@ -886,7 +585,7 @@ fun HomeScreen(
     }
 }
 
-private fun <T> LazyGridScope.sectionContent(
+internal fun <T> LazyGridScope.sectionContent(
     section: HomeSectionState<T>,
     loadingText: String,
     errorDetail: UiText?,
@@ -916,7 +615,7 @@ private fun <T> LazyGridScope.sectionContent(
     }
 }
 
-private fun LazyGridScope.addNeteaseSongSection(
+internal fun LazyGridScope.addNeteaseSongSection(
     sectionKey: String,
     registerKey: (String) -> String,
     sectionState: HomeNeteaseSongSectionState,
@@ -926,7 +625,8 @@ private fun LazyGridScope.addNeteaseSongSection(
     favoriteSongLookup: FavoriteSongLookup,
     onFavoriteToggle: (SongItem, Boolean) -> Unit,
     onShowSnackbar: (String) -> Unit,
-    offlineMode: Boolean
+    offlineMode: Boolean,
+    onHeaderClick: (() -> Unit)? = null
 ) {
     item(
         key = registerKey("$sectionKey:header"),
@@ -934,7 +634,8 @@ private fun LazyGridScope.addNeteaseSongSection(
     ) {
         SectionHeader(
             icon = icon,
-            title = stringResource(sectionState.source.titleRes)
+            title = stringResource(sectionState.source.titleRes),
+            onClick = onHeaderClick
         )
     }
     sectionContent(
@@ -960,7 +661,7 @@ private fun LazyGridScope.addNeteaseSongSection(
     }
 }
 
-private fun LazyGridScope.addNeteasePlaylistSection(
+internal fun LazyGridScope.addNeteasePlaylistSection(
     sectionKey: String,
     registerKey: (String) -> String,
     sectionState: HomeNeteasePlaylistSectionState,
@@ -968,7 +669,8 @@ private fun LazyGridScope.addNeteasePlaylistSection(
     favoriteKeys: Set<String>,
     onItemClick: (PlaylistSummary) -> Unit,
     onShowSnackbar: (String) -> Unit,
-    offlineMode: Boolean
+    offlineMode: Boolean,
+    onHeaderClick: (() -> Unit)? = null
 ) {
     item(
         key = registerKey("$sectionKey:header"),
@@ -976,7 +678,8 @@ private fun LazyGridScope.addNeteasePlaylistSection(
     ) {
         SectionHeader(
             icon = Icons.Outlined.Star,
-            title = stringResource(sectionState.source.titleRes)
+            title = stringResource(sectionState.source.titleRes),
+            onClick = onHeaderClick
         )
     }
     when {
@@ -1016,7 +719,23 @@ private fun LazyGridScope.addNeteasePlaylistSection(
     }
 }
 
-private fun neteaseSongSectionIcon(source: NeteaseHomeSongSource): ImageVector {
+/**
+ * 解析首页大模块的实际渲染顺序。
+ */
+internal fun resolveHomeMajorOrder(
+    order: List<String>,
+    internationalEnabled: Boolean
+): List<String> {
+    val defaults = if (internationalEnabled) {
+        HomeMajorSectionIds.DEFAULT_ORDER.filterNot { it == HomeMajorSectionIds.BILIBILI }
+    } else {
+        HomeMajorSectionIds.DEFAULT_ORDER
+    }
+    val requested = order.filter { it in defaults }.distinct()
+    return requested + defaults.filterNot { it in requested }
+}
+
+internal fun neteaseSongSectionIcon(source: NeteaseHomeSongSource): ImageVector {
     return when (source) {
         NeteaseHomeSongSource.PERSONAL_RADAR -> Icons.Outlined.Radar
         NeteaseHomeSongSource.TOP_SOARING,
@@ -1029,7 +748,7 @@ private fun neteaseSongSectionIcon(source: NeteaseHomeSongSource): ImageVector {
 }
 
 @Composable
-private fun SectionLoadingState(text: String) {
+internal fun SectionLoadingState(text: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1043,7 +762,7 @@ private fun SectionLoadingState(text: String) {
 }
 
 @Composable
-private fun SectionErrorState(detail: String) {
+internal fun SectionErrorState(detail: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1234,7 +953,7 @@ private fun SongRowMini(
 }
 
 @Composable
-private fun RadarPlaylistStrip(
+internal fun RadarPlaylistStrip(
     playlists: List<PlaylistSummary>,
     favoriteKeys: Set<String>,
     listState: LazyListState,
@@ -1534,11 +1253,20 @@ fun PlaylistCard(
     }
 }
 
-private data class ClassifiedYouTubeMusicShelves(
+internal data class ClassifiedYouTubeMusicShelves(
     val guessYouLike: YouTubeMusicHomeShelf?,
     val dailyDiscover: YouTubeMusicHomeShelf?,
     val remaining: List<YouTubeMusicHomeShelf>
-)
+) {
+    /** 是否存在任何可渲染的 YouTube Music 内容。 */
+    fun hasVisibleFeed(): Boolean {
+        return guessYouLike != null ||
+            dailyDiscover != null ||
+            remaining.any { shelf ->
+                shelf.shouldRenderAsSongShelf() || shelf.hasRenderablePlaylistItems()
+            }
+    }
+}
 
 private val YouTubeMusicGuessYouLikeKeywords = listOf(
     "猜你喜欢",
@@ -1586,7 +1314,7 @@ private fun classifyYouTubeMusicShelves(
     )
 }
 
-private fun YouTubeMusicHomeShelf.shouldRenderAsSongShelf(): Boolean {
+internal fun YouTubeMusicHomeShelf.shouldRenderAsSongShelf(): Boolean {
     if (items.isEmpty()) {
         return false
     }
@@ -1600,11 +1328,11 @@ private fun YouTubeMusicHomeShelf.shouldRenderAsSongShelf(): Boolean {
     return title.matchesYouTubeMusicShelfKeywords(YouTubeMusicSongShelfKeywords)
 }
 
-private fun YouTubeMusicHomeShelf.hasRenderablePlaylistItems(): Boolean {
+internal fun YouTubeMusicHomeShelf.hasRenderablePlaylistItems(): Boolean {
     return items.any { it.isPlaylistItem() }
 }
 
-private fun YouTubeMusicHomeItem.isPlaylistItem(): Boolean {
+internal fun YouTubeMusicHomeItem.isPlaylistItem(): Boolean {
     val normalizedPageType = pageType.uppercase(Locale.US)
     return when {
         normalizedPageType.contains("PLAYLIST") -> true
@@ -1664,7 +1392,7 @@ internal fun YouTubeMusicHomeItem.toPlayableSongItem(sectionTitle: String): Song
     )
 }
 
-private fun LazyGridScope.addYouTubeMusicSongShelfSection(
+internal fun LazyGridScope.addYouTubeMusicSongShelfSection(
     sectionKey: String,
     registerKey: (String) -> String,
     shelf: YouTubeMusicHomeShelf,

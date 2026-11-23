@@ -54,6 +54,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import moe.ouom.neriplayer.common.R as CoreCommonR
 import moe.ouom.neriplayer.platform.search.api.PlatformSearchType
+import moe.ouom.neriplayer.ui.viewmodel.tab.BilibiliExploreSearchType
 import moe.ouom.neriplayer.ui.viewmodel.tab.NeteaseExploreSearchType
 import moe.ouom.neriplayer.ui.viewmodel.tab.SearchSource
 import moe.ouom.neriplayer.ui.viewmodel.tab.YouTubeExploreSearchType
@@ -69,8 +70,10 @@ import moe.ouom.neriplayer.ui.viewmodel.tab.YouTubeExploreSearchType
 internal fun ExploreSearchTypeBar(
     source: SearchSource?,
     selectedNeteaseSearchType: NeteaseExploreSearchType,
+    selectedBilibiliSearchType: BilibiliExploreSearchType = BilibiliExploreSearchType.SONG,
     selectedYouTubeSearchType: YouTubeExploreSearchType,
     onNeteaseSearchTypeClick: (NeteaseExploreSearchType) -> Unit,
+    onBilibiliSearchTypeClick: (BilibiliExploreSearchType) -> Unit = {},
     onYouTubeSearchTypeClick: (YouTubeExploreSearchType) -> Unit,
     selectedPlatformSearchType: PlatformSearchType = PlatformSearchType.SONG,
     platformSearchTypes: List<PlatformSearchType> = emptyList(),
@@ -187,6 +190,32 @@ internal fun ExploreSearchTypeBar(
                 }
             }
 
+            SearchSource.BILIBILI -> {
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .testTag(EXPLORE_BILIBILI_SEARCH_TYPE_BAR_TAG),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    itemsIndexed(BilibiliExploreSearchType.entries) { _, type ->
+                        ExploreTagChip(
+                            label = bilibiliSearchTypeLabel(type),
+                            icon = bilibiliSearchTypeIcon(type),
+                            selected = selectedBilibiliSearchType == type,
+                            onClick = {
+                                if (source == displayedSource) {
+                                    onBilibiliSearchTypeClick(type)
+                                }
+                            },
+                            selectedAlpha = selectedAlpha,
+                            unselectedAlpha = unselectedAlpha,
+                            borderAlpha = borderAlpha
+                        )
+                    }
+                }
+            }
+
             SearchSource.YOUTUBE_MUSIC -> {
                 LazyRow(
                     modifier = Modifier
@@ -281,6 +310,23 @@ internal fun youtubeSearchTypeIcon(type: YouTubeExploreSearchType): ImageVector 
 }
 
 @Composable
+internal fun bilibiliSearchTypeLabel(type: BilibiliExploreSearchType): String {
+    return when (type) {
+        BilibiliExploreSearchType.SONG -> stringResource(CoreCommonR.string.explore_search_type_song)
+        BilibiliExploreSearchType.VIDEO -> stringResource(CoreCommonR.string.explore_search_type_video)
+        BilibiliExploreSearchType.CREATOR -> stringResource(CoreCommonR.string.explore_search_type_creator)
+    }
+}
+
+internal fun bilibiliSearchTypeIcon(type: BilibiliExploreSearchType): ImageVector {
+    return when (type) {
+        BilibiliExploreSearchType.SONG -> Icons.Outlined.MusicNote
+        BilibiliExploreSearchType.VIDEO -> Icons.Filled.PlayCircle
+        BilibiliExploreSearchType.CREATOR -> Icons.Filled.AccountCircle
+    }
+}
+
+@Composable
 internal fun platformSearchTypeLabel(type: PlatformSearchType): String {
     return when (type) {
         PlatformSearchType.SONG -> stringResource(CoreCommonR.string.explore_search_type_song)
@@ -317,6 +363,7 @@ internal fun isExploreSearchTypeBarSourceSwap(
 
 private val EXPLORE_SEARCH_TYPE_BAR_SOURCES = setOf(
     SearchSource.NETEASE,
+    SearchSource.BILIBILI,
     SearchSource.YOUTUBE_MUSIC,
     SearchSource.QQ_MUSIC,
     SearchSource.KUGOU
@@ -327,5 +374,6 @@ private const val EXPLORE_SEARCH_TYPE_BAR_SIZE_DURATION_MS = 220
 private const val EXPLORE_SEARCH_TYPE_BAR_SLIDE_DIVISOR = 5
 internal const val EXPLORE_SEARCH_TYPE_BAR_CONTAINER_TAG = "explore_search_type_bar"
 internal const val EXPLORE_NETEASE_SEARCH_TYPE_BAR_TAG = "explore_netease_search_type_bar"
+internal const val EXPLORE_BILIBILI_SEARCH_TYPE_BAR_TAG = "explore_bilibili_search_type_bar"
 internal const val EXPLORE_YOUTUBE_SEARCH_TYPE_BAR_TAG = "explore_youtube_search_type_bar"
 internal const val EXPLORE_PLATFORM_SEARCH_TYPE_BAR_TAG = "explore_platform_search_type_bar"

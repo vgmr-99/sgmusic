@@ -1643,7 +1643,10 @@ class YouTubeMusicPlaybackRepository(
         return preferredQualityOverride
             ?.takeIf { it.isNotBlank() }
             ?: audioQualityProvider().takeIf { it.isNotBlank() }
-            ?: "very_high"
+            // 与上游 cwuom/NeriPlayer 对齐：override/provider 都为空时的防御性默认值。
+            // 正常 DI 下 audioQualityProvider 恒返回用户设置（默认 very_high），此分支不可达；
+            // 不在此处赋予"提速"预期——真正的质量决策由上面的 provider/override 决定。
+            ?: "high"
     }
 
     private suspend fun resolveYouTubePlaybackSource(): YouTubePlaybackSourcePreference {

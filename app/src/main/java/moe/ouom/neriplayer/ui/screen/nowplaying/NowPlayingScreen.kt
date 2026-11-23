@@ -138,6 +138,7 @@ import moe.ouom.neriplayer.ui.component.local.LocalSongSyncConfirmDialog
 import moe.ouom.neriplayer.data.model.lyrics.LyricEntry
 import moe.ouom.neriplayer.ui.component.lyrics.LyricShareSheet
 import moe.ouom.neriplayer.ui.component.comment.CommentSheet
+import moe.ouom.neriplayer.ui.component.comment.clampCommentTimestampPosition
 import moe.ouom.neriplayer.ui.component.playback.PlaybackControlIndicator
 import moe.ouom.neriplayer.ui.component.playback.scaleButtonSize
 import moe.ouom.neriplayer.ui.component.playback.scaleIconSize
@@ -1690,7 +1691,18 @@ fun NowPlayingScreen(
                             CommentSheet(
                                 source = commentSource,
                                 offlineMode = offlineMode,
-                                onDismissRequest = { showCommentSheet = false }
+                                onDismissRequest = { showCommentSheet = false },
+                                onTimestampClick = { positionMs ->
+                                    // 歌词入口的越界策略是「拒绝而非夹取」——越界坐标会被静默丢弃，
+                                    // 表现为点了没反应。故先按已知时长夹到可播放范围再交给 seek。
+                                    // 暂停态只跳不播、播放态跳后继续播（seekTo 不改 playWhenReady）。
+                                    val knownDurationMs = maxOf(durationMs, currentSong?.durationMs ?: 0L)
+                                    seekToLyricSafely(
+                                        positionMs = clampCommentTimestampPosition(positionMs, knownDurationMs),
+                                        playbackDurationMs = durationMs,
+                                        songDurationMs = currentSong?.durationMs ?: 0L
+                                    )
+                                }
                             )
                         }
 

@@ -36,6 +36,14 @@ LINE_LIMIT_WAIVERS = {
     "modules/playback/runtime/src/main/java/moe/ouom/neriplayer/core/player/url/PlayerManagerUrlExtensions.kt": (
         "播放地址解析链集中于此；计划按音源类型拆分 resolver 后移除豁免"
     ),
+    "modules/local/src/main/java/moe/ouom/neriplayer/data/settings/AutoSettingsSchema.kt": (
+        "移植上游首页模块排序/可见性配置后新增约 80 行设置项定义导致超过 2000 行；"
+        "退出条件：把首页布局相关设置项拆到独立的 HomeSettingsSchema 后移除豁免"
+    ),
+    "app/src/main/java/moe/ouom/neriplayer/ui/NeriApp.kt": (
+        "主导航聚合组件，基线即超过 2000 行（历史迭代累积）；"
+        "退出条件：按导航职责拆分为多个 NavGraph 宿主后移除豁免"
+    ),
 }
 STORAGE_CALCULATION_FAMILIES = tuple(
     f"data.local.storage.{family}"

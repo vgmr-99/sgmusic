@@ -15,6 +15,7 @@
     <string name="about_update_new_version_title">New version %1$s available</string>
     <string name="about_update_up_to_date_title">Up to date</string>
     <string name="about_update_up_to_date_message">Version %1$s is already the latest.</string>
+    <string name="about_update_check_failed_title">Update check failed</string>
     <string name="about_update_check_failed_message">Check failed. Check your network and try again.</string>
     <string name="about_update_current_version">Current version: %1$s</string>
     <string name="about_update_downloading_title">Downloading update</string>

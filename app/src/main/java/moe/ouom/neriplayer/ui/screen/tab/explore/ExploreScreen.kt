@@ -171,6 +171,8 @@ import moe.ouom.neriplayer.ui.feedback.NeriSnackbarHost
 import moe.ouom.neriplayer.ui.feedback.showNeriSnackbar
 import moe.ouom.neriplayer.data.model.SongItem
 import moe.ouom.neriplayer.ui.viewmodel.tab.ExploreCapability
+import moe.ouom.neriplayer.data.model.BiliUploaderSummary
+import moe.ouom.neriplayer.ui.viewmodel.tab.BilibiliExploreSearchType
 import moe.ouom.neriplayer.ui.viewmodel.tab.ExploreSearchResult
 import moe.ouom.neriplayer.ui.viewmodel.tab.ExploreViewModel
 import moe.ouom.neriplayer.ui.viewmodel.tab.exploreSourceSupports
@@ -291,12 +293,14 @@ internal fun exploreSearchScrollContextKey(
     source: SearchSource,
     neteaseSearchType: NeteaseExploreSearchType,
     youtubeSearchType: YouTubeExploreSearchType = YouTubeExploreSearchType.SONG,
-    platformSearchType: PlatformSearchType = PlatformSearchType.SONG
+    platformSearchType: PlatformSearchType = PlatformSearchType.SONG,
+    bilibiliSearchType: BilibiliExploreSearchType = BilibiliExploreSearchType.SONG
 ): String? {
     val normalizedKeyword = keyword.trim()
     if (normalizedKeyword.isBlank()) return null
     val sourceType = when (source) {
         SearchSource.NETEASE -> neteaseSearchType.name
+        SearchSource.BILIBILI -> bilibiliSearchType.name
         SearchSource.YOUTUBE_MUSIC -> youtubeSearchType.name
         SearchSource.QQ_MUSIC,
         SearchSource.KUGOU,
@@ -404,6 +408,7 @@ fun ExploreScreen(
     offlineMode: Boolean = false,
     onPlay: (PlaylistSummary) -> Unit,
     onBiliPlaylistClick: (BiliPlaylist) -> Unit = {},
+    onBiliUploaderClick: (BiliUploaderSummary) -> Unit = {},
     onYouTubeMusicPlaylistClick: (YouTubeMusicPlaylist) -> Unit = {},
     onYouTubeCreatorClick: (YouTubeMusicCreatorSummary) -> Unit = {},
     onNeteaseArtistClick: (NeteaseArtistSummary) -> Unit = {},
@@ -659,6 +664,7 @@ fun ExploreScreen(
         searchHistoryEnabled,
         ui.selectedSearchSource,
         ui.selectedNeteaseSearchType,
+        ui.selectedBilibiliSearchType,
         ui.selectedYouTubeMusicSearchType
     ) {
         if (searchQuery.isBlank()) {
@@ -688,6 +694,7 @@ fun ExploreScreen(
         effectiveSearchKeyword,
         ui.selectedSearchSource,
         ui.selectedNeteaseSearchType,
+        ui.selectedBilibiliSearchType,
         ui.selectedYouTubeMusicSearchType
     ) {
         exploreSearchScrollContextKey(
@@ -695,7 +702,8 @@ fun ExploreScreen(
             source = ui.selectedSearchSource,
             neteaseSearchType = ui.selectedNeteaseSearchType,
             youtubeSearchType = ui.selectedYouTubeMusicSearchType,
-            platformSearchType = ui.selectedPlatformSearchType
+            platformSearchType = ui.selectedPlatformSearchType,
+            bilibiliSearchType = ui.selectedBilibiliSearchType
         )
     }
 
@@ -721,6 +729,8 @@ fun ExploreScreen(
         ui.searchItems.size,
         ui.selectedSearchSource,
         ui.selectedNeteaseSearchType,
+        ui.selectedBilibiliSearchType,
+        ui.selectedPlatformSearchType,
         ui.selectedYouTubeMusicSearchType
     ) {
         if (shouldLoadMoreSearch) {
@@ -986,8 +996,10 @@ fun ExploreScreen(
                         ExploreSearchTypeBar(
                             source = searchTypeBarSource,
                             selectedNeteaseSearchType = ui.selectedNeteaseSearchType,
+                            selectedBilibiliSearchType = ui.selectedBilibiliSearchType,
                             selectedYouTubeSearchType = ui.selectedYouTubeMusicSearchType,
                             onNeteaseSearchTypeClick = vm::setNeteaseSearchType,
+                            onBilibiliSearchTypeClick = vm::setBilibiliSearchType,
                             onYouTubeSearchTypeClick = vm::setYouTubeMusicSearchType,
                             selectedPlatformSearchType = ui.selectedPlatformSearchType,
                             platformSearchTypes = platformSearchTypes,
@@ -1264,6 +1276,13 @@ fun ExploreScreen(
                                                 creator = item.creator,
                                                 offlineMode = offlineMode,
                                                 onClick = { onYouTubeCreatorClick(item.creator) }
+                                            )
+                                        }
+                                        is ExploreSearchResult.BilibiliCreator -> {
+                                            BiliCreatorSearchRow(
+                                                uploader = item.creator,
+                                                offlineMode = offlineMode,
+                                                onClick = { onBiliUploaderClick(item.creator) }
                                             )
                                         }
                                         is ExploreSearchResult.Notice -> {

@@ -59,6 +59,7 @@ import moe.ouom.neriplayer.data.model.bilibili.playback.Durl
 import moe.ouom.neriplayer.data.model.bilibili.playback.FlacAudio
 import moe.ouom.neriplayer.data.model.bilibili.playback.PlayInfo
 import moe.ouom.neriplayer.data.model.bilibili.playback.PlayOptions
+import moe.ouom.neriplayer.data.model.bilibili.search.SearchUploaderPage
 import moe.ouom.neriplayer.data.model.bilibili.search.SearchVideoItem
 import moe.ouom.neriplayer.data.model.bilibili.search.SearchVideoPage
 import moe.ouom.neriplayer.data.model.bilibili.uploader.UploaderContentPage
@@ -107,6 +108,8 @@ class BiliClient(
 
         // 搜索 (WBI)
         private const val SEARCH_TYPE_URL = "https://api.bilibili.com/x/web-interface/wbi/search/type"
+        /** 搜索结果里高亮关键词的 <em> 标签（上游对齐：剔除后保留 &amp; 等实体原样解码）。 */
+        private val SEARCH_HIGHLIGHT = Regex("""(?i)</?em\b[^>]*>""")
 
         // 点赞近况
         private const val HAS_LIKE_URL = "https://api.bilibili.com/x/web-interface/archive/has/like"
@@ -398,6 +401,70 @@ class BiliClient(
 
     // 搜索 //
 
+    /** 音乐区视频搜索（对齐上游：限定 tid=3 音乐分区，避免混入非音乐内容）。 */
+    suspend fun searchMusicVideos(keyword: String, page: Int = 1): SearchVideoPage =
+        searchVideos(keyword = keyword, page = page, tids = MUSIC_ZONE_RID)
+
+    /** UP 主（创作者）搜索，探索页「创作者」分类使用。 */
+    suspend fun searchUploaders(keyword: String, page: Int = 1): SearchUploaderPage =
+        withContext(Dispatchers.IO) {
+            val data = getJsonWbi(
+                SEARCH_TYPE_URL,
+                mapOf(
+                    "search_type" to "bili_user",
+                    "keyword" to keyword,
+                    "page" to page.toString()
+                )
+            ).requireSuccessfulData("uploader search")
+            val results = data.optJSONArray("result") ?: JSONArray()
+            val uploaders = buildList {
+                for (index in 0 until results.length()) {
+                    val item = results.optJSONObject(index) ?: continue
+                    if (item.optString("type") != "bili_user") continue
+                    val mid = item.optLong("mid")
+                    val name = plainSearchText(item.searchString("uname"))
+                    if (mid <= 0L || name.isBlank()) continue
+                    add(
+                        UploaderProfile(
+                            mid = mid,
+                            name = name,
+                            faceUrl = normalizeCoverUrl(item.searchString("upic")),
+                            sign = plainSearchText(item.searchString("usign")),
+                            topPhotoUrl = ""
+                        )
+                    )
+                }
+            }
+            SearchUploaderPage(
+                page = data.optInt("page", page),
+                numPages = data.optInt("numPages", 1),
+                items = uploaders
+            )
+        }
+
+    /** 搜索接口字段读取：非字符串一律当空，避免 optString 把 JSONObject 序列化成 "null"。 */
+    private fun JSONObject.searchString(key: String): String = (opt(key) as? String).orEmpty()
+
+    /**
+     * 搜索文本清洗：去掉 <em> 高亮标签并解码 HTML 实体（UP 主名/签名与视频标题共用）。
+     * 注意 &amp; 必须最后替换，否则 &amp;lt; 会被二次解码成 "<"。
+     */
+    private fun plainSearchText(raw: String): String = raw
+        .replace(SEARCH_HIGHLIGHT, "")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&nbsp;", "\u00a0")
+        // 通用数字实体：&#39; / &#x27; / &#x201C; 等，统一解码为对应 Unicode 字符
+        .replace(Regex("""&#x([0-9a-fA-F]+);""")) { match ->
+            match.groupValues[1].toIntOrNull(16)?.let { Char(it).toString() } ?: match.value
+        }
+        .replace(Regex("""&#(\d+);""")) { match ->
+            match.groupValues[1].toIntOrNull()?.let { Char(it).toString() } ?: match.value
+        }
+        .replace("&amp;", "&")
+
     suspend fun searchVideos(
         keyword: String,
         page: Int = 1,
@@ -423,7 +490,7 @@ class BiliClient(
             val aid = it.optLong("aid")
             val bvid = it.optString("bvid")
             val titleHtml = it.optString("title")
-            val titlePlain = stripHtml(titleHtml)
+            val titlePlain = plainSearchText(titleHtml)
             val author = it.optString("author")
             val mid = it.optLong("mid")
             val cover = ensureHttps(it.optString("pic"))

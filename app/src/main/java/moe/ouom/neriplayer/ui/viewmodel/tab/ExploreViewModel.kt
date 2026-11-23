@@ -41,10 +41,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import moe.ouom.neriplayer.common.R as CoreCommonR
+import moe.ouom.neriplayer.data.model.BiliUploaderSummary
 import moe.ouom.neriplayer.data.model.bilibili.collection.FavFolder
 import moe.ouom.neriplayer.data.model.bilibili.search.SearchVideoItem
+import moe.ouom.neriplayer.data.model.bilibili.search.SearchVideoPage
 import moe.ouom.neriplayer.data.model.bilibili.video.VideoBasicInfo
 import moe.ouom.neriplayer.data.model.bilibili.video.VideoPage
+import moe.ouom.neriplayer.platform.bilibili.api.client.BiliClient
 import moe.ouom.neriplayer.platform.bilibili.playback.resolver.buildBiliPartSong
 import moe.ouom.neriplayer.platform.bilibili.playback.resolver.buildBiliSongAlbum
 import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicCreatorSummary
@@ -214,6 +217,13 @@ enum class ExploreSearchType(val apiType: Int) {
 /** 旧名保留别名，避免大面积改动既有引用 */
 typealias NeteaseExploreSearchType = ExploreSearchType
 
+/** B站探索搜索的三类：歌曲（音乐区）/ 视频（全站）/ 创作者（UP 主）。对齐上游 cwuom/NeriPlayer。 */
+enum class BilibiliExploreSearchType {
+    SONG,
+    VIDEO,
+    CREATOR
+}
+
 enum class YouTubeExploreSearchType(
     val filter: YouTubeMusicSearchFilter?
 ) {
@@ -268,6 +278,11 @@ sealed class ExploreSearchResult {
             "bilibili|playlist|${playlist.kind}|${playlist.mediaId}|${playlist.mid}"
     }
 
+    /** B站 UP 主搜索结果（创作者分类）。 */
+    data class BilibiliCreator(val creator: BiliUploaderSummary) : ExploreSearchResult() {
+        override val stableKey: String = "bilibili|creator|${creator.mid}"
+    }
+
     data class Artist(
         val result: NeteaseSearchArtistResult,
         val sourceTag: String = "netease",
@@ -305,6 +320,7 @@ data class ExploreUiState(
     val searchDisplayQuery: String = "",
     val selectedSearchSource: SearchSource = SearchSource.NETEASE,
     val selectedNeteaseSearchType: NeteaseExploreSearchType = NeteaseExploreSearchType.SONG,
+    val selectedBilibiliSearchType: BilibiliExploreSearchType = BilibiliExploreSearchType.SONG,
     val selectedPlatformSearchType: PlatformSearchType = PlatformSearchType.SONG,
     val selectedYouTubeMusicSearchType: YouTubeExploreSearchType = YouTubeExploreSearchType.SONG,
     val isNeteaseLoggedIn: Boolean = false,
@@ -672,6 +688,30 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
+    /** 切换 B站搜索分类（歌曲/视频/创作者），清空旧结果并触发重新搜索。 */
+    fun setBilibiliSearchType(type: BilibiliExploreSearchType) {
+        val state = _uiState.value
+        if (type == state.selectedBilibiliSearchType) return
+        NPLogger.d(TAG, "setBilibiliSearchType: ${state.selectedBilibiliSearchType} -> $type")
+        searchJob?.cancel()
+        searchMoreJob?.cancel()
+        invalidateSearchRequest()
+        _uiState.value = state.copy(
+            selectedBilibiliSearchType = type,
+            searching = false,
+            searchError = null,
+            searchResults = emptyList(),
+            searchItems = emptyList(),
+            searchHasMore = false,
+            searchLoadingMore = false,
+            searchLoadMoreError = null,
+            searchPage = 0,
+            // 必须清空关键词，UI 的搜索 LaunchedEffect 守卫才会认为是一次新请求
+            searchKeyword = "",
+            searchDisplayQuery = ""
+        )
+    }
+
     /**
      * 设置新平台（QQ/酷狗/汽水）的搜索分类。
      *
@@ -830,7 +870,8 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
                     SearchSource.BILIBILI -> fetchBilibiliSearchPage(
                         keyword = keyword,
                         matchQuery = matchQuery,
-                        page = nextPage
+                        page = nextPage,
+                        type = state.selectedBilibiliSearchType
                     )
                     SearchSource.YOUTUBE_MUSIC,
                     SearchSource.LINK_RECOGNITION,
@@ -868,11 +909,12 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** 搜索 Bilibili 视频 */
+    /** 搜索 Bilibili（歌曲/视频/创作者三类，按当前选中的分类） */
     private fun searchBilibili(keyword: String, matchQuery: String, requestVersion: Long) {
         searchJob = viewModelScope.launch {
             try {
-                val result = fetchBilibiliSearchPage(keyword, matchQuery, page = 1)
+                val type = _uiState.value.selectedBilibiliSearchType
+                val result = fetchBilibiliSearchPage(keyword, matchQuery, page = 1, type = type)
                 NPLogger.d(
                     TAG,
                     "search Bilibili success: request=$requestVersion, keyword=$keyword, count=${result.items.size}, page=${result.page}, hasMore=${result.hasMore}"
@@ -918,20 +960,10 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     private suspend fun fetchBilibiliSearchPage(
         keyword: String,
         matchQuery: String,
-        page: Int
-    ): ExploreSearchFetchResult {
-        val searchPage = withContext(Dispatchers.IO) {
-            biliClient.searchVideos(keyword = keyword, page = page)
-        }
-        val songs = rankExploreSongSearchResults(
-            query = matchQuery,
-            songs = searchPage.items.map { it.toSongItem() }
-        )
-        return ExploreSearchFetchResult(
-            items = songs.map { ExploreSearchResult.Song(it) },
-            page = searchPage.page,
-            hasMore = searchPage.page < searchPage.numPages && searchPage.items.isNotEmpty()
-        )
+        page: Int,
+        type: BilibiliExploreSearchType
+    ): ExploreSearchFetchResult = withContext(Dispatchers.IO) {
+        biliClient.fetchExplorePage(keyword, matchQuery, page, type)
     }
 
     private fun beginSearchRequest(keyword: String, displayQuery: String): Long {
@@ -2263,6 +2295,45 @@ private fun JSONObject.linkedNeteaseArtistPicUrl(): String? {
         .ifBlank { optString("img1v1Url", "") }
         .replaceFirst("http://", "https://")
         .takeIf { it.isNotBlank() }
+}
+
+/**
+ * B站搜索按分类委托到不同接口（对齐上游 cwuom/NeriPlayer）：
+ * - 歌曲：限定音乐分区 tid=3，并按查询词加权排序
+ * - 视频：全站视频，保持接口原顺序
+ * - 创作者：UP 主列表，映射为 [ExploreSearchResult.BilibiliCreator]
+ */
+private suspend fun BiliClient.fetchExplorePage(
+    keyword: String,
+    matchQuery: String,
+    page: Int,
+    type: BilibiliExploreSearchType
+): ExploreSearchFetchResult = when (type) {
+    BilibiliExploreSearchType.SONG ->
+        searchMusicVideos(keyword, page).toExplorePage(matchQuery)
+    BilibiliExploreSearchType.VIDEO ->
+        searchVideos(keyword, page).toExplorePage()
+    BilibiliExploreSearchType.CREATOR -> {
+        val result = searchUploaders(keyword, page)
+        val items = result.items.distinctBy { it.mid }.map {
+            ExploreSearchResult.BilibiliCreator(BiliUploaderSummary(it.mid, it.name, it.faceUrl))
+        }
+        ExploreSearchFetchResult(
+            items = items,
+            page = result.page,
+            hasMore = result.page < result.numPages && items.isNotEmpty()
+        )
+    }
+}
+
+private fun SearchVideoPage.toExplorePage(rankBy: String? = null): ExploreSearchFetchResult {
+    val songs = items.distinctBy { it.aid }.map { it.toSongItem() }
+    val ordered = if (rankBy == null) songs else rankExploreSongSearchResults(rankBy, songs)
+    return ExploreSearchFetchResult(
+        items = ordered.map(ExploreSearchResult::Song),
+        page = page,
+        hasMore = page < numPages && songs.isNotEmpty()
+    )
 }
 
 /** Bilibili 搜索结果到通用 SongItem 的转换器 */

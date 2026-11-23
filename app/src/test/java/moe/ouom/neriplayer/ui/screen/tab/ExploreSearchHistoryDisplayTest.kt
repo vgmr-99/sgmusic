@@ -122,10 +122,11 @@ class ExploreSearchHistoryDisplayTest {
     fun `search type bar only expands or collapses when a visible source changes`() {
         assertFalse(isExploreSearchTypeBarSourceSwap(SearchSource.NETEASE, null))
         assertFalse(isExploreSearchTypeBarSourceSwap(null, SearchSource.YOUTUBE_MUSIC))
+        // BILIBILI 现在有自己的搜索分类栏，用不可见的 LINK_RECOGNITION 验证"无分类栏"语义
         assertEquals(
             null,
             exploreSearchTypeBarSource(
-                selectedSearchSource = SearchSource.BILIBILI,
+                selectedSearchSource = SearchSource.LINK_RECOGNITION,
                 contentScrolled = false
             )
         )

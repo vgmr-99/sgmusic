@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import moe.ouom.neriplayer.common.R as CoreCommonR
+import moe.ouom.neriplayer.data.model.BiliUploaderSummary
 import moe.ouom.neriplayer.data.model.youtube.music.YouTubeMusicCreatorSummary
 import moe.ouom.neriplayer.data.local.media.displayAlbum
 import moe.ouom.neriplayer.data.local.media.displayArtist
@@ -277,6 +278,30 @@ internal fun YouTubeCreatorSearchRow(    creator: YouTubeMusicCreatorSummary,
             stringResource(CoreCommonR.string.explore_search_type_creator)
         },
         coverUrl = creator.coverUrl,
+        offlineMode = offlineMode,
+        fallbackIcon = {
+            Icon(
+                imageVector = Icons.Filled.AccountCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(34.dp)
+            )
+        },
+        onClick = onClick
+    )
+}
+
+/** B站 UP 主搜索结果行（创作者分类），与 YouTube 创作者行同构，subtitle 显示 UID。 */
+@Composable
+internal fun BiliCreatorSearchRow(
+    uploader: BiliUploaderSummary,
+    offlineMode: Boolean,
+    onClick: () -> Unit
+) {
+    LinkedCollectionRow(
+        title = uploader.name,
+        subtitle = stringResource(CoreCommonR.string.bili_uploader_mid, uploader.mid),
+        coverUrl = uploader.avatarUrl,
         offlineMode = offlineMode,
         fallbackIcon = {
             Icon(
