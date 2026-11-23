@@ -108,7 +108,7 @@ fun estimateBitrateKbps(
 
 data class PreferredQualityKeys(
     val netease: String = "exhigh",
-    val youtube: String = "high",
+    val youtube: String = "very_high",
     val bili: String = "high",
     val lx: String = "320k"
 )

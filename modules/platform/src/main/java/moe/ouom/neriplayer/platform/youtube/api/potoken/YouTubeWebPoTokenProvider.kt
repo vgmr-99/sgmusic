@@ -154,6 +154,7 @@ class YouTubeWebPoTokenProvider(
     }
 
     private val applicationContext = context.applicationContext
+    private val poTokenStore = YouTubePoTokenStore(applicationContext)
     private val accessMutex = Mutex()
     private val tokenCache = linkedMapOf<String, CachedWebPoToken>()
     /** videoId 维度的缓存键索引，用于在不碰 WebView 的前提下命中已有 token */
@@ -184,6 +185,45 @@ class YouTubeWebPoTokenProvider(
 
     @Volatile
     private var lastUnavailableLogAtMs: Long = 0L
+
+    init {
+        restorePersistedCache()
+    }
+
+    /** 冷启动时把上次进程铸造的有效 token 恢复到内存，避免重新起 WebView 挑战（匿名首播慢的根因）。 */
+    private fun restorePersistedCache() {
+        val auth = runCatching { authProvider().normalized() }.getOrNull() ?: return
+        val fingerprint = buildAuthFingerprint(auth)
+        val persisted = poTokenStore.load(
+            currentAuthFingerprint = fingerprint,
+            nowMs = System.currentTimeMillis(),
+            maxSize = TOKEN_CACHE_MAX_SIZE
+        ) ?: return
+        synchronized(tokenCache) {
+            persisted.tokens.forEach { (key, entry) ->
+                tokenCache[key] = CachedWebPoToken(entry.token, entry.expiresAtMs)
+            }
+            persisted.cacheKeyIndex.forEach { (indexKey, cacheKey) ->
+                if (cacheKey in tokenCache) cacheKeyIndex[indexKey] = cacheKey
+            }
+            persisted.sessionScopedCacheKeys.forEach { (sessionKey, cacheKey) ->
+                if (cacheKey in tokenCache) sessionScopedCacheKeys[sessionKey] = cacheKey
+            }
+        }
+        NPLogger.d(TAG, "restored ${persisted.tokens.size} cached PO token(s) from disk")
+    }
+
+    /** 在持锁状态下抓取落盘快照，避免把整个 tokenCache 引用逃逸到异步写盘线程。 */
+    private fun capturePersistedCacheLocked(authFingerprint: String): PersistedPoTokenCache =
+        PersistedPoTokenCache(
+            authFingerprint = authFingerprint,
+            savedAtMs = System.currentTimeMillis(),
+            tokens = tokenCache.mapValues { (_, entry) ->
+                PersistedPoTokenEntry(entry.token, entry.expiresAtMs)
+            },
+            cacheKeyIndex = cacheKeyIndex.toMap(),
+            sessionScopedCacheKeys = sessionScopedCacheKeys.toMap()
+        )
 
     override suspend fun warmSession() {
         // 未登录的 web GVS 更依赖 PoToken，按登录态早退会让匿名用户每次首播冷铸 token
@@ -229,6 +269,8 @@ class YouTubeWebPoTokenProvider(
             cacheKeyIndex.clear()
             sessionScopedCacheKeys.clear()
         }
+        // 账号/会话切换：落盘缓存一并清掉，避免下次冷启动恢复上一个身份的 token
+        poTokenStore.clear()
         preparedCookieFingerprint = null
         preparedAtMs = 0L
         preparedUrl = YOUTUBE_WEB_PO_WARM_BOOTSTRAP_URL
@@ -348,7 +390,7 @@ class YouTubeWebPoTokenProvider(
                     val result = mintPoToken(contentBinding)
                     when {
                         result?.status == "ok" && result.token.isNotBlank() -> {
-                            synchronized(tokenCache) {
+                            val snapshot = synchronized(tokenCache) {
                                 tokenCache[cacheKey] = CachedWebPoToken(
                                     token = result.token,
                                     expiresAtMs = now + TOKEN_TTL_MS
@@ -363,7 +405,10 @@ class YouTubeWebPoTokenProvider(
                                     ] = cacheKey
                                 }
                                 trimCacheLocked()
+                                capturePersistedCacheLocked(authFingerprint)
                             }
+                            // 落盘放在锁外，避免阻塞其他请求的缓存命中
+                            withContext(Dispatchers.IO) { poTokenStore.save(snapshot) }
                             NPLogger.d(
                                 TAG,
                                 "GVS PO token minted videoId=$videoId elapsedMs=${System.currentTimeMillis() - startedAtMs}"

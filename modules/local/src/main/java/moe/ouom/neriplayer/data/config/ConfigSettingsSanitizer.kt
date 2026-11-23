@@ -461,7 +461,7 @@ private val LONG_SETTING_NORMALIZERS: Map<String, (Long) -> Long> = buildMap {
     put(SettingsKeys.MAX_CACHE_SIZE_BYTES.name) { CacheSizePolicy.normalizeCacheSizeBytes(it) }
 }
 private const val DEFAULT_NETEASE_AUDIO_QUALITY = "exhigh"
-private const val DEFAULT_YOUTUBE_AUDIO_QUALITY = "high"
+private const val DEFAULT_YOUTUBE_AUDIO_QUALITY = "very_high"
 private const val DEFAULT_BILI_AUDIO_QUALITY = "high"
 private const val DEFAULT_START_DESTINATION_ROUTE = "home"
 private const val MAX_THEME_PALETTE_COLORS = 64

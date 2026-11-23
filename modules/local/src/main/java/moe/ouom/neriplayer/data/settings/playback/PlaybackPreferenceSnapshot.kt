@@ -381,7 +381,7 @@ fun Preferences.toPlaybackPreferenceSnapshot(): PlaybackPreferenceSnapshot {
     val legacyMobileDataQuality = this[SettingsKeys.MOBILE_DATA_DOWNGRADE_QUALITY]
     return PlaybackPreferenceSnapshot(
         audioQuality = valueOr(SettingsKeys.AUDIO_QUALITY, "exhigh"),
-        youtubeAudioQuality = valueOr(SettingsKeys.YOUTUBE_AUDIO_QUALITY, "high"),
+        youtubeAudioQuality = valueOr(SettingsKeys.YOUTUBE_AUDIO_QUALITY, "very_high"),
         biliAudioQuality = valueOr(SettingsKeys.BILI_AUDIO_QUALITY, "high"),
         mobileDataFollowDefaultAudioQuality = valueOr(
             SettingsKeys.MOBILE_DATA_FOLLOW_DEFAULT_AUDIO_QUALITY,
@@ -505,7 +505,7 @@ private fun SharedPreferences.toCachedPlaybackPreferenceSnapshot(): PlaybackPref
     val usbExclusivePreferences = prefs.readUsbExclusivePreferences()
     return PlaybackPreferenceSnapshot(
         audioQuality = prefs.stringOr(PLAYBACK_AUDIO_QUALITY_KEY, "exhigh"),
-        youtubeAudioQuality = prefs.stringOr(PLAYBACK_YOUTUBE_AUDIO_QUALITY_KEY, "high"),
+        youtubeAudioQuality = prefs.stringOr(PLAYBACK_YOUTUBE_AUDIO_QUALITY_KEY, "very_high"),
         biliAudioQuality = prefs.stringOr(PLAYBACK_BILI_AUDIO_QUALITY_KEY, "high"),
         mobileDataFollowDefaultAudioQuality = prefs.cachedMobileDataFollowsDefaultQuality(legacyMobileDataQuality),
         mobileDataNeteaseAudioQuality = normalizeMobileDataNeteaseAudioQuality(
@@ -660,7 +660,7 @@ private fun <T : Any> Preferences.valueOrNullable(key: Preferences.Key<T>, fallb
 fun PlaybackPreferenceSnapshot.sanitized(): PlaybackPreferenceSnapshot {
     return copy(
         audioQuality = audioQuality.trim().ifBlank { "exhigh" },
-        youtubeAudioQuality = youtubeAudioQuality.trim().ifBlank { "high" },
+        youtubeAudioQuality = youtubeAudioQuality.trim().ifBlank { "very_high" },
         biliAudioQuality = biliAudioQuality.trim().ifBlank { "high" },
         lxSourceQuality = lxSourceQuality.trim().ifBlank { "320k" },
         mobileDataNeteaseAudioQuality =

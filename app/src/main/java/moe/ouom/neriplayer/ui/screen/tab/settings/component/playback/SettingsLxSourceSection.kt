@@ -22,6 +22,8 @@ package moe.ouom.neriplayer.ui.screen.tab.settings.component.playback
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +34,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteForever
@@ -239,10 +242,16 @@ internal fun SettingsLxSourceSection(
                     LxSourceState.DISABLED -> stringResource(CoreCommonR.string.settings_lx_state_disabled)
                     LxSourceState.INIT -> stringResource(CoreCommonR.string.settings_lx_state_init)
                 }
+                // 质感边框卡片：背景与描边均取主题色，明暗主题切换时自动适配，
+                // 不会在黑/白背景下消失（surfaceContainerLow + outlineVariant 为主题感知色）。
+                val cardShape = RoundedCornerShape(16.dp)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 10.dp)
+                        .padding(vertical = 6.dp)
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow, cardShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, cardShape)
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
                     // 第一排：名称 + 单行文件名（信息区占满整行宽度）。
                     // 状态只在第二排「状态 · 声明平台」显示一次，避免重复。

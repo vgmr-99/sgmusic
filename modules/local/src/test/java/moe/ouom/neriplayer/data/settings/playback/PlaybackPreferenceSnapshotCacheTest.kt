@@ -183,7 +183,7 @@ class PlaybackPreferenceSnapshotCacheTest {
         ).sanitized()
 
         assertEquals("exhigh", snapshot.audioQuality)
-        assertEquals("high", snapshot.youtubeAudioQuality)
+        assertEquals("very_high", snapshot.youtubeAudioQuality)
         assertEquals("high", snapshot.biliAudioQuality)
         assertEquals(PlaybackEqualizerPresetId.FLAT, snapshot.playbackEqualizerPreset)
     }

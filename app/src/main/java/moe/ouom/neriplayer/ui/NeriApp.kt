@@ -1103,7 +1103,8 @@ private fun NeriAppContent(
         restoreLyricsAfterAlbumBack = false
         lyricsAlbumRouteObserved = false
         currentPlaybackSourceRoute = sourceRoute
-        PlayerManager.prefetchYouTubePlayableUrlWindow(
+        // 点按即播：预热当前曲目的播放地址 + 字节缓存（真正秒播），而非仅预热 URL
+        PlayerManager.prefetchYouTubeQueueWindow(
             playlist = songs,
             startIndex = index,
             source = "ui_click_before_play"
@@ -1131,7 +1132,8 @@ private fun NeriAppContent(
         restoreLyricsAfterAlbumBack = false
         lyricsAlbumRouteObserved = false
         currentPlaybackSourceRoute = null
-        PlayerManager.prefetchYouTubePlayableUrlWindow(
+        // 点按即播：预热当前曲目的播放地址 + 字节缓存（真正秒播），而非仅预热 URL
+        PlayerManager.prefetchYouTubeQueueWindow(
             playlist = listOf(song),
             startIndex = 0,
             source = "ui_click_preserve_queue_before_play"

@@ -357,7 +357,7 @@ object AutoSettingsSchema {
         @AutoSetting(
             key = "youtube_audio_quality",
             type = SettingValueType.String,
-            defaultString = "high",
+            defaultString = "very_high",
             order = 20,
             ui = SettingUiType.Custom,
             access = SettingAccessMode.KeyOnly

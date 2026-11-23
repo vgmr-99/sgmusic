@@ -27,7 +27,7 @@ import moe.ouom.neriplayer.data.model.settings.usb.DEFAULT_USB_EXCLUSIVE_VOLUME_
 
 data class PlaybackPreferenceSnapshot(
     val audioQuality: String = "exhigh",
-    val youtubeAudioQuality: String = "high",
+    val youtubeAudioQuality: String = "very_high",
     val biliAudioQuality: String = "high",
     val mobileDataFollowDefaultAudioQuality: Boolean = true,
     val mobileDataNeteaseAudioQuality: String = DEFAULT_MOBILE_DATA_NETEASE_AUDIO_QUALITY,

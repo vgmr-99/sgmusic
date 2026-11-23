@@ -1643,7 +1643,7 @@ class YouTubeMusicPlaybackRepository(
         return preferredQualityOverride
             ?.takeIf { it.isNotBlank() }
             ?: audioQualityProvider().takeIf { it.isNotBlank() }
-            ?: "high"
+            ?: "very_high"
     }
 
     private suspend fun resolveYouTubePlaybackSource(): YouTubePlaybackSourcePreference {

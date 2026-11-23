@@ -472,10 +472,23 @@ object AppContainer {
     }
     internal val biliSponsorBlockRepository by lazy { BiliSponsorBlockRepository(sharedOkHttpClient) }
     internal val biliVideoSkipRepository by lazy { BiliVideoSkipRepositoryProvider.getInstance(application) }
+    /**
+     * YouTube 搜索/引导专用客户端：继承共享客户端的认证拦截器、代理、连接池与超时，
+     * 叠加重定向 Cookie 处理（每跳合并 Cookie + 收集 Set-Cookie + 重定向上限），
+     * 修复「Too many follow-up requests: 21」重定向循环。仅对 YouTube host 生效。
+     */
+    private val youtubeRedirectCookie = RedirectCookieInterceptor()
+    private val youtubeInnertubeHttpClient by lazy {
+        sharedOkHttpClient.newBuilder()
+            .addInterceptor(youtubeRedirectCookie.Init())
+            .addNetworkInterceptor(youtubeRedirectCookie.Hop(maxRedirects = 8))
+            .build()
+    }
+
     private val youtubeMusicClientDelegate = lazy {
         YouTubeMusicClient(
             authRepo = youtubeAuthRepo,
-            okHttpClient = sharedOkHttpClient,
+            okHttpClient = youtubeInnertubeHttpClient,
             authAutoRefreshManager = youtubeAuthAutoRefreshManager
         )
     }

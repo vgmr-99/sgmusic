@@ -439,7 +439,7 @@ internal fun initialAppSettingsRouteState(
         ),
         defaultAudioQuality = AppDefaultAudioQualitySettingsState(
             preferredQuality = "exhigh",
-            youtubePreferredQuality = "high",
+            youtubePreferredQuality = "very_high",
             biliPreferredQuality = "high",
             mobileDataFollowDefaultAudioQuality = startupPlaybackPreferences.mobileDataFollowDefaultAudioQuality
         ),
