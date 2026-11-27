@@ -97,7 +97,9 @@ fun WaveformSlider(
     activeTint: Color = MaterialTheme.colorScheme.primary,
     durationMs: Long = 0L,
     playbackSpeed: Float = 1f,
-    playbackSessionKey: String? = null
+    playbackSessionKey: String? = null,
+    // 进度条形状：默认 WAVE 保持所有现有调用点行为不变；仅播放页按 NowPlayingStyle 显式传入。
+    shape: NowPlayingProgressShape = NowPlayingProgressShape.WAVE
 ) {
     val clampedValue = normalizeWaveProgress(value)
     val activeColor = activeTint.copy(alpha = if (enabled) 1f else 0.55f)
@@ -276,39 +278,132 @@ fun WaveformSlider(
             return@Canvas
         }
 
-        val segmentCount = resolveWaveSegmentCount(size.width)
-        val segmentWidth = size.width / segmentCount
+        when (shape) {
+            NowPlayingProgressShape.WAVE -> drawWaveTrack(
+                centerY = centerY,
+                progressPx = progressPx,
+                currentPhase = currentPhase,
+                animatedAmplitude = animatedAmplitude,
+                activeColor = activeColor,
+                inactiveColor = inactiveColor,
+                thumbColor = thumbColor,
+                wavePath = wavePath
+            )
 
-        wavePath.rewind()
-        wavePath.moveTo(0f, centerY + sin(currentPhase) * animatedAmplitude)
-        for (index in 1..segmentCount) {
-            val x = index * segmentWidth
-            val angle = x * WAVE_FREQUENCY + currentPhase
-            val y = centerY + sin(angle) * animatedAmplitude
-            wavePath.lineTo(x, y)
-        }
+            NowPlayingProgressShape.CAPSULE -> drawCapsuleTrack(
+                sizeWidth = size.width,
+                centerY = centerY,
+                progressPx = progressPx,
+                activeColor = activeColor,
+                inactiveColor = inactiveColor,
+                thumbColor = thumbColor
+            )
 
-        drawPath(
-            path = wavePath,
-            color = inactiveColor,
-            style = WaveInactiveStroke
-        )
-
-        clipRect(right = progressPx) {
-            drawPath(
-                path = wavePath,
-                color = activeColor,
-                style = WaveActiveStroke
+            NowPlayingProgressShape.SEGMENTED -> drawSegmentedTrack(
+                sizeWidth = size.width,
+                centerY = centerY,
+                progressPx = progressPx,
+                activeColor = activeColor,
+                inactiveColor = inactiveColor
             )
         }
+    }
+}
 
-        val thumbY = centerY + sin(progressPx * WAVE_FREQUENCY + currentPhase) * animatedAmplitude
-        drawCircle(
-            color = thumbColor,
-            radius = 16f,
-            center = Offset(progressPx, thumbY)
+/** 波形轨道（原有绘制逻辑，原样保留）。 */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWaveTrack(
+    centerY: Float,
+    progressPx: Float,
+    currentPhase: Float,
+    animatedAmplitude: Float,
+    activeColor: Color,
+    inactiveColor: Color,
+    thumbColor: Color,
+    wavePath: Path
+) {
+    val segmentCount = resolveWaveSegmentCount(size.width)
+    val segmentWidth = size.width / segmentCount
+
+    wavePath.rewind()
+    wavePath.moveTo(0f, centerY + sin(currentPhase) * animatedAmplitude)
+    for (index in 1..segmentCount) {
+        val x = index * segmentWidth
+        val angle = x * WAVE_FREQUENCY + currentPhase
+        val y = centerY + sin(angle) * animatedAmplitude
+        wavePath.lineTo(x, y)
+    }
+
+    drawPath(path = wavePath, color = inactiveColor, style = WaveInactiveStroke)
+    clipRect(right = progressPx) {
+        drawPath(path = wavePath, color = activeColor, style = WaveActiveStroke)
+    }
+
+    val thumbY = centerY + sin(progressPx * WAVE_FREQUENCY + currentPhase) * animatedAmplitude
+    drawCircle(color = thumbColor, radius = 16f, center = Offset(progressPx, thumbY))
+}
+
+/** 分段刻度轨道：沿轨道等距竖条，进度内高亮。 */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSegmentedTrack(
+    sizeWidth: Float,
+    centerY: Float,
+    progressPx: Float,
+    activeColor: Color,
+    inactiveColor: Color
+) {
+    val segmentCount = resolveWaveSegmentCount(sizeWidth)
+    val segmentWidth = sizeWidth / segmentCount
+    val barWidth = (segmentWidth * 0.45f).coerceIn(1.5f, 4f)
+    val baseHalfHeight = 3.dp.toPx()
+    val activeHalfHeight = 7.dp.toPx()
+    repeat(segmentCount) { index ->
+        val x = (index + 0.5f) * segmentWidth
+        val active = x <= progressPx
+        val halfHeight = if (active) activeHalfHeight else baseHalfHeight
+        drawLine(
+            color = if (active) activeColor else inactiveColor,
+            start = Offset(x, centerY - halfHeight),
+            end = Offset(x, centerY + halfHeight),
+            strokeWidth = barWidth,
+            cap = StrokeCap.Round
         )
     }
+}
+
+/** 粗胶囊轨道 + 胶囊拇指。 */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCapsuleTrack(
+    sizeWidth: Float,
+    centerY: Float,
+    progressPx: Float,
+    activeColor: Color,
+    inactiveColor: Color,
+    thumbColor: Color
+) {
+    val trackHalfHeight = 6.dp.toPx()
+    drawLine(
+        color = inactiveColor,
+        start = Offset(0f, centerY),
+        end = Offset(sizeWidth, centerY),
+        strokeWidth = trackHalfHeight * 2,
+        cap = StrokeCap.Round
+    )
+    clipRect(right = progressPx) {
+        drawLine(
+            color = activeColor,
+            start = Offset(0f, centerY),
+            end = Offset(sizeWidth, centerY),
+            strokeWidth = trackHalfHeight * 2,
+            cap = StrokeCap.Round
+        )
+    }
+    // 胶囊拇指：用胶囊形（圆角矩形），高度略大于轨道
+    val thumbHalfWidth = 4.dp.toPx()
+    val thumbHalfHeight = (trackHalfHeight + 3.dp.toPx())
+    drawRoundRect(
+        color = thumbColor,
+        topLeft = Offset(progressPx - thumbHalfWidth, centerY - thumbHalfHeight),
+        size = androidx.compose.ui.geometry.Size(thumbHalfWidth * 2, thumbHalfHeight * 2),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(thumbHalfWidth)
+    )
 }
 
 private val TWO_PI = 2f * Math.PI.toFloat()

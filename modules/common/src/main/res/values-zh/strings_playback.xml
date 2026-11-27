@@ -113,4 +113,9 @@
     <string name="player_playback_url_error_detail">获取播放地址失败：%1$s</string>
     <string name="mini_player_volume">音量</string>
     <string name="mini_player_progress">播放进度</string>
+    <string name="nowplaying_action_label_queue">队列</string>
+    <string name="nowplaying_action_label_timer">定时</string>
+    <string name="nowplaying_action_label_volume">音量</string>
+    <string name="nowplaying_action_label_lyrics">歌词</string>
+    <string name="nowplaying_action_label_add">歌单</string>
 </resources>

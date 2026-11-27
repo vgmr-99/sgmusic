@@ -55,6 +55,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -201,6 +202,8 @@ import moe.ouom.neriplayer.ui.screen.playback.nextFavoriteStateAfterTap
 import moe.ouom.neriplayer.ui.screen.playback.resolveLyricPreviewTimeMs
 import moe.ouom.neriplayer.ui.screen.playback.shouldReleaseLyricSeekPreview
 import moe.ouom.neriplayer.ui.screen.nowplaying.resolvePlaybackActionToolbarLayout
+import moe.ouom.neriplayer.ui.component.playback.usesGlassSurface
+import moe.ouom.neriplayer.ui.component.playback.usesLabels
 import moe.ouom.neriplayer.ui.screen.nowplaying.cover.nowPlayingLyricsToolbarDescription
 import moe.ouom.neriplayer.ui.screen.nowplaying.cover.nowPlayingLyricsToolbarIcon
 import moe.ouom.neriplayer.ui.screen.nowplaying.cover.NowPlayingLyricsCoverFlight
@@ -280,6 +283,9 @@ fun LyricsScreen(
     lyricsAdjustBehavior: Boolean = false,
     coverArtwork: (@Composable (Modifier) -> Unit)? = null,
     coverFlight: NowPlayingLyricsCoverFlight? = null,
+    // 进度条形状：与播放页主题保持一致；默认 WAVE 保持独立调用点兼容
+    progressShape: moe.ouom.neriplayer.ui.component.playback.NowPlayingProgressShape =
+        moe.ouom.neriplayer.ui.component.playback.NowPlayingProgressShape.WAVE,
 ) {
     val lyricFontScale = lyricFontScales.lyricsPageLyric
     val translationFontScale = lyricFontScales.lyricsPageTranslation
@@ -293,6 +299,14 @@ fun LyricsScreen(
     val playbackControlLayoutPreferences by settingsRepo
         .playbackControlLayoutPreferencesFlow
         .collectAsStateWithLifecycle(initialValue = settingsRepo.defaultPlaybackControlLayoutPreferences)
+    // 播放键样式与播放页保持一致，避免两页观感割裂
+    val lyricsControlStyle by settingsRepo
+        .nowPlayingControlStyleFlow
+        .collectAsStateWithLifecycle(
+            initialValue = moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingButtonStyle.CLASSIC
+        )
+    val lyricsControlSpec = moe.ouom.neriplayer.ui.component.playback
+        .resolveNowPlayingButtonSpec(lyricsControlStyle)
     val queue by PlayerManager.currentQueueFlow.collectAsStateWithLifecycle()
     val queueDisplayRevision by PlayerManager.currentQueueDisplayRevisionFlow.collectAsStateWithLifecycle()
     val queueDisplayState = remember(queue, currentSong, queueDisplayRevision) {
@@ -391,6 +405,15 @@ fun LyricsScreen(
     val lyricsTopActionIconSize = lyricsControlSize.scaleIconSize(24.dp)
     val lyricsTopBarHeight = maxOf(56.dp, lyricsTopActionButtonSize)
     val toolbarIconSize = lyricsControlSize.scaleIconSize(baseToolbarIconSize)
+    // 功能键样式与播放页共用一套，歌词页底部栏同步外观
+    val lyricsActionBarStyle by settingsRepo
+        .nowPlayingActionBarStyleFlow
+        .collectAsStateWithLifecycle(
+            initialValue = moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingActionBarStyle.DOCK
+        )
+    val lyricsActionBarShape = moe.ouom.neriplayer.ui.component.playback
+        .resolveNowPlayingActionBarShape(lyricsActionBarStyle)
+    val lyricsActionBarGlass = lyricsActionBarShape.usesGlassSurface()
     val toolbarMinimumTouchTarget = lyricsControlSize.scaleButtonSize(48.dp)
     val primaryControlSize = lyricsControlSize.scaleButtonSize(basePrimaryControlSize)
     val secondaryControlSize = lyricsControlSize.scaleButtonSize(baseSecondaryControlSize)
@@ -959,6 +982,7 @@ fun LyricsScreen(
                 onSeekTo = onSeekTo,
                 seekEnabled = progressSeekEnabled,
                 onPreviewPositionChange = { previewPositionOverrideMs = it },
+                progressShape = progressShape,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("lyricsScreenProgress")
@@ -1011,8 +1035,19 @@ fun LyricsScreen(
                     )
                 }
 
-                HapticFilledIconButton(
+                moe.ouom.neriplayer.ui.component.playback.NowPlayingPlayButton(
                     onClick = { PlayerManager.togglePlayPause() },
+                    isPlaying = isPlaybackControlPlaying,
+                    isPlaybackWaiting = isPlaybackWaiting,
+                    isAudioRouteMuted = isAudioRouteMuted,
+                    playContentDescription = stringResource(CoreCommonR.string.lyrics_play),
+                    pauseContentDescription = stringResource(CoreCommonR.string.lyrics_pause),
+                    restoreVolumeContentDescription = stringResource(CoreCommonR.string.player_restore_volume),
+                    waitingContentDescription = stringResource(CoreCommonR.string.player_waiting),
+                    iconStyle = lyricsControlSpec.iconStyle,
+                    buttonShape = lyricsControlSpec.shape,
+                    accentColor = MaterialTheme.colorScheme.primary,
+                    iconSize = primaryControlIconSize,
                     enabled = !usbPlaybackPreparing,
                     modifier = Modifier
                         .then(
@@ -1029,19 +1064,7 @@ fun LyricsScreen(
                             } else Modifier
                         )
                         .size(primaryControlSize)
-                ) {
-                    PlaybackControlIndicator(
-                        isPlaying = isPlaybackControlPlaying,
-                        isPlaybackWaiting = isPlaybackWaiting,
-                        isAudioRouteMuted = isAudioRouteMuted,
-                        playContentDescription = stringResource(CoreCommonR.string.lyrics_play),
-                        pauseContentDescription = stringResource(CoreCommonR.string.lyrics_pause),
-                        restoreVolumeContentDescription = stringResource(CoreCommonR.string.player_restore_volume),
-                        waitingContentDescription = stringResource(CoreCommonR.string.player_waiting),
-                        modifier = Modifier.size(primaryControlIconSize),
-                        progressIndicatorSize = primaryControlIconSize
-                    )
-                }
+                )
 
                 HapticIconButton(onClick = { PlayerManager.next() },
                     modifier = Modifier
@@ -1093,17 +1116,38 @@ fun LyricsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(if (isTabletLandscape) 30.dp else 0.dp))
+                        .clip(
+                            when {
+                                lyricsActionBarGlass -> RoundedCornerShape(percent = 50)
+                                isTabletLandscape -> RoundedCornerShape(30.dp)
+                                else -> RoundedCornerShape(0.dp)
+                            }
+                        )
                         .background(
-                            if (isTabletLandscape) {
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.34f)
+                            when {
+                                lyricsActionBarGlass ->
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.18f)
+
+                                isTabletLandscape ->
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.34f)
+
+                                else -> Color.Transparent
+                            }
+                        )
+                        .then(
+                            if (lyricsActionBarGlass) {
+                                Modifier.border(
+                                    width = 1.dp,
+                                    color = Color.White.copy(alpha = 0.22f),
+                                    shape = RoundedCornerShape(percent = 50)
+                                )
                             } else {
-                                Color.Transparent
+                                Modifier
                             }
                         )
                         .padding(
                             horizontal = toolbarLayout.horizontalPadding,
-                            vertical = if (isTabletLandscape) 8.dp else 4.dp
+                            vertical = if (isTabletLandscape || lyricsActionBarGlass) 8.dp else 4.dp
                         ),
                     horizontalArrangement = if (toolbarLayout.useEqualWidthSlots) {
                         Arrangement.Start
@@ -1132,11 +1176,16 @@ fun LyricsScreen(
                     }
                 } else Modifier
             )) {
-                Icon(
-                    Icons.AutoMirrored.Outlined.QueueMusic,
-                    contentDescription = stringResource(CoreCommonR.string.lyrics_playlist),
-                    modifier = Modifier.size(toolbarLayout.iconSize)
-                )
+                LyricsToolbarContent(
+                    showLabel = lyricsActionBarShape.usesLabels(),
+                    label = stringResource(CoreCommonR.string.nowplaying_action_label_queue)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.QueueMusic,
+                        contentDescription = stringResource(CoreCommonR.string.lyrics_playlist),
+                        modifier = Modifier.size(toolbarLayout.iconSize)
+                    )
+                }
             }
 
             // 定时器按钮
@@ -1156,12 +1205,21 @@ fun LyricsScreen(
                         }
                     } else Modifier
                 )) {
-                Icon(
-                    Icons.Outlined.Timer,
-                    contentDescription = stringResource(CoreCommonR.string.lyrics_timer),
-                    tint = if (sleepTimerState.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(toolbarLayout.iconSize)
-                )
+                LyricsToolbarContent(
+                    showLabel = lyricsActionBarShape.usesLabels(),
+                    label = stringResource(CoreCommonR.string.nowplaying_action_label_timer)
+                ) {
+                    Icon(
+                        Icons.Outlined.Timer,
+                        contentDescription = stringResource(CoreCommonR.string.lyrics_timer),
+                        tint = if (sleepTimerState.isActive) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                        modifier = Modifier.size(toolbarLayout.iconSize)
+                    )
+                }
             }
 
             // 音量按钮 (根据设备显示不同图标, 居中)
@@ -1190,11 +1248,16 @@ fun LyricsScreen(
                         }
                     } else Modifier
                 )) {
-                Icon(
-                    audioDeviceIcon,
-                    contentDescription = stringResource(CoreCommonR.string.cd_audio_device),
-                    modifier = Modifier.size(toolbarLayout.iconSize)
-                )
+                LyricsToolbarContent(
+                    showLabel = lyricsActionBarShape.usesLabels(),
+                    label = stringResource(CoreCommonR.string.nowplaying_action_label_volume)
+                ) {
+                    Icon(
+                        audioDeviceIcon,
+                        contentDescription = stringResource(CoreCommonR.string.cd_audio_device),
+                        modifier = Modifier.size(toolbarLayout.iconSize)
+                    )
+                }
             }
 
             // 横屏调整歌词行为，竖屏保留返回封面页入口
@@ -1228,14 +1291,19 @@ fun LyricsScreen(
                     },
                     label = "lyrics_icon"
                 ) { _ ->
-                    Icon(
-                        imageVector = nowPlayingLyricsToolbarIcon(lyricsAdjustBehavior),
-                        contentDescription = stringResource(nowPlayingLyricsToolbarDescription(
-                            lyricsAdjustBehavior, CoreCommonR.string.lyrics_back_to_cover
-                        )),
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(toolbarLayout.iconSize)
-                    )
+                    LyricsToolbarContent(
+                        showLabel = lyricsActionBarShape.usesLabels(),
+                        label = stringResource(CoreCommonR.string.nowplaying_action_label_lyrics)
+                    ) {
+                        Icon(
+                            imageVector = nowPlayingLyricsToolbarIcon(lyricsAdjustBehavior),
+                            contentDescription = stringResource(nowPlayingLyricsToolbarDescription(
+                                lyricsAdjustBehavior, CoreCommonR.string.lyrics_back_to_cover
+                            )),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(toolbarLayout.iconSize)
+                        )
+                    }
                 }
             }
 
@@ -1258,11 +1326,16 @@ fun LyricsScreen(
                     }
                 } else Modifier
             )) {
-                Icon(
-                    Icons.AutoMirrored.Outlined.PlaylistAdd,
-                    contentDescription = stringResource(CoreCommonR.string.lyrics_add_to_playlist),
-                    modifier = Modifier.size(toolbarLayout.iconSize)
-                )
+                LyricsToolbarContent(
+                    showLabel = lyricsActionBarShape.usesLabels(),
+                    label = stringResource(CoreCommonR.string.nowplaying_action_label_add)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.PlaylistAdd,
+                        contentDescription = stringResource(CoreCommonR.string.lyrics_add_to_playlist),
+                        modifier = Modifier.size(toolbarLayout.iconSize)
+                    )
+                }
             }
 
             // 定时器对话框
@@ -1534,7 +1607,9 @@ private fun LyricsProgressSection(
     onSeekTo: (Long) -> Unit,
     seekEnabled: Boolean,
     onPreviewPositionChange: (Long?) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    progressShape: moe.ouom.neriplayer.ui.component.playback.NowPlayingProgressShape =
+        moe.ouom.neriplayer.ui.component.playback.NowPlayingProgressShape.WAVE
 ) {
     val delayedPlaybackWaiting = rememberDelayedPlaybackWaiting(isPlaybackWaiting)
     val context = LocalContext.current
@@ -1644,13 +1719,39 @@ private fun LyricsProgressSection(
                 pendingSeekPreviewPositionMs != null,
             durationMs = durationMs,
             playbackSpeed = playbackSpeed,
-            playbackSessionKey = songKey
+            playbackSessionKey = songKey,
+            shape = progressShape
         )
 
         Text(
             text = formatDuration(durationMs),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+
+/**
+ * 歌词页底部功能键内容：需要时在图标下方补一行小字标签。
+ */
+@Composable
+private fun LyricsToolbarContent(
+    showLabel: Boolean,
+    label: String,
+    icon: @Composable () -> Unit
+) {
+    if (!showLabel) {
+        icon()
+        return
+    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        icon()
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
         )
     }
 }

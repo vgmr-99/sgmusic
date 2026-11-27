@@ -497,6 +497,8 @@ internal fun SettingsPersonalizationControlsCard(
             highlightPulse = highlightPulse,
             onHighlightFinished = onHighlightFinished
         )
+        // 播放页模板 / 进度条 / 播放键 / 功能键的外观，与播放页控制同处一张卡片
+        SettingsNowPlayingStyleRows()
     }
 }
 

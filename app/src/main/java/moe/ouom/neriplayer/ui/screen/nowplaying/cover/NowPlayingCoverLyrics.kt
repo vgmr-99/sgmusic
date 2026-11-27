@@ -25,6 +25,7 @@ import moe.ouom.neriplayer.lyrics.parser.hasWordTimedEntries
 import moe.ouom.neriplayer.ui.component.lyrics.LyricVisualSpec
 import moe.ouom.neriplayer.ui.component.lyrics.SyncedLyricsView
 import moe.ouom.neriplayer.ui.component.lyrics.resolveLyricEdgeFadeHeight
+import moe.ouom.neriplayer.ui.screen.nowplaying.resolveNowPlayingLyricBaseFontSize
 
 internal data class NowPlayingSyncedLyricContent(
     val lines: List<LyricEntry>,
@@ -147,7 +148,7 @@ internal fun NowPlayingEmbeddedLyricsContent(
                 MaterialTheme.colorScheme.onBackground
             },
             fontSize = scaledLyricFontSize(
-                if (style.nowPlayingStyle == NowPlayingStyle.AppleMusic) 22f else 18f,
+                resolveNowPlayingLyricBaseFontSize(style.nowPlayingStyle),
                 style.fontScale
             ).sp,
             translationFontSize = scaledLyricFontSize(14f, style.translationFontScale).sp,

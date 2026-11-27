@@ -22,7 +22,7 @@ import org.junit.Test
 
 class NowPlayingTrackIdentityTest {
     @Test
-    fun `compact identity uses the side pane typography and expanded identity stays centered`() {
+    fun `compact identity uses the side pane typography and every layout stays centered`() {
         val typography = Typography(
             titleLarge = TextStyle(fontSize = 22.sp),
             headlineSmall = TextStyle(fontSize = 26.sp),
@@ -33,16 +33,16 @@ class NowPlayingTrackIdentityTest {
         val expanded = resolveNowPlayingTrackIdentityPresentation(NowPlayingTrackIdentityLayout.Expanded, typography)
         assertSame(typography.titleLarge, compact.titleStyle)
         assertSame(typography.bodyMedium, compact.artistStyle)
-        assertSame(Alignment.Start, compact.horizontalAlignment)
+        assertSame(Alignment.CenterHorizontally, compact.horizontalAlignment)
         assertSame(typography.headlineSmall, expanded.titleStyle)
         assertSame(typography.bodyLarge, expanded.artistStyle)
         assertSame(Alignment.CenterHorizontally, expanded.horizontalAlignment)
-        assertEquals(Modifier, compact.modifier)
-        assertEquals(Modifier, expanded.modifier)
+        assertEquals(Modifier.fillMaxWidth(), compact.modifier)
+        assertEquals(Modifier.fillMaxWidth(), expanded.modifier)
     }
 
     @Test
-    fun `large artwork identity fills the cover width with left aligned headline typography`() {
+    fun `large artwork identity fills the cover width with centered headline typography`() {
         val typography = Typography(
             headlineMedium = TextStyle(fontSize = 30.sp),
             titleMedium = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.Bold)
@@ -52,7 +52,7 @@ class NowPlayingTrackIdentityTest {
 
         assertSame(typography.headlineMedium, largeCover.titleStyle)
         assertEquals(typography.titleMedium.copy(fontWeight = FontWeight.Normal), largeCover.artistStyle)
-        assertSame(Alignment.Start, largeCover.horizontalAlignment)
+        assertSame(Alignment.CenterHorizontally, largeCover.horizontalAlignment)
         assertEquals(Modifier.fillMaxWidth(), largeCover.modifier)
     }
 
