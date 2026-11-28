@@ -377,6 +377,37 @@ class LxRuntime(
      * { source, action, data:{type,url}, headers? }，Kotlin 侧再做一次宽松解析兜底，
      * 兼容 {url}、{data:{url}}、{body:{data:{url}}}、裸字符串、多重 JSON 字符串包裹。
      */
+    /**
+     * 取流 / 派发预算（绝对时间戳，毫秒；0 表示未激活）。
+     *
+     * 墨澜这类多后端轮询音源会在一次 evaluate 里同步跑完整条取流链
+     * （lx.request → OkHttp execute 同步阻塞 JS 线程），宿主的 deadline
+     * 轮询要等 evaluate 返回后才开始计时，等于形同虚设。
+     * 把预算下沉到原生 HTTP 桥：每个请求的超时被裁剪到「剩余预算」，
+     * 预算耗尽直接短路返回超时，保证 UI 在预算时间内必出结果。
+     */
+    @Volatile
+    private var budgetDeadlineMillis: Long = 0L
+
+    /**
+     * 计算单个 HTTP 请求的有效超时。
+     *
+     * @return -1 表示预算已耗尽（应短路返回超时），否则返回有效超时毫秒数
+     */
+    internal fun resolveBudgetedTimeout(
+        scriptTimeoutMs: Long,
+        budgetDeadline: Long,
+        now: Long,
+    ): Long {
+        if (budgetDeadline <= 0L) return scriptTimeoutMs
+        val budgetLeft = budgetDeadline - now
+        if (budgetLeft <= 0L) return -1L
+        return minOf(scriptTimeoutMs, budgetLeft)
+    }
+
+    /** 查询取流预算是否激活（供自检 / 测试）。 */
+    fun isBudgetActive(): Boolean = budgetDeadlineMillis > 0L
+
     suspend fun requestMusicUrl(
         musicInfo: LxMusicInfo,
         platform: LxPlatform,
@@ -385,6 +416,7 @@ class LxRuntime(
     ): LxResult<LxMusicUrl> = withContext(jsDispatcher) {
         val ctx = ctxRef.get() ?: return@withContext LxResult.Err("no_ctx", "runtime not inited")
         try {
+            budgetDeadlineMillis = System.currentTimeMillis() + timeoutMs
             // 既没注册 request handler、脚本自己也没导出 musicUrl：直接报出来，
             // 不然用户只看到一句「超时」，根本不知道脚本压根没接上取流
             if (!hasUsableHandler(ctx)) {
@@ -449,6 +481,8 @@ class LxRuntime(
             parseMusicUrlResult(last)
         } catch (e: Exception) {
             LxResult.Err("request_fail", (e.message ?: e.toString()))
+        } finally {
+            budgetDeadlineMillis = 0L
         }
     }
 
@@ -599,6 +633,7 @@ class LxRuntime(
     ): LxResult<String> = withContext(jsDispatcher) {
         val ctx = ctxRef.get() ?: return@withContext LxResult.Err("no_ctx", "runtime not inited")
         try {
+            budgetDeadlineMillis = System.currentTimeMillis() + timeoutMs
             val payload = JSONObject()
                 .put("action", action)
                 .put("source", source.code)
@@ -638,6 +673,8 @@ class LxRuntime(
             LxResult.Ok(value.toString())
         } catch (e: Exception) {
             LxResult.Err("request_fail", (e.message ?: e.toString()))
+        } finally {
+            budgetDeadlineMillis = 0L
         }
     }
 
@@ -1143,7 +1180,9 @@ class LxRuntime(
                 }
                 val bodyText = opt?.optString("body", "")?.takeIf { it.isNotEmpty() }
                 // 脚本传的 timeout 必须真的生效：洛雪脚本常用 timeout: 3000 做短超时重试
-                val timeoutMs = opt?.optLong("timeoutMs", 0L)?.takeIf { it > 0L } ?: 20_000L
+                // preload 正常都会带 timeoutMs；这里的兜底与 preload 默认一致（8s），
+                // 避免旧版 preload 漏传时单个坏后端把 JS 线程堵满 20 秒
+                val timeoutMs = opt?.optLong("timeoutMs", 0L)?.takeIf { it > 0L } ?: 8_000L
                 val formObj = opt?.optJSONObject("form")
                 val form = if (formObj != null) {
                     val map = mutableMapOf<String, String>()
@@ -1158,25 +1197,45 @@ class LxRuntime(
                 }
                 val followRedirects = opt?.optBoolean("followRedirects", true) ?: true
                 val maxRedirects = opt?.optInt("maxRedirects", 5) ?: 5
-                val r = http.request(
-                    method = method,
-                    url = url,
-                    headers = headers,
-                    body = bodyText,
-                    timeoutMs = timeoutMs,
-                    form = form,
-                    followRedirects = followRedirects,
-                    maxRedirects = maxRedirects,
+                // 取流预算：单请求超时被裁剪到剩余预算，预算耗尽直接短路返回超时，
+                // 不再发请求（多后端轮询音源最坏 2~3 分钟的「一直加载」由此根治）
+                val effectiveTimeout = resolveBudgetedTimeout(
+                    scriptTimeoutMs = timeoutMs,
+                    budgetDeadline = budgetDeadlineMillis,
+                    now = System.currentTimeMillis(),
                 )
-                JSONObject().apply {
-                    put("statusCode", r.statusCode)
-                    put("headers", JSONObject(r.headers))
-                    put("body", r.body ?: "")
-                    put("bodyBase64", r.bodyBase64 ?: "")
-                    put("bytes", r.bodySize)
-                    put("error", r.error ?: "")
-                    put("isTimeout", r.isTimeout)
-                }.toString()
+                val responseJson = if (effectiveTimeout < 0L) {
+                    JSONObject().apply {
+                        put("statusCode", 0)
+                        put("headers", JSONObject())
+                        put("body", "")
+                        put("bodyBase64", "")
+                        put("bytes", 0)
+                        put("error", "BudgetExhausted")
+                        put("isTimeout", true)
+                    }
+                } else {
+                    val r = http.request(
+                        method = method,
+                        url = url,
+                        headers = headers,
+                        body = bodyText,
+                        timeoutMs = effectiveTimeout,
+                        form = form,
+                        followRedirects = followRedirects,
+                        maxRedirects = maxRedirects,
+                    )
+                    JSONObject().apply {
+                        put("statusCode", r.statusCode)
+                        put("headers", JSONObject(r.headers))
+                        put("body", r.body ?: "")
+                        put("bodyBase64", r.bodyBase64 ?: "")
+                        put("bytes", r.bodySize)
+                        put("error", r.error ?: "")
+                        put("isTimeout", r.isTimeout)
+                    }
+                }
+                responseJson.toString()
             }
         })
         ctx.getGlobalObject().setProperty("__lx_native_http", httpObj)

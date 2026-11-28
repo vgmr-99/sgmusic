@@ -33,6 +33,13 @@
 //   { source, action, data: { type, url }, headers? }，供 LxRuntime 读取。
 
 // ---- CommonJS / Node 兼容层（顶层 var 即全局对象属性，脚本在另一个 evaluate 里才能看到）----
+
+// 脚本没传 timeout 时的兜底单请求超时。
+// 洛雪桌面默认无超时（Node 语义），直接照搬会让多后端轮询音源
+// （墨澜 8 后端 × 各自 8~15s）在坏后端上白等很久；收紧到 8 秒，
+// 让慢后端尽快失败、轮询尽快跳到下一个。脚本自己传了 timeout 则尊重脚本。
+var DEFAULT_REQUEST_TIMEOUT_MS = 8000;
+
 var module = (typeof globalThis.module !== 'undefined' && globalThis.module)
   ? globalThis.module : { exports: {} };
 var exports = module.exports;
@@ -311,7 +318,7 @@ globalThis.process = process;
           headers: headers,
           body: hasBody ? body : '',
           form: options.form || null,
-          timeoutMs: options.timeout || 20000,
+          timeoutMs: options.timeout || DEFAULT_REQUEST_TIMEOUT_MS,
           followRedirects: options.follow_redirects !== false,
           maxRedirects: options.follow_max || options.maxRedirects || 5,
         });
@@ -403,7 +410,7 @@ globalThis.process = process;
       body: body,
       form: options.form,
       formData: options.formData,
-      timeout: options.timeout || 20000,
+      timeout: options.timeout || DEFAULT_REQUEST_TIMEOUT_MS,
       follow_redirects: options.follow_redirects,
       follow_max: options.follow_max,
     };
@@ -452,7 +459,7 @@ globalThis.process = process;
       body: options.body,
       form: options.form,
       formData: options.formData,
-      timeout: options.timeout || 20000,
+      timeout: options.timeout || DEFAULT_REQUEST_TIMEOUT_MS,
       follow_redirects: options.follow_redirects,
       follow_max: options.follow_max,
       maxRedirects: options.maxRedirects,

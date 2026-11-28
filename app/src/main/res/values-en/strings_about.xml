@@ -6,7 +6,9 @@
     <string name="about_app_tagline">Every sound of time</string>
     <string name="about_app_footer">Based on the upstream NeriPlayer project\nThanks to the upstream team for their open-source contribution!</string>
     <string name="about_feedback_title">Feedback &amp; Suggestions</string>
-    <string name="about_feedback_subtitle">QQ Group: 60035779</string>
+    <string name="about_feedback_subtitle">QQ Group: 60035779\nEmail: vgmr\@qq.com</string>
+    <string name="about_website_title">Official Website</string>
+    <string name="about_website_subtitle">vgmr.cc/sgyy</string>
 
     <!-- In-app update -->
     <string name="about_update_version_subtitle">%1$s · Tap to check for updates</string>

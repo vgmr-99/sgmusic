@@ -250,6 +250,14 @@ internal fun AboutScreen(
             context.tryStartActivity(intent)
             Unit
         },
+        onOpenWebsite = {
+            val intent = Intent(
+                Intent.ACTION_VIEW,
+                "https://vgmr.cc/sgyy".toUri()
+            )
+            context.tryStartActivity(intent)
+            Unit
+        },
         onShowDisclaimer = { showDisclaimer = true }
     )
 
@@ -344,6 +352,7 @@ private fun aboutContentCardEntries(
     onCheckUpdate: () -> Unit,
     onOpenRepo: () -> Unit,
     onOpenFeedback: () -> Unit,
+    onOpenWebsite: () -> Unit,
     onShowDisclaimer: () -> Unit
 ): List<AboutCardEntry> {
     return listOf(
@@ -364,6 +373,13 @@ private fun aboutContentCardEntries(
             title = stringResource(R.string.about_feedback_title),
             subtitle = stringResource(R.string.about_feedback_subtitle),
             onClick = onOpenFeedback
+        ),
+        // 官网：vgmr.cc/sgyy，点击在浏览器打开
+        AboutCardEntry(
+            key = "website",
+            title = stringResource(R.string.about_website_title),
+            subtitle = stringResource(R.string.about_website_subtitle),
+            onClick = onOpenWebsite
         ),
         AboutCardEntry(
             key = "repo",

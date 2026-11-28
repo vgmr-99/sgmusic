@@ -6,7 +6,9 @@
     <string name="about_app_tagline">拾取时光的每一段声音</string>
     <string name="about_app_footer">基于上游 NeriPlayer项目二次开发\n感谢上游团队的开源贡献！</string>
     <string name="about_feedback_title">反馈&amp;建议</string>
-    <string name="about_feedback_subtitle">QQ群：60035779</string>
+    <string name="about_feedback_subtitle">QQ群：60035779\n邮箱：vgmr\@qq.com</string>
+    <string name="about_website_title">官网</string>
+    <string name="about_website_subtitle">vgmr.cc/sgyy</string>
 
     <!-- 应用内更新 -->
     <string name="about_update_version_subtitle">%1$s · 点击检查更新</string>
