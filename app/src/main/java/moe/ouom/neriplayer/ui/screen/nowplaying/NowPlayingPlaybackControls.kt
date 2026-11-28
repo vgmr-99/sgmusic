@@ -513,7 +513,9 @@ internal fun NowPlayingProgressSection(
     onQualityClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     tabletLandscape: Boolean = false,
-    progressRowModifier: Modifier = Modifier
+    progressRowModifier: Modifier = Modifier,
+    progressShape: moe.ouom.neriplayer.ui.component.playback.NowPlayingProgressShape =
+        moe.ouom.neriplayer.ui.component.playback.NowPlayingProgressShape.WAVE
 ) {
     val owner = remember(songKey) {
         NowPlayingProgressOwner(PlayerManager.playbackPositionFlow.value)
@@ -549,7 +551,8 @@ internal fun NowPlayingProgressSection(
             seekEnabled = seekEnabled,
             activeContentColor = activeContentColor,
             lyricSeekHaptic = lyricSeekHaptic,
-            modifier = Modifier.fillMaxWidth().then(progressRowModifier)
+            modifier = Modifier.fillMaxWidth().then(progressRowModifier),
+            progressShape = progressShape
         )
         if (progressInfoPresentation.reserveRowHeight || progressInfoPresentation.segments.isNotEmpty()) {
             NowPlayingProgressInfoRow(
@@ -582,7 +585,9 @@ private fun NowPlayingProgressRow(
     seekEnabled: Boolean,
     activeContentColor: Color,
     lyricSeekHaptic: LyricSeekHapticFeedback,
-    modifier: Modifier
+    modifier: Modifier,
+    progressShape: moe.ouom.neriplayer.ui.component.playback.NowPlayingProgressShape =
+        moe.ouom.neriplayer.ui.component.playback.NowPlayingProgressShape.WAVE
 ) {
     Row(
         modifier = modifier,
@@ -607,7 +612,8 @@ private fun NowPlayingProgressRow(
             seekEnabled = seekEnabled,
             activeContentColor = activeContentColor,
             lyricSeekHaptic = lyricSeekHaptic,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            progressShape = progressShape
         )
         Text(
             text = formatDuration(durationMs),
@@ -654,7 +660,9 @@ private fun NowPlayingSeekSlider(
     seekEnabled: Boolean,
     activeContentColor: Color,
     lyricSeekHaptic: LyricSeekHapticFeedback,
-    modifier: Modifier
+    modifier: Modifier,
+    progressShape: moe.ouom.neriplayer.ui.component.playback.NowPlayingProgressShape =
+        moe.ouom.neriplayer.ui.component.playback.NowPlayingProgressShape.WAVE
 ) {
     val actions = rememberNowPlayingSeekActions(owner, lyricSeekHaptic)
     actions.updatePlayback(durationMs, currentPosition)
@@ -673,6 +681,7 @@ private fun NowPlayingSeekSlider(
         activeTint = activeContentColor,
         durationMs = durationMs,
         playbackSpeed = playbackSpeed,
-        playbackSessionKey = songKey
+        playbackSessionKey = songKey,
+        shape = progressShape
     )
 }

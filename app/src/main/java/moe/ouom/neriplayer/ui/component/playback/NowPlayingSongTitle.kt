@@ -22,6 +22,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -44,7 +45,8 @@ internal fun NowPlayingSongTitle(
     marqueeEnabled: Boolean,
     style: TextStyle,
     modifier: Modifier = Modifier,
-    color: Color = Color.Unspecified
+    color: Color = Color.Unspecified,
+    textAlign: TextAlign = TextAlign.Start
 ) {
     if (!marqueeEnabled) {
         Text(
@@ -54,6 +56,7 @@ internal fun NowPlayingSongTitle(
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Ellipsis,
+            textAlign = textAlign,
             modifier = modifier
         )
         return

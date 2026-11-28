@@ -88,25 +88,81 @@ internal fun shouldUseNowPlayingToolbarDock(
     controlsAtBottom: Boolean = false
 ): Boolean = toolbarDockEnabled && !useCompactPortraitLayout && !controlsAtBottom
 
+/**
+ * 播放页模板骨架。
+ *
+ * 三套模板的差异体现在「谁主导视觉」上，而不是只换背景色：
+ * - CLASSIC_STACK：经典竖排，封面自适应大图，歌词在控件下方（项目原有观感）
+ * - ARTWORK_FIRST：封面主导，大封面 + 大标题，歌词收窄让位给封面
+ * - LYRICS_FIRST：歌词主导，顶部小封面与标题并排，中间留给歌词
+ */
+internal enum class NowPlayingTemplateLayout {
+    CLASSIC_STACK,
+    ARTWORK_FIRST,
+    LYRICS_FIRST
+}
+
 internal data class NowPlayingCoverPagePresentation(
     val beforeCoverSpacing: Dp,
     val afterCoverSpacing: Dp,
     val preferredCoverSize: Dp?,
     val trackIdentityLayout: NowPlayingTrackIdentityLayout,
-    val lyricsAdjustBehavior: Boolean
+    val lyricsAdjustBehavior: Boolean,
+    /** 模板骨架类型。 */
+    val templateLayout: NowPlayingTemplateLayout = NowPlayingTemplateLayout.CLASSIC_STACK,
+    /** 顶部是否使用「小封面 + 标题」并排头部。 */
+    val sideBySideHeader: Boolean = false,
+    /** 并排头部使用的小封面尺寸。 */
+    val headerCoverSize: Dp? = null
 )
 
 internal fun resolveNowPlayingCoverPagePresentation(
     immersiveMode: Boolean,
-    lyricsAdjustBehavior: Boolean
-): NowPlayingCoverPagePresentation = if (immersiveMode) {
-    NowPlayingCoverPagePresentation(
-        16.dp, 28.dp, NowPlayingImmersiveCoverSize, NowPlayingTrackIdentityLayout.LargeCover, false
-    )
-} else {
-    NowPlayingCoverPagePresentation(
-        8.dp, 16.dp, null, NowPlayingTrackIdentityLayout.Expanded, lyricsAdjustBehavior
-    )
+    lyricsAdjustBehavior: Boolean,
+    style: moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingStyle =
+        moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingStyle.Classic,
+    availableHeightDp: Float = 0f
+): NowPlayingCoverPagePresentation {
+    if (immersiveMode) {
+        return NowPlayingCoverPagePresentation(
+            16.dp, 28.dp, NowPlayingImmersiveCoverSize, NowPlayingTrackIdentityLayout.LargeCover, false
+        )
+    }
+    // 模板差异：不同主题给封面不同的尺寸与标题布局，形成真正的排布区别。
+    // 小屏兜底：封面尺寸不超过可用高度的 42%，避免控件被挤出屏幕
+    val coverBudget = if (availableHeightDp > 0f) (availableHeightDp * 0.42f).dp else 360.dp
+    return when (style) {
+        moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingStyle.Classic ->
+            NowPlayingCoverPagePresentation(
+                8.dp, 16.dp, null, NowPlayingTrackIdentityLayout.Expanded, lyricsAdjustBehavior,
+                NowPlayingTemplateLayout.CLASSIC_STACK
+            )
+
+        moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingStyle.Expressive ->
+            // 强调风格：封面最大（占据视觉主导），标题用大字号，间距收紧
+            NowPlayingCoverPagePresentation(
+                4.dp, 10.dp, minOf(288.dp, coverBudget), NowPlayingTrackIdentityLayout.LargeCover,
+                lyricsAdjustBehavior, NowPlayingTemplateLayout.ARTWORK_FIRST
+            )
+
+        moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingStyle.AppleMusic ->
+            // Apple Music 风格：顶部小封面与标题并排，中间大面积留给歌词
+            NowPlayingCoverPagePresentation(
+                10.dp, 12.dp, 120.dp, NowPlayingTrackIdentityLayout.Compact, false,
+                NowPlayingTemplateLayout.LYRICS_FIRST,
+                sideBySideHeader = true,
+                headerCoverSize = 120.dp
+            )
+    }
+}
+
+/** 模板对应的歌词基础字号，让三套模板的歌词观感明显不同。 */
+internal fun resolveNowPlayingLyricBaseFontSize(
+    style: moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingStyle
+): Float = when (style) {
+    moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingStyle.Classic -> 18f
+    moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingStyle.Expressive -> 16f
+    moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingStyle.AppleMusic -> 22f
 }
 
 internal data class PlaybackActionToolbarLayout(

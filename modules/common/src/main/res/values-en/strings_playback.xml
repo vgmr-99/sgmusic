@@ -113,4 +113,9 @@
     <string name="player_playback_url_error_detail">Failed to resolve playback URL: %1$s</string>
     <string name="mini_player_volume">Volume</string>
     <string name="mini_player_progress">Playback progress</string>
+    <string name="nowplaying_action_label_queue">Queue</string>
+    <string name="nowplaying_action_label_timer">Timer</string>
+    <string name="nowplaying_action_label_volume">Volume</string>
+    <string name="nowplaying_action_label_lyrics">Lyrics</string>
+    <string name="nowplaying_action_label_add">Playlist</string>
 </resources>

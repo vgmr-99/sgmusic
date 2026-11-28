@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.Clipboard
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
@@ -72,16 +73,18 @@ internal fun resolveNowPlayingTrackIdentityPresentation(
     layout: NowPlayingTrackIdentityLayout,
     typography: Typography
 ): NowPlayingTrackIdentityPresentation = when (layout) {
+    // 三套播放页模板的标题一律居中：容器撑满宽度 + 居中对齐，
+    // 长标题/长歌手名再叠加 textAlign=Center，避免溢出时又贴回左边。
     NowPlayingTrackIdentityLayout.Compact -> NowPlayingTrackIdentityPresentation(
-        typography.titleLarge, typography.bodyMedium, Alignment.Start, Modifier
+        typography.titleLarge, typography.bodyMedium, Alignment.CenterHorizontally, Modifier.fillMaxWidth()
     )
     NowPlayingTrackIdentityLayout.Expanded -> NowPlayingTrackIdentityPresentation(
-        typography.headlineSmall, typography.bodyLarge, Alignment.CenterHorizontally, Modifier
+        typography.headlineSmall, typography.bodyLarge, Alignment.CenterHorizontally, Modifier.fillMaxWidth()
     )
     NowPlayingTrackIdentityLayout.LargeCover -> NowPlayingTrackIdentityPresentation(
         typography.headlineMedium,
         typography.titleMedium.copy(fontWeight = FontWeight.Normal),
-        Alignment.Start,
+        Alignment.CenterHorizontally,
         Modifier.fillMaxWidth()
     )
 }
@@ -166,12 +169,13 @@ private fun NowPlayingTrackTitle(
     owner: NowPlayingTrackIdentityOwner,
     titleStyle: TextStyle
 ) {
-    BoxWithConstraints {
+    BoxWithConstraints(contentAlignment = Alignment.Center) {
         NowPlayingSongTitle(
             text = displayName.orEmpty(),
             marqueeEnabled = marqueeEnabled,
             style = titleStyle,
             color = titleColor,
+            textAlign = TextAlign.Center,
             modifier = Modifier
                 .widthIn(max = maxWidth)
                 .clip(RoundedCornerShape(8.dp))
@@ -199,13 +203,14 @@ private fun NowPlayingTrackArtist(
     owner: NowPlayingTrackIdentityOwner,
     artistStyle: TextStyle
 ) {
-    Box {
+    Box(contentAlignment = Alignment.Center) {
         Text(
             text = displayArtist.orEmpty(),
             style = artistStyle,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
             modifier = Modifier
                 .nowPlayingArtistSharedModifier(sharedTransitionScope, animatedVisibilityScope)
                 .clip(RoundedCornerShape(8.dp))

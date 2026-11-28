@@ -41,6 +41,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -60,6 +61,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
@@ -301,6 +304,26 @@ fun NowPlayingScreen(
     val nowPlayingStyle by settingsRepo
         .nowPlayingStyleFlow
         .collectAsStateWithLifecycle(initialValue = NowPlayingStyle.Classic)
+    val progressStyle by settingsRepo
+        .nowPlayingProgressStyleFlow
+        .collectAsStateWithLifecycle(
+            initialValue = moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingProgressStyle.WAVE
+        )
+    val progressShape = moe.ouom.neriplayer.ui.component.playback.resolveProgressShape(progressStyle)
+    val controlStyle by settingsRepo
+        .nowPlayingControlStyleFlow
+        .collectAsStateWithLifecycle(
+            initialValue = moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingButtonStyle.CLASSIC
+        )
+    val actionBarStyle by settingsRepo
+        .nowPlayingActionBarStyleFlow
+        .collectAsStateWithLifecycle(
+            initialValue = moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingActionBarStyle.DOCK
+        )
+    val controlSpec = moe.ouom.neriplayer.ui.component.playback
+        .resolveNowPlayingButtonSpec(controlStyle)
+    val actionBarShape = moe.ouom.neriplayer.ui.component.playback
+        .resolveNowPlayingActionBarShape(actionBarStyle)
     val playbackControlLayoutPreferences by settingsRepo
         .playbackControlLayoutPreferencesFlow
         .collectAsStateWithLifecycle(initialValue = settingsRepo.defaultPlaybackControlLayoutPreferences)
@@ -815,7 +838,10 @@ fun NowPlayingScreen(
     val useWideLandscapeLayout = isLandscape
     val lyricsAdjustBehavior = shouldAdjustNowPlayingLyricsBehavior(isLandscape, phoneLandscape)
     val coverPagePresentation = resolveNowPlayingCoverPagePresentation(
-        immersiveMode && !tabletLandscape, lyricsAdjustBehavior
+        immersiveMode = immersiveMode && !tabletLandscape,
+        lyricsAdjustBehavior = lyricsAdjustBehavior,
+        style = nowPlayingStyle,
+        availableHeightDp = windowHeightDp.value
     )
     val useCompactPortraitLayout = !tabletPortrait && shouldUseCompactNowPlayingPortraitLayout(
         isLandscape = isLandscape,
@@ -990,6 +1016,8 @@ fun NowPlayingScreen(
                                 sharedTransitionScope = this@SharedTransitionLayout,
                                 animatedContentScope = this@AnimatedContent,
                                 coverFlight = coverFlight,
+                                // 歌词页进度条与播放页主题保持一致
+                                progressShape = progressShape,
                                 offlineMode = offlineMode,
                                 lyricsAdjustBehavior = lyricsAdjustBehavior,
                                 coverArtwork = { modifier ->
@@ -1024,11 +1052,14 @@ fun NowPlayingScreen(
                                 controlBaseSizes.primaryButtonSize
                             )
                             val controlButtonSpacing = controlBaseSizes.spacing * nowPlayingControlSize.scale
-                            val nowPlayingToolbarIconSize = nowPlayingControlSize.scaleIconSize(
+                            // 底部功能键与歌词页属于同一套控件，尺寸统一跟随歌词页档位，
+                            // 播放页 ↔ 歌词页来回切换时功能键大小不再跳变。
+                            val actionBarControlSize = playbackControlLayoutPreferences.lyricsSize
+                            val nowPlayingToolbarIconSize = actionBarControlSize.scaleIconSize(
                                 if (useWideLandscapeLayout) 22.dp else 20.dp
                             )
                             val nowPlayingMainControlIconSize = nowPlayingControlSize.scaleIconSize(controlBaseSizes.iconSize)
-                            val nowPlayingToolbarMinimumTouchTarget = nowPlayingControlSize.scaleButtonSize(
+                            val nowPlayingToolbarMinimumTouchTarget = actionBarControlSize.scaleButtonSize(
                                 PlaybackActionToolbarMinimumTouchTarget
                             )
                             val onTopBarNavigateUp: () -> Unit = when {
@@ -1088,6 +1119,7 @@ fun NowPlayingScreen(
                             }
 
                             val mainPlaybackControls: @Composable () -> Unit = {
+                                // 控件样式由独立设置项决定（与播放页模板解耦）
                                 if (controlsAutoHidden) {
                                     // 自动隐藏时保持等高占位，避免布局跳动
                                     Spacer(Modifier.height(controlButtonSpacing * 3))
@@ -1121,7 +1153,7 @@ fun NowPlayingScreen(
                                             modifier = Modifier.size(controlsLayout.secondaryButtonSize)
                                         ) {
                                             Icon(
-                                                Icons.Outlined.Shuffle,
+                                                moe.ouom.neriplayer.ui.component.playback.NowPlayingControlIcons.shuffle(controlSpec.iconStyle),
                                                 contentDescription = stringResource(CoreCommonR.string.player_shuffle),
                                                 modifier = Modifier.size(secondaryIconSize),
                                                 tint = if (shuffleEnabled) {
@@ -1145,14 +1177,25 @@ fun NowPlayingScreen(
                                                 .size(controlsLayout.secondaryButtonSize)
                                         ) {
                                             Icon(
-                                                Icons.Outlined.SkipPrevious,
+                                                moe.ouom.neriplayer.ui.component.playback.NowPlayingControlIcons.previous(controlSpec.iconStyle),
                                                 contentDescription = stringResource(CoreCommonR.string.player_previous),
                                                 modifier = Modifier.size(secondaryIconSize)
                                             )
                                         }
 
-                                        HapticFilledIconButton(
+                                        moe.ouom.neriplayer.ui.component.playback.NowPlayingPlayButton(
                                             onClick = { PlayerManager.togglePlayPause() },
+                                            isPlaying = isPlaybackControlPlaying,
+                                            isPlaybackWaiting = isPlaybackWaiting,
+                                            isAudioRouteMuted = isAudioRouteMuted,
+                                            playContentDescription = stringResource(CoreCommonR.string.player_play),
+                                            pauseContentDescription = stringResource(CoreCommonR.string.player_pause),
+                                            restoreVolumeContentDescription = stringResource(CoreCommonR.string.player_restore_volume),
+                                            waitingContentDescription = stringResource(CoreCommonR.string.player_waiting),
+                                            iconStyle = controlSpec.iconStyle,
+                                            buttonShape = controlSpec.shape,
+                                            accentColor = nowPlayingActiveIconColor,
+                                            iconSize = primaryIconSize,
                                             enabled = !usbPlaybackPreparing,
                                             modifier = Modifier
                                                 .nowPlayingLongPress(toggleImmersiveMode)
@@ -1164,19 +1207,7 @@ fun NowPlayingScreen(
                                                     boundsTransform = LocalNowPlayingLyricsBoundsTransform.current
                                                 )
                                                 .size(controlsLayout.primaryButtonSize)
-                                        ) {
-                                            PlaybackControlIndicator(
-                                                isPlaying = isPlaybackControlPlaying,
-                                                isPlaybackWaiting = isPlaybackWaiting,
-                                                isAudioRouteMuted = isAudioRouteMuted,
-                                                playContentDescription = stringResource(CoreCommonR.string.player_play),
-                                                pauseContentDescription = stringResource(CoreCommonR.string.player_pause),
-                                                restoreVolumeContentDescription = stringResource(CoreCommonR.string.player_restore_volume),
-                                                waitingContentDescription = stringResource(CoreCommonR.string.player_waiting),
-                                                modifier = Modifier.size(primaryIconSize),
-                                                progressIndicatorSize = primaryIconSize
-                                            )
-                                        }
+                                        )
 
                                         HapticIconButton(
                                             onClick = { PlayerManager.next() },
@@ -1191,7 +1222,7 @@ fun NowPlayingScreen(
                                                 .size(controlsLayout.secondaryButtonSize)
                                         ) {
                                             Icon(
-                                                Icons.Outlined.SkipNext,
+                                                moe.ouom.neriplayer.ui.component.playback.NowPlayingControlIcons.next(controlSpec.iconStyle),
                                                 contentDescription = stringResource(CoreCommonR.string.player_next),
                                                 modifier = Modifier.size(secondaryIconSize)
                                             )
@@ -1202,11 +1233,10 @@ fun NowPlayingScreen(
                                             modifier = Modifier.size(controlsLayout.secondaryButtonSize)
                                         ) {
                                             Icon(
-                                                imageVector = if (repeatMode == Player.REPEAT_MODE_ONE) {
-                                                    Icons.Filled.RepeatOne
-                                                } else {
-                                                    Icons.Outlined.Repeat
-                                                },
+                                                imageVector = moe.ouom.neriplayer.ui.component.playback.NowPlayingControlIcons.repeat(
+                                                    repeatOne = repeatMode == Player.REPEAT_MODE_ONE,
+                                                    style = controlSpec.iconStyle
+                                                ),
                                                 contentDescription = stringResource(CoreCommonR.string.player_repeat),
                                                 modifier = Modifier.size(secondaryIconSize),
                                                 tint = if (repeatMode != Player.REPEAT_MODE_OFF) {
@@ -1233,6 +1263,7 @@ fun NowPlayingScreen(
                                     progressInfoPresentation = progressInfoPresentation,
                                     seekEnabled = playbackProgressSeekEnabled,
                                     activeContentColor = targetNowPlayingActiveIconColor,
+                                    progressShape = progressShape,
                                     useWideLandscapeLayout = useWideLandscapeLayout,
                                     onPreviewPositionChange = { previewPositionOverrideMs = it },
                                     // 点红框的音质档位直接弹出音质选择，不必绕进「更多」菜单
@@ -1432,7 +1463,8 @@ fun NowPlayingScreen(
                                     ),
                                     actions = coverToolbarActions,
                                     sharedTransitionScope = this@SharedTransitionLayout,
-                                    animatedVisibilityScope = this@AnimatedContent
+                                    animatedVisibilityScope = this@AnimatedContent,
+                                    barStyle = actionBarShape
                                 )
                             }
                             val embeddedLyricsVisible = shouldShowNowPlayingEmbeddedLyrics(
@@ -1487,16 +1519,9 @@ fun NowPlayingScreen(
                                 coverToolbar(false)
                             }
 
-                            // 手机竖屏保留原来的控件顺序和封面歌词
-                            val mainColumnContent: @Composable ColumnScope.() -> Unit = {
-                                coverTopBar()
-                                Spacer(Modifier.height(coverPagePresentation.beforeCoverSpacing))
-                                coverPanel(
-                                    Modifier.nowPlayingCoverPanelModifier(false, this),
-                                    coverPagePresentation.preferredCoverSize
-                                )
-                                portraitLeadingContent()
-
+                            // 手机竖屏：按播放页模板（NowPlayingStyle）采用不同的元素排布。
+                            // 三套模板共用同一批零件（封面/标题/进度/控件/歌词/工具栏），只是顺序与伸缩位不同。
+                            val embeddedLyricsBlock: @Composable ColumnScope.() -> Unit = {
                                 NowPlayingEmbeddedLyrics(
                                     visible = embeddedLyricsVisible,
                                     content = embeddedLyricContent,
@@ -1504,11 +1529,69 @@ fun NowPlayingScreen(
                                     playback = embeddedLyricPlayback,
                                     actions = embeddedLyricActions
                                 )
+                            }
+                            val mainColumnContent: @Composable ColumnScope.() -> Unit = {
+                                coverTopBar()
+                                when (coverPagePresentation.templateLayout) {
+                                    NowPlayingTemplateLayout.CLASSIC_STACK -> {
+                                        // 经典：封面 → 标题/进度/控件 → 内嵌歌词 → 工具栏
+                                        Spacer(Modifier.height(coverPagePresentation.beforeCoverSpacing))
+                                        coverPanel(
+                                            Modifier.nowPlayingCoverPanelModifier(false, this),
+                                            coverPagePresentation.preferredCoverSize
+                                        )
+                                        portraitLeadingContent()
+                                        embeddedLyricsBlock()
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        portraitTrailingContent()
+                                    }
 
-                                // 置底偏好始终以可用内容区的底部为准
-                                Spacer(modifier = Modifier.weight(1f))
+                                    NowPlayingTemplateLayout.ARTWORK_FIRST -> {
+                                        // 强调：大封面 → 大标题 → 歌词（收窄）→ 进度/控件 → 工具栏
+                                        Spacer(Modifier.height(coverPagePresentation.beforeCoverSpacing))
+                                        coverPanel(
+                                            Modifier.nowPlayingCoverPanelModifier(false, this),
+                                            coverPagePresentation.preferredCoverSize
+                                        )
+                                        Spacer(Modifier.height(coverPagePresentation.afterCoverSpacing))
+                                        portraitTrackIdentity()
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        embeddedLyricsBlock()
+                                        nowPlayingProgressSection()
+                                        mainPlaybackControls()
+                                        coverToolbar(false)
+                                    }
 
-                                portraitTrailingContent()
+                                    NowPlayingTemplateLayout.LYRICS_FIRST -> {
+                                        // Apple Music：小封面与标题并排 → 大面积歌词 → 进度/控件 → 工具栏
+                                        Spacer(Modifier.height(coverPagePresentation.beforeCoverSpacing))
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            coverPanel(
+                                                Modifier,
+                                                coverPagePresentation.headerCoverSize
+                                            )
+                                            Spacer(Modifier.width(14.dp))
+                                            Column(
+                                                modifier = Modifier.weight(1f),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                portraitTrackIdentity()
+                                            }
+                                        }
+                                        Spacer(Modifier.height(coverPagePresentation.afterCoverSpacing))
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        embeddedLyricsBlock()
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        nowPlayingProgressSection()
+                                        mainPlaybackControls()
+                                        coverToolbar(false)
+                                    }
+                                }
                             }
 
                             if (useWideLandscapeLayout) {

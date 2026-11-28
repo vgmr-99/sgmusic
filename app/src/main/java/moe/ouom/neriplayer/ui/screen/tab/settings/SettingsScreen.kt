@@ -108,7 +108,6 @@ import moe.ouom.neriplayer.ui.feedback.AppFeedback
 import moe.ouom.neriplayer.ui.screen.about.LocalAboutPageNavigator
 import moe.ouom.neriplayer.ui.screen.tab.settings.about.SettingsAboutPageContent
 import moe.ouom.neriplayer.ui.screen.tab.settings.appearance.SettingsUiStyleSelector
-import moe.ouom.neriplayer.ui.screen.tab.settings.appearance.SettingsNowPlayingStyleSelector
 import moe.ouom.neriplayer.ui.screen.tab.settings.appearance.BackgroundImagePickerPort
 import moe.ouom.neriplayer.ui.screen.tab.settings.audio.AudioEffectsSettingsPage
 import moe.ouom.neriplayer.ui.screen.tab.settings.appearance.EnforceNowPlayingBackgroundExclusion
@@ -600,9 +599,6 @@ internal fun SettingsScreen(
                         },
 
                         SettingsPage.NowPlaying to {
-                            item(key = "${selectedPage.name}:card:1") {
-                                SettingsNowPlayingStyleSelector()
-                            }
                             item(key = "${selectedPage.name}:card:2") {
                                 SettingsPersonalizationPlaybackInfoCard(
                                     autoSettingsRepository = autoSettingsRepository,

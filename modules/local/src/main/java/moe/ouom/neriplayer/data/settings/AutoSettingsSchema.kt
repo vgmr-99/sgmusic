@@ -8,6 +8,9 @@ import moe.ouom.neriplayer.data.settings.appearance.ThemeDefaults
 import moe.ouom.neriplayer.data.settings.appearance.UiDensityScalePreference
 import moe.ouom.neriplayer.data.model.settings.appearance.UiStyle
 import moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingStyle
+import moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingProgressStyle
+import moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingButtonStyle
+import moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingActionBarStyle
 import moe.ouom.neriplayer.data.settings.download.DEFAULT_DOWNLOAD_BILI_AUDIO_QUALITY
 import moe.ouom.neriplayer.data.settings.download.DEFAULT_DOWNLOAD_NETEASE_AUDIO_QUALITY
 import moe.ouom.neriplayer.data.settings.download.DEFAULT_DOWNLOAD_YOUTUBE_AUDIO_QUALITY
@@ -739,6 +742,51 @@ object AutoSettingsSchema {
             titleRes = CoreCommonR.string.settings_nowplaying_style,
             descriptionRes = CoreCommonR.string.settings_nowplaying_style_desc,
             icon = AutoSettingIcon.Layers
+        )
+
+        @AutoSetting(
+            key = "nowplaying_progress_style",
+            type = SettingValueType.String,
+            defaultString = NowPlayingProgressStyle.DEFAULT_STORAGE_VALUE,
+            constantName = "NOW_PLAYING_PROGRESS_STYLE",
+            order = 48,
+            ui = SettingUiType.Custom,
+            access = SettingAccessMode.KeyOnly
+        )
+        val nowPlayingProgressStyle = autoSetting(
+            titleRes = CoreCommonR.string.settings_nowplaying_progress_style,
+            descriptionRes = CoreCommonR.string.settings_nowplaying_progress_style_desc,
+            icon = AutoSettingIcon.Tune
+        )
+
+        @AutoSetting(
+            key = "nowplaying_control_style",
+            type = SettingValueType.String,
+            defaultString = NowPlayingButtonStyle.DEFAULT_STORAGE_VALUE,
+            constantName = "NOW_PLAYING_CONTROL_STYLE",
+            order = 51,
+            ui = SettingUiType.Custom,
+            access = SettingAccessMode.KeyOnly
+        )
+        val nowPlayingControlStyle = autoSetting(
+            titleRes = CoreCommonR.string.settings_nowplaying_control_style,
+            descriptionRes = CoreCommonR.string.settings_nowplaying_control_style_desc,
+            icon = AutoSettingIcon.Tune
+        )
+
+        @AutoSetting(
+            key = "nowplaying_action_bar_style",
+            type = SettingValueType.String,
+            defaultString = NowPlayingActionBarStyle.DEFAULT_STORAGE_VALUE,
+            constantName = "NOW_PLAYING_ACTION_BAR_STYLE",
+            order = 52,
+            ui = SettingUiType.Custom,
+            access = SettingAccessMode.KeyOnly
+        )
+        val nowPlayingActionBarStyle = autoSetting(
+            titleRes = CoreCommonR.string.settings_nowplaying_action_bar_style,
+            descriptionRes = CoreCommonR.string.settings_nowplaying_action_bar_style_desc,
+            icon = AutoSettingIcon.Tune
         )
 
         @AutoSetting(

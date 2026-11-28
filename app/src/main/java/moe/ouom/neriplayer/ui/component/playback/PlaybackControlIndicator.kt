@@ -9,8 +9,11 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -51,7 +54,9 @@ internal fun PlaybackControlIndicator(
     restoreVolumeContentDescription: String = playContentDescription,
     color: Color = LocalContentColor.current,
     progressIndicatorSize: Dp = 24.dp,
-    progressStrokeWidth: Dp = 2.5.dp
+    progressStrokeWidth: Dp = 2.5.dp,
+    // 图标风格：默认 OUTLINED 保持所有现有调用点行为不变
+    iconStyle: NowPlayingIconStyle = NowPlayingIconStyle.OUTLINED
 ) {
     val delayedPlaybackWaiting = rememberDelayedPlaybackWaiting(isPlaybackWaiting)
     val visualState = resolvePlaybackControlVisualState(
@@ -79,13 +84,13 @@ internal fun PlaybackControlIndicator(
     ) { state ->
         when (state) {
             PlaybackControlVisualState.PLAY -> Icon(
-                imageVector = Icons.Outlined.PlayArrow,
+                imageVector = resolvePlayIcon(iconStyle),
                 contentDescription = resolvedContentDescription,
                 tint = color
             )
 
             PlaybackControlVisualState.PAUSE -> Icon(
-                imageVector = Icons.Outlined.Pause,
+                imageVector = resolvePauseIcon(iconStyle),
                 contentDescription = resolvedContentDescription,
                 tint = color
             )
@@ -169,3 +174,11 @@ internal fun resolvePlaybackWaiting(
 ): Boolean {
     return playbackRequested && (!isPlaying || usbPlaybackPreparing)
 }
+
+/** 按图标风格解析播放键图标；OUTLINED 与改动前完全一致。 */
+internal fun resolvePlayIcon(style: NowPlayingIconStyle): ImageVector =
+    if (style == NowPlayingIconStyle.FILLED) Icons.Filled.PlayArrow else Icons.Outlined.PlayArrow
+
+/** 按图标风格解析暂停键图标；OUTLINED 与改动前完全一致。 */
+internal fun resolvePauseIcon(style: NowPlayingIconStyle): ImageVector =
+    if (style == NowPlayingIconStyle.FILLED) Icons.Filled.Pause else Icons.Outlined.Pause

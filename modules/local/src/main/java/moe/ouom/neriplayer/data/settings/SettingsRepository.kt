@@ -26,6 +26,9 @@ package moe.ouom.neriplayer.data.settings
 import kotlinx.coroutines.flow.onEach
 import moe.ouom.neriplayer.data.model.settings.appearance.UiStyle
 import moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingStyle
+import moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingProgressStyle
+import moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingButtonStyle
+import moe.ouom.neriplayer.data.model.settings.appearance.NowPlayingActionBarStyle
 import moe.ouom.neriplayer.data.model.youtube.playback.YouTubePlaybackSourcePreference
 import moe.ouom.neriplayer.platform.youtube.settings.YouTubePlaybackSourcePreferencePolicy
 import moe.ouom.neriplayer.data.model.settings.appearance.AdvancedBlurQuality
@@ -162,6 +165,15 @@ class SettingsRepository(private val context: Context) {
 
     val nowPlayingStyleFlow: Flow<NowPlayingStyle> =
         dataStoreSettingFlow { NowPlayingStyle.fromStorage(it[SettingsKeys.NOW_PLAYING_STYLE]) }
+
+    val nowPlayingProgressStyleFlow: Flow<NowPlayingProgressStyle> =
+        dataStoreSettingFlow { NowPlayingProgressStyle.fromStorage(it[SettingsKeys.NOW_PLAYING_PROGRESS_STYLE]) }
+
+    val nowPlayingControlStyleFlow: Flow<NowPlayingButtonStyle> =
+        dataStoreSettingFlow { NowPlayingButtonStyle.fromStorage(it[SettingsKeys.NOW_PLAYING_CONTROL_STYLE]) }
+
+    val nowPlayingActionBarStyleFlow: Flow<NowPlayingActionBarStyle> =
+        dataStoreSettingFlow { NowPlayingActionBarStyle.fromStorage(it[SettingsKeys.NOW_PLAYING_ACTION_BAR_STYLE]) }
 
     val liquidGlassEnabledFlow: Flow<Boolean> =
         dataStoreSettingFlow { it[SettingsKeys.LIQUID_GLASS_ENABLED] ?: true }
@@ -791,6 +803,18 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setNowPlayingStyle(value: NowPlayingStyle) {
         context.dataStore.edit { it[SettingsKeys.NOW_PLAYING_STYLE] = value.storageValue }
+    }
+
+    suspend fun setNowPlayingProgressStyle(value: NowPlayingProgressStyle) {
+        context.dataStore.edit { it[SettingsKeys.NOW_PLAYING_PROGRESS_STYLE] = value.storageValue }
+    }
+
+    suspend fun setNowPlayingControlStyle(value: NowPlayingButtonStyle) {
+        context.dataStore.edit { it[SettingsKeys.NOW_PLAYING_CONTROL_STYLE] = value.storageValue }
+    }
+
+    suspend fun setNowPlayingActionBarStyle(value: NowPlayingActionBarStyle) {
+        context.dataStore.edit { it[SettingsKeys.NOW_PLAYING_ACTION_BAR_STYLE] = value.storageValue }
     }
 
     suspend fun setDynamicColor(value: Boolean) {
